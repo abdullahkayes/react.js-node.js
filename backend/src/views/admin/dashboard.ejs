@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#0b0f19]">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ERP Dashboard - Dazzling Shipping</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Google Font - Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              dark: '#0b0f19',
+              card: '#111726',
+              border: '#1e293b',
+              orange: '#ff5c00',
+              'orange-hover': '#e05200',
+              accentBlue: '#38bdf8',
+              accentGreen: '#22c55e',
+              accentPurple: '#a855f7',
+              accentRed: '#ef4444',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0b0f19;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+  </style>
+</head>
+<body class="h-full bg-[#0b0f19] text-gray-200 font-sans antialiased overflow-x-hidden selection:bg-orange-500 selection:text-white">
+
+  <!-- Fallback EJS logic simulation for standalone preview -->
+  <script>
+    window.user = window.user || { email: "Sheikh Sadi", initials: "SS" };
+    window.stats = window.stats || {
+      shipmentsToday: 248,
+      inTransit: 46,
+      deliveredThisMonth: 31,
+      revenueThisMonth: 12450.00,
+      totalShipments: 1248,
+      totalUsers: 84
+    };
+  </script>
+
+  <!-- Main Container -->
+  <div class="flex min-h-screen w-full">
+    
+    <!-- Sidebar -->
+    <%- include('partials/sidebar', { active: 'dashboard' }) %>
+
+    <!-- MAIN CONTENT AREA -->
+    <div class="flex-1 flex flex-col min-w-0">
+      
+      <%- include('partials/header', { title: 'ERP Dashboard', subtitle: 'Operational overview and pending actions', user: typeof user !== 'undefined' ? user : {} }) %>
+
+      <!-- MAIN BODY CONTAINER -->
+      <main class="flex-1 p-6 space-y-6 overflow-y-auto">
+        
+        <!-- TOP ROW 6 KPI METRICS CARDS -->
+        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5">
+          
+          <!-- Card 1: Active Shipments -->
+          <div class="bg-[#111726] border border-[#1a2333] p-4 rounded-xl flex items-center justify-between hover:border-blue-500/40 transition-colors">
+            <div class="space-y-1">
+              <p class="text-xs font-medium text-gray-400">Active Shipments</p>
+              <p class="text-2xl font-bold text-sky-400">
+                <%= typeof stats !== 'undefined' ? stats.shipmentsToday : '248' %>
+              </p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
+              <i data-lucide="box" class="w-5 h-5"></i>
+            </div>
+          </div>
+
+          <!-- Card 2: Awaiting Review -->
+          <div class="bg-[#111726] border border-[#1a2333] p-4 rounded-xl flex items-center justify-between hover:border-amber-500/40 transition-colors">
+            <div class="space-y-1">
+              <p class="text-xs font-medium text-gray-400">Awaiting Review</p>
+              <p class="text-2xl font-bold text-orange-400">17</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-orange-400">
+              <i data-lucide="clock" class="w-5 h-5"></i>
+            </div>
+          </div>
+
+          <!-- Card 3: Receiving / Matching -->
+          <div class="bg-[#111726] border border-[#1a2333] p-4 rounded-xl flex items-center justify-between hover:border-emerald-500/40 transition-colors">
+            <div class="space-y-1">
+              <p class="text-xs font-medium text-gray-400">Receiving / Matching</p>
+              <p class="text-2xl font-bold text-emerald-400">12</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <i data-lucide="package-check" class="w-5 h-5"></i>
+            </div>
+          </div>
+
+          <!-- Card 4: Compliance Holds -->
+          <div class="bg-[#111726] border border-[#1a2333] p-4 rounded-xl flex items-center justify-between hover:border-red-500/40 transition-colors">
+            <div class="space-y-1">
+              <p class="text-xs font-medium text-gray-400">Compliance Holds</p>
+              <p class="text-2xl font-bold text-rose-500">4</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500">
+              <i data-lucide="alert-octagon" class="w-5 h-5"></i>
+            </div>
+          </div>
+
+          <!-- Card 5: Payment Verification -->
+          <div class="bg-[#111726] border border-[#1a2333] p-4 rounded-xl flex items-center justify-between hover:border-purple-500/40 transition-colors">
+            <div class="space-y-1">
+              <p class="text-xs font-medium text-gray-400">Payment Verification</p>
+              <p class="text-2xl font-bold text-purple-400">9</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+              <i data-lucide="credit-card" class="w-5 h-5"></i>
+            </div>
+          </div>
+
+          <!-- Card 6: Open Cases -->
+          <div class="bg-[#111726] border border-[#1a2333] p-4 rounded-xl flex items-center justify-between hover:border-cyan-500/40 transition-colors">
+            <div class="space-y-1">
+              <p class="text-xs font-medium text-gray-400">Open Cases</p>
+              <p class="text-2xl font-bold text-cyan-400">11</p>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+              <i data-lucide="headphones" class="w-5 h-5"></i>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- MAIN TWO-COLUMN SPLIT GRID -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          <!-- LEFT COLUMN (OPERATIONS & WAREHOUSE) - 7 SPAN -->
+          <div class="lg:col-span-7 space-y-6">
+            
+            <!-- Import & Export Operations Card -->
+            <div class="bg-[#111726] border border-[#1a2333] p-5 rounded-xl space-y-5">
+              <div class="flex items-center justify-between border-b border-[#1a2333] pb-3">
+                <h3 class="text-sm font-semibold text-white">Import & Export Operations</h3>
+                <div class="flex items-center gap-6 text-xs font-medium">
+                  <button class="text-orange-500 border-b-2 border-orange-500 pb-2 font-semibold">Import</button>
+                  <button class="text-gray-400 hover:text-gray-200 pb-2">Export</button>
+                </div>
+              </div>
+
+              <!-- Pipeline Flowchart Graph -->
+              <div class="relative py-2 overflow-x-auto">
+                <div class="min-w-[550px] flex items-center justify-between relative z-10">
+                  
+                  <!-- Connecting Line -->
+                  <div class="absolute top-6 left-6 right-6 h-0.5 bg-[#1e293b] -z-10"></div>
+
+                  <!-- Step 1: Request Review -->
+                  <div class="flex flex-col items-center gap-2 text-center group">
+                    <div class="w-12 h-12 rounded-full bg-[#111726] border-2 border-sky-500 flex items-center justify-center text-sky-400 shadow-md">
+                      <i data-lucide="clipboard-check" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-[11px] text-gray-400 font-medium leading-tight max-w-[65px]">Request Review</span>
+                    <span class="text-base font-bold text-sky-400">17</span>
+                  </div>
+
+                  <!-- Step 2: USA Warehouse -->
+                  <div class="flex flex-col items-center gap-2 text-center">
+                    <div class="w-12 h-12 rounded-full bg-[#111726] border-2 border-orange-500 flex items-center justify-center text-orange-400 shadow-md">
+                      <i data-lucide="warehouse" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-[11px] text-gray-400 font-medium leading-tight max-w-[65px]">USA Warehouse</span>
+                    <span class="text-base font-bold text-orange-400">23</span>
+                  </div>
+
+                  <!-- Step 3: Consolidation -->
+                  <div class="flex flex-col items-center gap-2 text-center">
+                    <div class="w-12 h-12 rounded-full bg-[#111726] border-2 border-emerald-500 flex items-center justify-center text-emerald-400 shadow-md">
+                      <i data-lucide="boxes" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-[11px] text-gray-400 font-medium leading-tight max-w-[65px]">Consolidation</span>
+                    <span class="text-base font-bold text-emerald-400">8</span>
+                  </div>
+
+                  <!-- Step 4: International Transit -->
+                  <div class="flex flex-col items-center gap-2 text-center">
+                    <div class="w-12 h-12 rounded-full bg-[#111726] border-2 border-purple-500 flex items-center justify-center text-purple-400 shadow-md">
+                      <i data-lucide="plane" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-[11px] text-gray-400 font-medium leading-tight max-w-[70px]">International Transit</span>
+                    <span class="text-base font-bold text-purple-400">46</span>
+                  </div>
+
+                  <!-- Step 5: Customs Clearance -->
+                  <div class="flex flex-col items-center gap-2 text-center">
+                    <div class="w-12 h-12 rounded-full bg-[#111726] border-2 border-rose-500 flex items-center justify-center text-rose-400 shadow-md">
+                      <i data-lucide="shield-alert" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-[11px] text-gray-400 font-medium leading-tight max-w-[65px]">Customs Clearance</span>
+                    <span class="text-base font-bold text-rose-400">12</span>
+                  </div>
+
+                  <!-- Step 6: Dhaka Hub -->
+                  <div class="flex flex-col items-center gap-2 text-center">
+                    <div class="w-12 h-12 rounded-full bg-[#111726] border-2 border-cyan-500 flex items-center justify-center text-cyan-400 shadow-md">
+                      <i data-lucide="building-2" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-[11px] text-gray-400 font-medium leading-tight max-w-[65px]">Dhaka Hub</span>
+                    <span class="text-base font-bold text-cyan-400">19</span>
+                  </div>
+
+                  <!-- Step 7: Last-Mile -->
+                  <div class="flex flex-col items-center gap-2 text-center">
+                    <div class="w-12 h-12 rounded-full bg-[#111726] border-2 border-amber-500 flex items-center justify-center text-amber-500 shadow-md">
+                      <i data-lucide="truck" class="w-5 h-5"></i>
+                    </div>
+                    <span class="text-[11px] text-gray-400 font-medium leading-tight max-w-[65px]">Last-Mile</span>
+                    <span class="text-base font-bold text-amber-500">31</span>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <!-- Warehouse & Hub Activity Card -->
+            <div class="bg-[#111726] border border-[#1a2333] p-5 rounded-xl space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-white">Warehouse & Hub Activity</h3>
+                <div class="flex items-center bg-[#0b0f19] p-0.5 rounded-lg border border-[#1a2333] text-xs">
+                  <button class="px-2.5 py-1 bg-orange-500 text-white font-medium rounded-md">All</button>
+                  <button class="px-2.5 py-1 text-gray-400 hover:text-white">Import</button>
+                  <button class="px-2.5 py-1 text-gray-400 hover:text-white">Export</button>
+                </div>
+              </div>
+
+              <!-- Two Column Warehouse Table Grid -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                <!-- USA Warehouse Panel -->
+                <div class="border border-[#1a2333] rounded-lg p-3.5 bg-[#0e1320]/60 space-y-3">
+                  <h4 class="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                    <i data-lucide="warehouse" class="w-3.5 h-3.5 text-orange-400"></i>
+                    USA Warehouse
+                  </h4>
+
+                  <div class="space-y-2 text-xs">
+                    <div class="flex items-center justify-between py-1 border-b border-[#1a2333]/50">
+                      <span class="text-gray-400 flex items-center gap-2"><i data-lucide="package-search" class="w-3.5 h-3.5 text-orange-400"></i> Expected Parcels</span>
+                      <span class="font-semibold text-white">18</span>
+                    </div>
+                    <div class="flex items-center justify-between py-1 border-b border-[#1a2333]/50">
+                      <span class="text-gray-400 flex items-center gap-2"><i data-lucide="package-check" class="w-3.5 h-3.5 text-orange-400"></i> Receiving / Matching</span>
+                      <span class="font-semibold text-white">3</span>
+                    </div>
+                    <div class="flex items-center justify-between py-1 border-b border-[#1a2333]/50">
+                      <span class="text-gray-400 flex items-center gap-2"><i data-lucide="search" class="w-3.5 h-3.5 text-orange-400"></i> Awaiting Inspection</span>
+                      <span class="font-semibold text-white">8</span>
+                    </div>
+                    <div class="flex items-center justify-between py-1 border-b border-[#1a2333]/50">
+                      <span class="text-gray-400 flex items-center gap-2"><i data-lucide="scale" class="w-3.5 h-3.5 text-orange-400"></i> Weight / Measurement</span>
+                      <span class="font-semibold text-white">5</span>
+                    </div>
+                    <div class="flex items-center justify-between py-1 border-b border-[#1a2333]/50">
+                      <span class="text-gray-400 flex items-center gap-2"><i data-lucide="boxes" class="w-3.5 h-3.5 text-orange-400"></i> Packing / Consolidation</span>
+                      <span class="font-semibold text-white">6</span>
+                    </div>
+                    <div class="flex items-center justify-between py-1">
+                      <span class="text-gray-400 flex items-center gap-2"><i data-lucide="truck" class="w-3.5 h-3.5 text-orange-400"></i> Ready for Dispatch</span>
+                      <span class="font-semibold text-white">7</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Dhaka Hub Panel -->
+                <div class="border border-[#1a2333] rounded-lg p-3.5 bg-[#0e1320]/60 space-y-3">
+                  <h4 class="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                    <i data-lucide="building-2" class="w-3.5 h-3.5 text-orange-400"></i>
+                    Dhaka Hub
+                  </h4>
+
+                  <div class="space-y-2 text-xs">
+                    <div class="flex items-center justify-between py-1 border-b border-[#1a2333]/50">
+                      <span class="text-gray-400 flex items-center gap-2"><i data-lucide="package-search" class="w-3.5 h-3.5 text-orange-400"></i> Expected Parcels</span>
+                      <span class="font-semibold text-white">14</span>
+                    </div>
+                    <div class="flex items-center justify-between py-1 border-b border-[#1a2333]/50">
+                      <span class="text-gray-400 flex items-center gap-2"><i data-lucide="package-check" class="w-3.5 h-3.5 text-orange-400"></i> Receiving / Matching</span>
+                      <span class="font-semibold text-white">5</span>
+                    </div>
+                    <div class="flex items-center justify-between py-1 border-b border-[#1a2333]/50">
+                      <span class="text-gray-400 flex items-center gap-2"><i data-lucide="search" class="w-3.5 h-3.5 text-orange-400"></i> Awaiting Inspection</span>
+                      <span class="font-semibold text-white">6</span>
+                    </div>
+                    <div class="flex items-center justify-between py-1 border-b border-[#1a2333]/50">
+                      <span class="text-gray-400 flex items-center gap-2"><i data-lucide="scale" class="w-3.5 h-3.5 text-orange-400"></i> Weight / Measurement</span>
+                      <span class="font-semibold text-white">7</span>
+                    </div>
+                    <div class="flex items-center justify-between py-1 border-b border-[#1a2333]/50">
+                      <span class="text-gray-400 flex items-center gap-2"><i data-lucide="boxes" class="w-3.5 h-3.5 text-orange-400"></i> Packing / Consolidation</span>
+                      <span class="font-semibold text-white">4</span>
+                    </div>
+                    <div class="flex items-center justify-between py-1">
+                      <span class="text-gray-400 flex items-center gap-2"><i data-lucide="truck" class="w-3.5 h-3.5 text-orange-400"></i> Ready for Dispatch</span>
+                      <span class="font-semibold text-white">12</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Exceptions, Returns & Claims Card -->
+            <div class="bg-[#111726] border border-[#1a2333] p-5 rounded-xl space-y-4">
+              <h3 class="text-sm font-semibold text-white">Exceptions, Returns & Claims</h3>
+
+              <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                
+                <!-- Item 1 -->
+                <div class="border border-[#1a2333] bg-[#0b0f19]/40 p-3 rounded-lg text-center flex flex-col items-center justify-between space-y-2 hover:border-red-500/50 transition-colors">
+                  <div class="w-8 h-8 rounded-lg border border-rose-500/30 bg-rose-500/10 flex items-center justify-center text-rose-500">
+                    <i data-lucide="alert-octagon" class="w-4 h-4"></i>
+                  </div>
+                  <span class="text-[11px] text-gray-400 font-medium leading-tight">Shipment Holds</span>
+                  <span class="text-base font-bold text-rose-500">4</span>
+                </div>
+
+                <!-- Item 2 -->
+                <div class="border border-[#1a2333] bg-[#0b0f19]/40 p-3 rounded-lg text-center flex flex-col items-center justify-between space-y-2 hover:border-orange-500/50 transition-colors">
+                  <div class="w-8 h-8 rounded-lg border border-orange-500/30 bg-orange-500/10 flex items-center justify-center text-orange-400">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                  </div>
+                  <span class="text-[11px] text-gray-400 font-medium leading-tight">Return Requests</span>
+                  <span class="text-base font-bold text-orange-400">6</span>
+                </div>
+
+                <!-- Item 3 -->
+                <div class="border border-[#1a2333] bg-[#0b0f19]/40 p-3 rounded-lg text-center flex flex-col items-center justify-between space-y-2 hover:border-purple-500/50 transition-colors">
+                  <div class="w-8 h-8 rounded-lg border border-purple-500/30 bg-purple-500/10 flex items-center justify-center text-purple-400">
+                    <i data-lucide="truck" class="w-4 h-4"></i>
+                  </div>
+                  <span class="text-[11px] text-gray-400 font-medium leading-tight">Courier RTO</span>
+                  <span class="text-base font-bold text-purple-400">3</span>
+                </div>
+
+                <!-- Item 4 -->
+                <div class="border border-[#1a2333] bg-[#0b0f19]/40 p-3 rounded-lg text-center flex flex-col items-center justify-between space-y-2 hover:border-sky-500/50 transition-colors">
+                  <div class="w-8 h-8 rounded-lg border border-sky-500/30 bg-sky-500/10 flex items-center justify-center text-sky-400">
+                    <i data-lucide="x-circle" class="w-4 h-4"></i>
+                  </div>
+                  <span class="text-[11px] text-gray-400 font-medium leading-tight">Export Failed Delivery</span>
+                  <span class="text-base font-bold text-sky-400">2</span>
+                </div>
+
+                <!-- Item 5 -->
+                <div class="border border-[#1a2333] bg-[#0b0f19]/40 p-3 rounded-lg text-center flex flex-col items-center justify-between space-y-2 hover:border-emerald-500/50 transition-colors">
+                  <div class="w-8 h-8 rounded-lg border border-emerald-500/30 bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                    <i data-lucide="shield" class="w-4 h-4"></i>
+                  </div>
+                  <span class="text-[11px] text-gray-400 font-medium leading-tight">Insurance Claims</span>
+                  <span class="text-base font-bold text-emerald-400">5</span>
+                </div>
+
+                <!-- Item 6 -->
+                <div class="border border-[#1a2333] bg-[#0b0f19]/40 p-3 rounded-lg text-center flex flex-col items-center justify-between space-y-2 hover:border-gray-500/50 transition-colors">
+                  <div class="w-8 h-8 rounded-lg border border-gray-600/30 bg-gray-600/10 flex items-center justify-center text-gray-400">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                  </div>
+                  <span class="text-[11px] text-gray-400 font-medium leading-tight">Cancellations</span>
+                  <span class="text-base font-bold text-gray-300">1</span>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+
+          <!-- RIGHT COLUMN (ACTION QUEUE, FINANCE, ACTIVITY) - 5 SPAN -->
+          <div class="lg:col-span-5 space-y-6">
+            
+            <!-- Priority Action Queue Card -->
+            <div class="bg-[#111726] border border-[#1a2333] p-5 rounded-xl space-y-4">
+              <h3 class="text-sm font-semibold text-white">Priority Action Queue</h3>
+
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr class="text-gray-400 border-b border-[#1a2333]">
+                      <th class="pb-2.5 font-medium">Type</th>
+                      <th class="pb-2.5 font-medium">Shipment / Record</th>
+                      <th class="pb-2.5 font-medium">Waiting</th>
+                      <th class="pb-2.5 font-medium text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-[#1a2333]/60 text-gray-300">
+                    
+                    <!-- Row 1 -->
+                    <tr>
+                      <td class="py-3 flex items-center gap-2">
+                        <i data-lucide="file-text" class="w-3.5 h-3.5 text-sky-400"></i>
+                        <span>Request Review</span>
+                      </td>
+                      <td class="py-3 font-mono text-gray-200">SHP-2026-05147</td>
+                      <td class="py-3 text-gray-400">2h 15m</td>
+                      <td class="py-3 text-right">
+                        <button class="px-3 py-1 text-xs border border-orange-500/70 text-orange-400 rounded hover:bg-orange-500 hover:text-white transition-all font-medium">Review</button>
+                      </td>
+                    </tr>
+
+                    <!-- Row 2 -->
+                    <tr>
+                      <td class="py-3 flex items-center gap-2">
+                        <i data-lucide="package-x" class="w-3.5 h-3.5 text-amber-500"></i>
+                        <span>Unmatched Parcel</span>
+                      </td>
+                      <td class="py-3 font-mono text-gray-200">1Z99A1234567890</td>
+                      <td class="py-3 text-gray-400">3h 42m</td>
+                      <td class="py-3 text-right">
+                        <button class="px-3 py-1 text-xs border border-orange-500/70 text-orange-400 rounded hover:bg-orange-500 hover:text-white transition-all font-medium">Match</button>
+                      </td>
+                    </tr>
+
+                    <!-- Row 3 -->
+                    <tr>
+                      <td class="py-3 flex items-center gap-2">
+                        <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-500"></i>
+                        <span>Compliance Hold</span>
+                      </td>
+                      <td class="py-3 font-mono text-gray-200">SHP-2026-00034</td>
+                      <td class="py-3 text-gray-400">5h 08m</td>
+                      <td class="py-3 text-right">
+                        <button class="px-3 py-1 text-xs border border-orange-500/70 text-orange-400 rounded hover:bg-orange-500 hover:text-white transition-all font-medium">Resolve</button>
+                      </td>
+                    </tr>
+
+                    <!-- Row 4 -->
+                    <tr>
+                      <td class="py-3 flex items-center gap-2">
+                        <i data-lucide="credit-card" class="w-3.5 h-3.5 text-purple-400"></i>
+                        <span>Payment Verification</span>
+                      </td>
+                      <td class="py-3 font-mono text-gray-200">INV-2026-00978</td>
+                      <td class="py-3 text-gray-400">6h 30m</td>
+                      <td class="py-3 text-right">
+                        <button class="px-3 py-1 text-xs border border-orange-500/70 text-orange-400 rounded hover:bg-orange-500 hover:text-white transition-all font-medium">Verify</button>
+                      </td>
+                    </tr>
+
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Finance & Payment Status Card -->
+            <div class="bg-[#111726] border border-[#1a2333] p-5 rounded-xl space-y-3">
+              <h3 class="text-sm font-semibold text-white">Finance & Payment Status</h3>
+
+              <div class="space-y-2 text-xs">
+                <div class="flex items-center justify-between p-2.5 rounded-lg bg-[#0e1320]/50 border border-[#1a2333]/40">
+                  <span class="text-gray-300 flex items-center gap-2.5">
+                    <i data-lucide="file-question" class="w-4 h-4 text-sky-400"></i>
+                    Quotations Awaiting Approval
+                  </span>
+                  <span class="font-bold text-sky-400 text-sm">5</span>
+                </div>
+
+                <div class="flex items-center justify-between p-2.5 rounded-lg bg-[#0e1320]/50 border border-[#1a2333]/40">
+                  <span class="text-gray-300 flex items-center gap-2.5">
+                    <i data-lucide="credit-card" class="w-4 h-4 text-sky-400"></i>
+                    Advance Payment Verification
+                  </span>
+                  <span class="font-bold text-sky-400 text-sm">4</span>
+                </div>
+
+                <div class="flex items-center justify-between p-2.5 rounded-lg bg-[#0e1320]/50 border border-[#1a2333]/40">
+                  <span class="text-gray-300 flex items-center gap-2.5">
+                    <i data-lucide="receipt" class="w-4 h-4 text-sky-400"></i>
+                    Final Invoice Payment
+                  </span>
+                  <span class="font-bold text-sky-400 text-sm">9</span>
+                </div>
+
+                <div class="flex items-center justify-between p-2.5 rounded-lg bg-[#0e1320]/50 border border-[#1a2333]/40">
+                  <span class="text-gray-300 flex items-center gap-2.5">
+                    <i data-lucide="refresh-cw" class="w-4 h-4 text-sky-400"></i>
+                    Refunds Awaiting Execution
+                  </span>
+                  <span class="font-bold text-sky-400 text-sm">3</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recent ERP Activity Card -->
+            <div class="bg-[#111726] border border-[#1a2333] p-5 rounded-xl space-y-4">
+              <h3 class="text-sm font-semibold text-white">Recent ERP Activity</h3>
+
+              <div class="space-y-4 text-xs">
+                
+                <!-- Activity Item 1 -->
+                <div class="flex items-start gap-3">
+                  <div class="w-7 h-7 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="box" class="w-3.5 h-3.5"></i>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-200 leading-tight">Parcel matched to shipment</p>
+                    <p class="text-gray-400 text-[11px] truncate">Tracking 1Z99A1234567890 matched to SHP-2026-04567</p>
+                  </div>
+                  <span class="text-[11px] text-gray-500 shrink-0">12m ago</span>
+                </div>
+
+                <!-- Activity Item 2 -->
+                <div class="flex items-start gap-3">
+                  <div class="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-200 leading-tight">Payment verified</p>
+                    <p class="text-gray-400 text-[11px] truncate">Advance payment verified for SHP-2026-04510</p>
+                  </div>
+                  <span class="text-[11px] text-gray-500 shrink-0">28m ago</span>
+                </div>
+
+                <!-- Activity Item 3 -->
+                <div class="flex items-start gap-3">
+                  <div class="w-7 h-7 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-200 leading-tight">Shipment locked</p>
+                    <p class="text-gray-400 text-[11px] truncate">Shipment SHP-2026-04480 has been locked</p>
+                  </div>
+                  <span class="text-[11px] text-gray-500 shrink-0">45m ago</span>
+                </div>
+
+                <!-- Activity Item 4 -->
+                <div class="flex items-start gap-3">
+                  <div class="w-7 h-7 rounded-full bg-rose-500/20 text-rose-500 flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-200 leading-tight">Compliance hold applied</p>
+                    <p class="text-gray-400 text-[11px] truncate">Compliance hold applied on SHP-2026-04405</p>
+                  </div>
+                  <span class="text-[11px] text-gray-500 shrink-0">1h 12m ago</span>
+                </div>
+
+                <!-- Activity Item 5 -->
+                <div class="flex items-start gap-3">
+                  <div class="w-7 h-7 rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-200 leading-tight">Return request reviewed</p>
+                    <p class="text-gray-400 text-[11px] truncate">Return request RTR-2026-0178 reviewed and updated</p>
+                  </div>
+                  <span class="text-[11px] text-gray-500 shrink-0">1h 48m ago</span>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- BOTTOM TIMESTAMP FOOTER -->
+        <footer class="flex items-center justify-center gap-2 text-xs text-gray-500 py-4 border-t border-[#1a2333]/60">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-gray-400 animate-spin-slow"></i>
+          <span>Data updated just now</span>
+        </footer>
+
+      </main>
+
+    </div>
+  </div>
+
+  <!-- Lucide Icons Initialization Script -->
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      if (window.lucide) {
+        lucide.createIcons();
+      }
+    });
+  </script>
+</body>
+</html>

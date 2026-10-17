@@ -1,0 +1,335 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Manage Shipment - Insurance & Claims Tab
+   *
+   * Everything shown is read from the database through the shipment view that
+   * renderShipmentManage() builds:
+   *   - shipment.insuranceRequested  (bool, derived from the source request's
+   *     addPackageInsurance / addInsurance flag - the customer's insurance choice)
+   *   - shipment.insurances[]        (Insurance rows for this shipment)
+   *   - shipment.claims[]            (Claim rows for this shipment - they can
+   *     exist even when the shipment was not insured)
+   *   - shipment.sourceRequestItems[] (customer-submitted items; these carry the
+   *     itemType that classifies an item as Product/Goods or Document, plus the
+   *     declared value the customer entered)
+   *   - shipment.items[]             (staff-side shipment_items, used only as a
+   *     fallback when no request backs the shipment)
+   *   - shipment.trackingEvents[]    (status history with createdAt)
+   *   - shipment.isLost / lostConfirmedAt (whether the shipment was lost and the
+   *     date that loss was confirmed)
+   *   - shipment.status, shipment.serviceMode
+   *
+   * Coverage Amount and Premium are computed from the items per the spec
+   * (Coverage Amount = total declared value of all items excluding Documents;
+   * Premium = 3% of Coverage Amount) rather than echoing a stored figure, so the
+   * page is correct even when no Insurance row exists yet.
+   * ------------------------------------------------------------------------- */
+  const S = (typeof shipment !== 'undefined' && shipment) ? shipment : {};
+
+  /* Gating: the customer selected insurance on the request that became this
+     shipment. The flag lives on the request, so it is resolved in the
+     controller from addPackageInsurance / addInsurance and surfaced here. */
+  const insuranceSelected = Boolean(S.insuranceRequested);
+
+  const insurances = Array.isArray(S.insurances) ? S.insurances : [];
+  const claims = Array.isArray(S.claims) ? S.claims : [];
+  const trackingEvents = Array.isArray(S.trackingEvents) ? S.trackingEvents : [];
+  const serviceMode = (S.serviceMode || 'Import');
+  const shipmentStatus = S.status || '';
+  const isLost = Boolean(S.isLost);
+  const lostConfirmedAt = S.lostConfirmedAt || null;
+
+  /* Customer-submitted rows lead (they carry itemType + declared value); the
+     staff-side shipment_items fall back only when no request backs the shipment. */
+  const requestItems =
+    (Array.isArray(S.sourceRequestItems) && S.sourceRequestItems.length)
+      ? S.sourceRequestItems
+      : (Array.isArray(S.items) ? S.items : []);
+
+  /* Presentation helpers - kept local so this partial is renderable on its own,
+     mirroring items-tracking.ejs. */
+  const pick = (row, ...keys) => {
+    for (const key of keys) {
+      const value = row ? row[key] : null;
+      if (value !== null && value !== undefined && String(value).trim() !== '') return value;
+    }
+    return null;
+  };
+  const toNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+  const moneyUSD = (v) => {
+    const n = toNum(v);
+    return n === null ? '—' : `USD ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+  const fmtDate = (v) =>
+    v ? new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+  const orDash = (v) =>
+    v === null || v === undefined || String(v).trim() === '' ? '—' : v;
+  const titleCase = (v) =>
+    String(v || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+  /* An item is a Document (and therefore excluded from coverage) when its itemType
+     is one of the document values the booking forms store: "Documents",
+     "Business Documents" or "Personal Documents". Anything else is a good. */
+  const isDocument = (it) => /document/i.test(String(it.itemType || it.type || '').trim());
+  const declaredValue = (it) => toNum(pick(it, 'invoiceValue', 'invoice_value', 'productPrice', 'product_price', 'totalPrice', 'total_price')) ?? 0;
+
+  /* Primary insurance record (if one was created for the shipment). The page's
+     Coverage Amount / Premium are still computed per the spec, but the record
+     provides the Insurance ID and the persisted status badge. */
+  const insurance = insurances.length ? insurances[0] : null;
+  const insuranceRef = insurance
+    ? (insurance.insuranceId || `INS-${String(insurance.id).padStart(7, '0')}`)
+    : 'N/A';
+  const coverageStatus = insurance
+    ? titleCase(insurance.status)
+    : (insuranceSelected ? 'Active' : '—');
+
+  /* ---- Coverage calculations (Section 1) ---------------------------------- */
+  let coverageAmount = 0;
+  let coveredCount = 0;
+  let excludedCount = 0;
+
+  const itemRows = requestItems.map((it) => {
+    const doc = isDocument(it);
+    const val = doc ? 0 : declaredValue(it);
+    if (doc) excludedCount += 1; else coveredCount += 1;
+    coverageAmount += val;
+    return {
+      ref: 'ITM-' + String(it.id).padStart(7, '0'),
+      name: orDash(pick(it, 'productName', 'product_name', 'productDescription', 'product_description', 'description')),
+      type: orDash(String(it.itemType || it.type || '').trim()) || 'Products / Goods',
+      declared: moneyUSD(declaredValue(it)),
+      covered: !doc,
+      coverage: doc ? 'USD 0.00' : moneyUSD(val),
+    };
+  });
+
+  const premium = toNum(coverageAmount) * 0.03;
+
+  /* Coverage Start Date: the latest receipt status recorded.
+     Import -> "Received at USA Warehouse"; Export -> "Received at Dhaka Hub".
+     Staff can only record (never edit) the timestamp, so the latest recorded
+     receipt event is the start. N/A until a receipt has been recorded. */
+  const START_STATUS = serviceMode === 'Export' ? 'Received at Dhaka Hub' : 'Received at USA Warehouse';
+  const startEvents = trackingEvents.filter((e) => String(e.status) === START_STATUS);
+  const coverageStart = startEvents.length
+    ? startEvents.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0].createdAt
+    : null;
+
+  /* Coverage End Date: follows the spec's decision rules. */
+  let coverageEnd = null;
+  if (isLost) {
+    coverageEnd = lostConfirmedAt;
+  } else if (String(shipmentStatus) === 'Delivered') {
+    const deliveredEvents = trackingEvents.filter((e) => String(e.status) === 'Delivered');
+    coverageEnd = deliveredEvents.length
+      ? deliveredEvents.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0].createdAt
+      : null;
+  }
+
+  const hasStart = Boolean(coverageStart);
+  const coveragePeriod = hasStart
+    ? `${fmtDate(coverageStart)} – ${fmtDate(coverageEnd)}`
+    : 'N/A';
+
+  /* Claim status tones for the Claims table (Section 4). */
+  const CLAIM_STATUS_TONE = {
+    'Draft': 'bg-slate-500/10 text-slate-300 border-slate-500/20',
+    'Submitted': 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+    'Under Review': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    'Needs More Information': 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+    'Approved': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    'Rejected': 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    'Paid': 'bg-green-500/10 text-green-400 border-green-500/20',
+    'Closed': 'bg-gray-500/10 text-gray-400 border-gray-500/20',
+  };
+  const claimStatusTone = (s) => CLAIM_STATUS_TONE[String(s || '')] || CLAIM_STATUS_TONE.Closed;
+%>
+
+<div id="insurance-claims-container" class="space-y-4 text-slate-200 font-sans text-[12px] antialiased">
+
+  <!-- Header Title & Action Buttons -->
+  <div class="flex items-center justify-between gap-4">
+    <div>
+      <h1 class="text-xl font-bold text-white tracking-tight">Insurance &amp; Claims</h1>
+      <p class="text-[11px] text-slate-400 mt-0.5">Insurance coverage exists separately from claims; document items are never covered.</p>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <!-- View Coverage / Review Claim are not wired yet: they are intended to
+           navigate to their own pages within this section. Left inactive until
+           those pages are developed. -->
+      <button type="button" class="px-3.5 py-1.5 bg-[#1b2b48]/80 hover:bg-[#1b2b48] text-slate-200 text-[11px] font-semibold rounded border border-[#2d4268] transition-colors cursor-default">
+        View Coverage
+      </button>
+      <button type="button" class="px-3.5 py-1.5 bg-[#f97316] hover:bg-[#ea580c] text-white text-[11px] font-semibold rounded shadow transition-colors cursor-default">
+        Review Claim
+      </button>
+    </div>
+  </div>
+
+  <!-- Top Grid Section (Insurance Coverage + Coverage Summary) -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+    <!-- Insurance Coverage Main Card -->
+    <div class="lg:col-span-6 bg-[#0b1426] border border-[#1b2b48] rounded-md p-4 relative">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-bold text-white">Insurance Coverage</h2>
+        <span class="px-2.5 py-0.5 rounded-full bg-[#064e3b]/90 text-[#34d399] border border-[#059669]/40 text-[10px] font-semibold">
+          <%= coverageStatus %>
+        </span>
+      </div>
+
+      <% if (!insuranceSelected) { %>
+        <!-- Customer did not select insurance on the booking form. -->
+        <p class="text-slate-400 text-sm">No insurance coverage</p>
+      <% } else { %>
+        <div class="grid grid-cols-2 gap-y-3.5 gap-x-4 text-[11px]">
+          <div>
+            <span class="text-slate-400 block font-medium">Insurance ID</span>
+            <span class="text-white font-bold mt-0.5 block font-mono"><%= insuranceRef %></span>
+          </div>
+          <div>
+            <span class="text-slate-400 block font-medium">Coverage Amount</span>
+            <span class="text-white font-bold mt-0.5 block"><%= moneyUSD(coverageAmount) %></span>
+          </div>
+
+          <div>
+            <span class="text-slate-400 block font-medium">Premium</span>
+            <span class="text-white font-bold mt-0.5 block"><%= moneyUSD(premium) %></span>
+          </div>
+          <div>
+            <span class="text-slate-400 block font-medium">Coverage Period</span>
+            <span class="text-white font-bold mt-0.5 block"><%= coveragePeriod %></span>
+          </div>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- Coverage Summary Card -->
+    <div class="lg:col-span-6 bg-[#0b1426] border border-[#1b2b48] rounded-md p-4 flex flex-col justify-between space-y-3">
+      <div>
+        <h2 class="text-sm font-bold text-white mb-3">Coverage Summary</h2>
+
+        <!-- Metric Boxes -->
+        <div class="grid grid-cols-3 gap-3">
+          <div class="bg-[#050b18] border border-[#16243d] rounded p-2.5">
+            <span class="text-[10px] text-slate-400 block font-medium">Covered Items</span>
+            <span class="text-lg font-bold text-white mt-1 block"><%= insuranceSelected ? coveredCount : 'N/A' %></span>
+          </div>
+
+          <div class="bg-[#050b18] border border-[#16243d] rounded p-2.5">
+            <span class="text-[10px] text-slate-400 block font-medium">Excluded Items</span>
+            <span class="text-lg font-bold text-white mt-1 block"><%= insuranceSelected ? excludedCount : 'N/A' %></span>
+          </div>
+
+          <div class="bg-[#050b18] border border-[#16243d] rounded p-2.5">
+            <span class="text-[10px] text-slate-400 block font-medium">Claims</span>
+            <span class="text-lg font-bold text-white mt-1 block"><%= claims.length %></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Covered by Item Table Panel (only when insurance was selected) -->
+  <% if (insuranceSelected) { %>
+    <div class="bg-[#0b1426] border border-[#1b2b48] rounded-md p-4 space-y-3">
+      <h2 class="text-sm font-bold text-white">Coverage by Item</h2>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-[11px]">
+          <thead>
+            <tr class="border-b border-[#1b2b48] text-slate-400 text-[10.5px]">
+              <th class="py-2 pr-2 font-medium">Item ID</th>
+              <th class="py-2 px-2 font-medium">Item</th>
+              <th class="py-2 px-2 font-medium">Item Type</th>
+              <th class="py-2 px-2 font-medium">Declared Value</th>
+              <th class="py-2 px-2 font-medium text-center">Covered?</th>
+              <th class="py-2 px-2 font-medium">Coverage Amount</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[#16243d]/60 text-slate-300">
+            <% if (!itemRows.length) { %>
+              <tr>
+                <td colspan="6" class="py-4 text-center text-slate-400">No items on this shipment</td>
+              </tr>
+            <% } %>
+            <% itemRows.forEach((item) => { %>
+              <tr class="hover:bg-[#0f1d35]/50 transition-colors">
+                <td class="py-2.5 pr-2 font-medium text-white"><%= item.ref %></td>
+                <td class="py-2.5 px-2 text-slate-200"><%= item.name %></td>
+                <td class="py-2.5 px-2 text-slate-400"><%= item.type %></td>
+                <td class="py-2.5 px-2 font-medium text-slate-200"><%= item.declared %></td>
+                <td class="py-2.5 px-2 text-center">
+                  <% if (item.covered) { %>
+                    <span class="inline-block w-5 h-5 leading-5 rounded-full bg-[#064e3b] text-[#34d399] text-[9px] font-bold text-center">
+                      Yes
+                    </span>
+                  <% } else { %>
+                    <span class="inline-block w-5 h-5 leading-5 rounded-full bg-[#881333] text-[#fda4af] text-[9px] font-bold text-center">
+                      No
+                    </span>
+                  <% } %>
+                </td>
+                <td class="py-2.5 px-2 font-medium text-slate-200"><%= item.coverage %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% } %>
+
+  <!-- Claims Table Panel -->
+  <div class="bg-[#0b1426] border border-[#1b2b48] rounded-md p-4 space-y-3">
+    <h2 class="text-sm font-bold text-white">Claims</h2>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-[11px]">
+        <thead>
+          <tr class="border-b border-[#1b2b48] text-slate-400 text-[10.5px]">
+            <th class="py-2 pr-2 font-medium">Claim ID</th>
+            <th class="py-2 px-2 font-medium">Insurance ID</th>
+            <th class="py-2 px-2 font-medium">Claim Basis</th>
+            <th class="py-2 px-2 font-medium">Claim Type</th>
+            <th class="py-2 px-2 font-medium">Item IDs</th>
+            <th class="py-2 px-2 font-medium">Claimed Amount</th>
+            <th class="py-2 px-2 font-medium">Approved Amount</th>
+            <th class="py-2 px-2 font-medium">Status</th>
+            <th class="py-2 pl-2 text-right font-medium">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#16243d]/60 text-slate-300">
+          <% if (!claims.length) { %>
+            <tr>
+              <td colspan="9" class="py-4 text-center text-slate-400">No claims for this shipment</td>
+            </tr>
+          <% } %>
+          <% claims.forEach((claim) => { %>
+            <tr class="hover:bg-[#0f1d35]/50 transition-colors">
+              <td class="py-2.5 pr-2 font-medium text-white"><%= claim.claimId || `CLM-${String(claim.id).padStart(7, '0')}` %></td>
+              <td class="py-2.5 px-2 text-slate-300"><%= claim.insuranceId ? claim.insuranceId : 'N/A' %></td>
+              <td class="py-2.5 px-2 text-slate-300"><%= orDash(claim.claimBasis) %></td>
+              <td class="py-2.5 px-2 text-slate-300"><%= orDash(claim.claimType) %></td>
+              <td class="py-2.5 px-2 text-slate-300"><%= orDash(claim.itemId) %></td>
+              <td class="py-2.5 px-2 font-medium text-slate-200"><%= moneyUSD(claim.claimedAmount) %></td>
+              <td class="py-2.5 px-2 text-slate-400"><%= claim.approvedAmount ? moneyUSD(claim.approvedAmount) : '—' %></td>
+              <td class="py-2.5 px-2">
+                <span class="px-2 py-0.5 rounded-full <%= claimStatusTone(claim.status) %> border text-[9.5px] font-medium">
+                  <%= orDash(claim.status) %>
+                </span>
+              </td>
+              <td class="py-2.5 pl-2 text-right">
+                <!-- Not wired: intended to open the dedicated claim page. -->
+                <a href="#" class="text-blue-400 hover:text-blue-300 hover:underline text-[11px]">View Claim</a>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>

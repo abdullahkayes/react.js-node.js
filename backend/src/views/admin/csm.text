@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#0b0f19]">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customers & Accounts - Dazzling Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            brand: {
+              dark: '#0b0f19', card: '#111726', border: '#1e293b',
+              orange: '#ff5c00', 'orange-hover': '#e05200',
+              accentBlue: '#38bdf8', accentGreen: '#22c55e',
+              accentPurple: '#a855f7', accentRed: '#ef4444',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="h-full bg-[#0b0f19] text-gray-200 font-sans antialiased overflow-x-hidden">
+  <div class="flex min-h-screen w-full">
+    <%- include('partials/sidebar', { active: 'customers' }) %>
+    <div class="flex-1 flex flex-col min-w-0">
+      <%- include('partials/header', { title: 'Customers & Accounts', subtitle: 'Manage customer profiles and accounts', user: typeof user !== 'undefined' ? user : {} }) %>
+      <main class="flex-1 p-6 space-y-6 overflow-y-auto">
+        
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-group gap-3.5" id="summaryCards">
+          <% const cards = [
+            { key: '', label: 'Total Customers', count: summaryCards.total, icon: 'users', color: 'sky' },
+            { key: 'Active', label: 'Active Accounts', count: summaryCards.active, icon: 'user-check', color: 'emerald' },
+            { key: 'Warning', label: 'Warning Accounts', count: summaryCards.warning, icon: 'alert-triangle', color: 'amber' },
+            { key: 'Restricted', label: 'Restricted Accounts', count: summaryCards.restricted, icon: 'lock', color: 'rose' },
+            { key: 'Suspended', label: 'Suspended Accounts', count: summaryCards.suspended, icon: 'user-x', color: 'purple' },
+            { key: 'Closed', label: 'Closed Accounts', count: summaryCards.closed, icon: 'archive-x', color: 'gray' },
+            { key: 'Dormant', label: 'Dormant Accounts', count: summaryCards.dormant, icon: 'moon', color: 'blue' },
+            { key: 'newThisMonth', label: 'New This Month', count: summaryCards.newThisMonth, icon: 'calendar-plus', color: 'cyan' }
+          ]; %>
+          <% cards.forEach(card => { %>
+            <div
+              class="bg-[#111726] border border-[#1a2333] p-4 rounded-xl flex items-center justify-between hover:border-<%= card.color %>-500/40 transition-colors cursor-pointer group"
+              onclick="filterTable('<%= card.key %>')"
+            >
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg border border-<%= card.color %>-500/30 bg-<%= card.color %>-500/10 flex items-center justify-center text-<%= card.color %>-400">
+                  <i data-lucide="<%= card.icon %>" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <p class="text-[11px] text-gray-400 font-medium"><%= card.label %></p>
+                  <p class="text-xl font-bold text-<%= card.color %>-400"><%= card.count %></p>
+                </div>
+              </div>
+              <i data-lucide="arrow-right" class="w-4 h-4 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+            </div>
+          <% }) %>
+        </div>
+
+        <!-- Table Toolbar -->
+        <div class="flex items-center justify-between">
+          <div class="relative w-80">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input
+              type="text"
+              placeholder="Search by name or email..."
+              class="w-full bg-[#111726] border border-[#1e293b] rounded-lg pl-10 pr-3 py-2 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors"
+              onkeyup="handleSearch(this.value)"
+            />
+          </div>
+          <button
+            onclick="exportPDF()"
+            class="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg text-xs font-medium hover:bg-orange-600 transition-colors shadow-md shadow-orange-500/20"
+          >
+            <i data-lucide="file-down" class="w-4 h-4"></i>
+            Export List (PDF)
+          </button>
+        </div>
+
+        <!-- Main Table -->
+        <div class="bg-[#111726] border border-[#1a2333] rounded-xl overflow-hidden">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="text-gray-400 border-b border-[#1a2333]">
+                <th class="pb-3 px-4 font-medium">Customer ID</th>
+                <th class="pb-3 px-4 font-medium">Name</th>
+                <th class="pb-3 px-4 font-medium">Email</th>
+                <th class="pb-3 px-4 font-medium">Phone</th>
+                <th class="pb-3 px-4 font-medium">Account Status</th>
+                <th class="pb-3 px-4 font-medium">Total Shipments</th>
+                <th class="pb-3 px-4 font-medium">Created</th>
+                <th class="pb-3 px-4 text-right font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[#1a2333]/60">
+              <% if (customers && customers.length > 0) { %>
+                <% customers.forEach(c => { %>
+                  <tr class="hover:bg-[#0e1320]/50 transition-colors">
+                    <td class="py-3 px-4">
+<a href="/admin/customers/<%= c.id %>" class="font-mono text-sky-400 hover:text-sky-300 relative group underline decoration-sky-400/30 hover:decoration-sky-300">#<%= c.id %></a>
+                      <div class="absolute hidden group-hover:block z-10 w-64 p-3 mt-1 bg-[#111726] border border-[#1e293b] rounded-lg shadow-xl text-xs text-gray-300 pointer-events-none">
+                        <div class="space-y-1">
+                          <div><span class="text-gray-400">Name:</span> <%= c.name %></div>
+                          <div><span class="text-gray-400">Email:</span> <%= c.email %></div>
+                          <div><span class="text-gray-400">Phone:</span> <%= c.phone || 'N/A' %></div>
+                          <div><span class="text-gray-400">Status:</span> <%= c.accountStatus %></div>
+                          <div><span class="text-gray-400">Shipments:</span> <%= c.shipmentCount %></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="py-3 px-4 text-gray-200 font-medium"><%= c.name %></td>
+                    <td class="py-3 px-4 text-gray-300"><%= c.email %></td>
+                    <td class="py-3 px-4 text-gray-300"><%= c.phone || 'N/A' %></td>
+                    <td class="py-3 px-4">
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-medium
+                        <%= c.accountStatus === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                           c.accountStatus === 'Warning' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                           c.accountStatus === 'Restricted' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
+                           c.accountStatus === 'Suspended' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
+                           c.accountStatus === 'Closed' ? 'bg-gray-500/10 text-gray-400 border border-gray-500/20' :
+                           c.accountStatus === 'Dormant' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                           c.accountStatus === 'Terminated' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                           'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' %>">
+                        <%= c.accountStatus %>
+                      </span>
+                    </td>
+                    <td class="py-3 px-4 text-gray-300"><%= c.shipmentCount %></td>
+                    <td class="py-3 px-4 text-gray-400"><%= new Date(c.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) %></td>
+                    <td class="py-3 px-4 text-right">
+                      <button type="button" onclick="viewDetails('<%= c.id %>')" class="px-3 py-1 text-xs border border-[#1e293b] text-gray-300 rounded hover:bg-[#1e293b]/50 transition-colors">View Details</button>
+                    </td>
+                  </tr>
+                <% }) %>
+              <% } else { %>
+                <tr>
+                  <td colspan="8" class="py-8 px-4 text-center text-gray-500">No customers found.</td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script>
+    if (window.lucide) lucide.createIcons();
+
+    function filterTable(status) {
+      const params = new URLSearchParams(window.location.search);
+      if (status && status !== 'newThisMonth') {
+        params.set('filter', status);
+      } else if (status === 'newThisMonth') {
+        params.set('filter', 'newThisMonth');
+      } else {
+        params.delete('filter');
+      }
+      params.delete('search');
+      params.set('page', '1');
+      window.location.search = params.toString();
+    }
+
+    function handleSearch(value) {
+      clearTimeout(window._searchTimeout);
+      window._searchTimeout = setTimeout(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (value.trim()) {
+          params.set('search', value.trim());
+        } else {
+          params.delete('search');
+        }
+        params.set('page', '1');
+        window.location.search = params.toString();
+      }, 500);
+    }
+
+    function exportPDF() {
+      const params = new URLSearchParams(window.location.search);
+      window.open(`/admin/customers/export?${params.toString()}`, '_blank');
+    }
+
+    function viewDetails(id) {
+      window.location.href = `/admin/customers/${id}`;
+    }
+  </script>
+</body>
+</html>

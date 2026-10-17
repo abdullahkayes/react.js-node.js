@@ -1,0 +1,653 @@
+<!--
+  Send Notification modal.
+
+  Opened from the Communications & Audit tab. A notification sent here is
+  recorded exactly like one the system raises: it gains a row in Customer
+  Notifications and one delivery evidence row per selected channel.
+
+  The type list and the channel list are rendered from the same catalogue the
+  endpoint validates against, so staff cannot be offered a value the server would
+  refuse.
+-->
+<div id="notifyModalContainer"
+     data-customer-id="<%= customer.id %>"
+     data-message-max-length="<%= notificationOptions.messageMaxLength %>"
+     data-title-max-length="<%= notificationOptions.titleMaxLength %>"
+     data-channel-labels="<%= JSON.stringify(notificationOptions.channelLabels) %>"
+     class="hidden fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto transition-all duration-300">
+
+  <!-- Modal Box -->
+  <div id="notifyModal" class="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden text-slate-800 font-sans text-xs my-auto border border-slate-100 transition-all duration-300">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-6 py-5 bg-white border-b border-slate-100">
+      <div class="flex items-center gap-3.5">
+        <div class="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+          <i data-lucide="send" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h2 class="text-base font-bold text-slate-900 tracking-tight">Send Notification</h2>
+          <p class="text-[11px] text-slate-500 mt-0.5">Send a notification to this customer through the approved channels.</p>
+        </div>
+      </div>
+
+      <button type="button" data-notify-action="close" title="Close" class="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- Validation error from the save request -->
+    <div id="notifyError" class="hidden mx-6 mt-4 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5 text-[11px] text-red-700 flex items-start gap-2">
+      <i data-lucide="alert-circle" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
+      <span id="notifyErrorText"></span>
+    </div>
+
+    <!-- Body Layout. The modal has two views: the editor, and a read-only preview
+         of the notification as the customer would receive it. -->
+    <form id="sendNotificationForm" class="m-0" novalidate>
+      <div data-notify-view="edit" class="p-6 bg-white grid grid-cols-1 lg:grid-cols-12 gap-6 max-h-[78vh] overflow-y-auto">
+
+        <!-- Left Column: Form Inputs -->
+        <div class="lg:col-span-7 space-y-4">
+
+          <!-- Customer Info. Read-only: the notification goes to this customer. -->
+          <div class="space-y-1.5">
+            <label class="font-bold text-slate-900 text-[11px]">Customer</label>
+            <div class="grid grid-cols-12 rounded-lg border border-slate-200 overflow-hidden bg-slate-50/60 font-mono text-[11px]">
+              <div class="col-span-4 px-3 py-2 border-r border-slate-200 text-slate-600 font-medium truncate" data-notify-field="customerId">
+                #<%= customer.id %>
+              </div>
+              <div class="col-span-8 px-3 py-2 text-slate-800 font-sans font-medium truncate" data-notify-field="customerName">
+                <%= customer.name %>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notification Type, from the approved vocabulary -->
+          <div class="space-y-1.5">
+            <label for="notifyTypeSelect" class="font-bold text-slate-900 text-[11px]">Notification Type <span class="text-red-500">*</span></label>
+            <div class="relative">
+              <select id="notifyTypeSelect" name="notificationType"
+                      class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none cursor-pointer pr-8 font-medium">
+                <option value="" disabled selected>Select notification type</option>
+                <% notificationOptions.types.forEach(function (type) { %>
+                  <option value="<%= type %>"><%= type %></option>
+                <% }); %>
+              </select>
+              <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none"></i>
+            </div>
+          </div>
+
+          <!-- Related Record. Search-based rather than a typed reference: a
+               notification can be about any record the customer owns, so staff
+               search those records and pick the applicable one. The opaque key of
+               the picked row is submitted and the endpoint re-resolves it against
+               this customer before storing it, so a notification can never end up
+               attached to somebody else's record. Empty is valid: a genuinely
+               customer-level notification has no related record. -->
+          <div class="space-y-1.5">
+            <label for="notifyRelatedSearch" class="font-bold text-slate-900 text-[11px]">Related Record <span class="text-slate-400 font-normal">(Optional)</span></label>
+            <div class="relative">
+              <input type="search" id="notifyRelatedSearch" data-notify-related-search autocomplete="off"
+                     placeholder="Search this customer's records (request, shipment, claim, return/RTO, payment, invoice, account action, document...)"
+                     class="w-full bg-white border border-slate-200 rounded-lg pl-3 pr-9 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+              <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5 pointer-events-none"></i>
+            </div>
+
+            <!-- Search results -->
+            <div data-notify-related-results class="hidden max-h-44 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100 bg-white"></div>
+            <p data-notify-related-hint class="hidden text-[10px] text-slate-400">No matching record found. Refine the search, or leave the field empty for a customer-level notification.</p>
+
+            <!-- The picked record -->
+            <div data-notify-related-selected class="hidden bg-blue-50/70 border border-blue-200 rounded-lg p-2.5 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <div class="w-7 h-7 rounded bg-blue-600 flex items-center justify-center text-white shrink-0">
+                  <i data-lucide="link-2" class="w-4 h-4"></i>
+                </div>
+                <div class="min-w-0">
+                  <div data-notify-related-ref class="font-mono text-[11px] font-bold text-slate-800 truncate"></div>
+                  <div data-notify-related-desc class="text-[10px] text-slate-500 truncate"></div>
+                </div>
+              </div>
+              <button type="button" data-notify-related-clear class="shrink-0 text-slate-400 hover:text-red-600 transition-colors" title="Remove related record">
+                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+            <p class="text-[10px] text-slate-400">Stored with the notification. Saved as: <span data-notify-related-key class="font-mono">none</span></p>
+          </div>
+
+          <!-- Subject. Stored in the notification's title column, which is the
+               one-line summary shown in the notification list and used as the
+               email subject line. -->
+          <div class="space-y-1">
+            <label for="notifySubjectInput" class="font-bold text-slate-900 text-[11px]">Subject <span class="text-red-500">*</span></label>
+            <input type="text" id="notifySubjectInput" name="title" maxlength="<%= notificationOptions.titleMaxLength %>"
+                   placeholder="Short summary of the notification" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+          </div>
+
+          <!-- Message Body -->
+          <div class="space-y-1.5">
+            <label for="notifyMessageInput" class="font-bold text-slate-900 text-[11px]">Message <span class="text-red-500">*</span></label>
+            <div class="relative">
+              <textarea id="notifyMessageInput" name="message" rows="6" maxlength="<%= notificationOptions.messageMaxLength %>" class="w-full bg-white border border-slate-200 rounded-lg p-3 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none leading-relaxed">Dear <%= customer.name.split(' ')[0] %>,
+
+We are writing to inform you about an important update regarding your account. Please sign in to your Dazzling Shipping account for more details.
+
+Thank you,
+Dazzling International</textarea>
+              <span id="notifyCharCounter" class="absolute right-3 bottom-2 text-[10px] text-slate-400 font-mono"><%= notifyMessageLength %>/<%= notificationOptions.messageMaxLength %></span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right Column: Delivery Channels & Live Preview -->
+        <div class="lg:col-span-5 space-y-5">
+
+          <!-- Channels Selection Section -->
+          <div class="space-y-2.5">
+            <h4 class="font-bold text-slate-900 text-xs">Notification Channels <span class="text-red-500">*</span></h4>
+
+            <% const CHANNEL_CARDS = {
+                 'Dashboard': ['bell', 'purple', "Shown in the customer's dashboard notifications", 'Becomes Viewed when the customer opens it'],
+                 'Email': ['mail', 'blue', "Sent to the customer's registered email address", 'Provider confirmation'],
+                 'SMS': ['message-square', 'emerald', "Sent to the customer's registered mobile number", 'Provider confirmation'],
+                 'WhatsApp': ['message-circle', 'emerald', 'Sent to the customer via WhatsApp', 'Provider confirmation'],
+               };
+               const CHANNEL_TINT = {
+                 blue: 'bg-blue-50 text-blue-600',
+                 emerald: 'bg-emerald-50 text-emerald-600',
+                 purple: 'bg-purple-50 text-purple-600',
+               };
+             %>
+            <div class="space-y-2">
+              <% notificationOptions.channels.forEach(function (channel) {
+                   const meta = CHANNEL_CARDS[channel] || ['bell', 'blue', '', ''];
+                   // The channel is offered whenever the customer has a destination
+                   // on file. A channel with no transport wired up is still offered
+                   // and is recorded as sent and queued, so the delivery evidence
+                   // shows the attempt rather than a channel that was never offered.
+                   const usable = notificationChannelAvailability[channel] !== false;
+               %>
+                <label class="bg-white border border-slate-200 rounded-xl p-3 flex items-start justify-between <%= usable ? 'cursor-pointer hover:border-blue-300' : 'opacity-50 cursor-not-allowed' %> transition-colors">
+                  <div class="flex items-start gap-3">
+                    <div class="p-2 rounded-lg <%= CHANNEL_TINT[meta[1]] %> shrink-0 mt-0.5">
+                      <i data-lucide="<%= meta[0] %>" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                      <span class="font-bold text-slate-900 text-xs"><%= notificationOptions.channelLabels[channel] || channel %></span>
+                      <p class="text-[10px] text-slate-400 mt-0.5 leading-tight"><%= usable ? meta[2] : 'No contact detail on file for this channel' %></p>
+                      <p class="text-[9px] text-slate-300 mt-0.5 leading-tight">Viewed status: <%= meta[3] %></p>
+                    </div>
+                  </div>
+                  <input type="checkbox" data-notify-channel value="<%= channel %>" <%= usable ? 'checked' : '' %>
+                         <%= usable ? '' : 'disabled' %>
+                         class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer mt-1" />
+                </label>
+              <% }); %>
+            </div>
+            <p class="text-[10px] text-slate-400">At least one channel is required. Each selected channel records its own delivery result.</p>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Preview view. Shows the notification exactly as it will be recorded and
+           delivered. Nothing here sends anything: the preview is rebuilt from the
+           editor each time it is opened, and staff return to the editor to change
+           anything. -->
+      <div data-notify-view="preview" class="hidden p-6 bg-slate-50/60 max-h-[78vh] overflow-y-auto">
+        <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-3 bg-blue-50/60 border-b border-blue-100">
+            <div class="flex items-center gap-2 text-blue-700 font-bold text-xs">
+              <i data-lucide="eye" class="w-4 h-4 text-blue-600"></i>
+              <span>Notification Preview</span>
+            </div>
+            <p class="text-[10px] text-slate-500">Nothing is sent until you choose Send Notification.</p>
+          </div>
+
+          <div class="p-5 space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <span class="block text-[10px] font-bold text-slate-500 mb-1">Customer</span>
+                <p class="text-xs text-slate-800 font-medium">#<%= customer.id %> &middot; <%= customer.name %></p>
+              </div>
+              <div>
+                <span class="block text-[10px] font-bold text-slate-500 mb-1">Notification Type</span>
+                <p data-notify-preview="type" class="text-xs text-slate-800 font-medium">Not selected</p>
+              </div>
+              <div>
+                <span class="block text-[10px] font-bold text-slate-500 mb-1">Related Record</span>
+                <p data-notify-preview="related" class="text-xs text-slate-800 font-mono">None</p>
+              </div>
+              <div>
+                <span class="block text-[10px] font-bold text-slate-500 mb-1">Notification Channels</span>
+                <div data-notify-preview="channels" class="flex flex-wrap gap-1.5"></div>
+              </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-100">
+              <span class="block text-[10px] font-bold text-slate-500 mb-1">Subject</span>
+              <p data-notify-preview="subject" class="text-sm font-semibold text-slate-900">No Subject</p>
+            </div>
+
+            <div>
+              <span class="block text-[10px] font-bold text-slate-500 mb-1">Message</span>
+              <p data-notify-preview="message" class="text-xs text-slate-700 whitespace-pre-line leading-relaxed">No Message</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Footer Buttons. Preview and Back to editing swap places so the primary
+           action on screen is always the step staff are on. -->
+      <div class="px-6 py-4 bg-white border-t border-slate-100 flex items-center justify-end gap-3">
+        <button type="button" data-notify-action="close" class="px-5 py-2 rounded-lg border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition-colors text-xs">
+          Cancel
+        </button>
+
+        <button type="button" data-notify-action="preview" class="px-5 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 font-semibold hover:bg-blue-100 transition-colors text-xs flex items-center gap-2">
+          <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+          <span>Preview</span>
+        </button>
+
+        <button type="button" data-notify-action="back" class="hidden px-5 py-2 rounded-lg border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition-colors text-xs flex items-center gap-2">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+          <span>Back to Editing</span>
+        </button>
+
+        <button type="submit" data-notify-submit
+                class="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors text-xs shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
+          <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          <span data-notify-submit-label>Send Notification</span>
+        </button>
+      </div>
+    </form>
+
+  </div>
+
+</div>
+<script>
+  /**
+   * Send Notification modal behaviour.
+   *
+   * The modal is injected over AJAX, so listeners are bound when it opens rather
+   * than at parse time, and the opener is delegated from the document.
+   *
+   * The modal has two views. The editor collects the notification, and the preview
+   * shows it back as it will be recorded and delivered. Previewing never sends:
+   * only the submit button does that, and the preview is rebuilt from the editor
+   * every time it is opened so it can never drift from what will be sent.
+   */
+  (function () {
+    let wired = false;
+
+    /**
+     * Guards the Related Record search: only the newest response may paint the
+     * results list, so a slow early request cannot overwrite a later one.
+     */
+    let relatedSearchToken = 0;
+
+    /** The last search returned, addressed by index by the results list. */
+    let relatedHits = [];
+
+    /** The key of the picked record, submitted instead of any typed text. */
+    let selectedRelatedKey = '';
+
+    function els() {
+      return {
+        container: document.getElementById('notifyModalContainer'),
+        form: document.getElementById('sendNotificationForm'),
+        type: document.getElementById('notifyTypeSelect'),
+        title: document.getElementById('notifySubjectInput'),
+        message: document.getElementById('notifyMessageInput'),
+        counter: document.getElementById('notifyCharCounter'),
+        relatedSearch: document.getElementById('notifyRelatedSearch'),
+        relatedResults: document.querySelector('[data-notify-related-results]'),
+        relatedHint: document.querySelector('[data-notify-related-hint]'),
+        relatedSelected: document.querySelector('[data-notify-related-selected]'),
+        relatedRef: document.querySelector('[data-notify-related-ref]'),
+        relatedDesc: document.querySelector('[data-notify-related-desc]'),
+        relatedKey: document.querySelector('[data-notify-related-key]'),
+        relatedClear: document.querySelector('[data-notify-related-clear]'),
+        editView: document.querySelector('[data-notify-view="edit"]'),
+        previewView: document.querySelector('[data-notify-view="preview"]'),
+        previewType: document.querySelector('[data-notify-preview="type"]'),
+        previewRelated: document.querySelector('[data-notify-preview="related"]'),
+        previewChannels: document.querySelector('[data-notify-preview="channels"]'),
+        previewSubject: document.querySelector('[data-notify-preview="subject"]'),
+        previewMessage: document.querySelector('[data-notify-preview="message"]'),
+        error: document.getElementById('notifyError'),
+        errorText: document.getElementById('notifyErrorText'),
+        submit: document.querySelector('[data-notify-submit]'),
+        submitLabel: document.querySelector('[data-notify-submit-label]'),
+      };
+    }
+
+    /**
+     * Channel display names, read from the same catalogue the endpoint validates
+     * against, so the preview and the modal can only ever name a real channel.
+     */
+    function channelLabels() {
+      const el = els();
+      if (!el.container) return {};
+      try {
+        return JSON.parse(el.container.getAttribute('data-channel-labels') || '{}');
+      } catch (error) {
+        return {};
+      }
+    }
+
+    function setError(message) {
+      const el = els();
+      if (!el.error || !el.errorText) return;
+      el.errorText.textContent = message || '';
+      el.error.classList.toggle('hidden', !message);
+    }
+
+    function selectedChannels() {
+      return Array.from(document.querySelectorAll('[data-notify-channel]:checked')).map((c) => c.value);
+    }
+
+    function refreshCounter() {
+      const el = els();
+      if (!el.message || !el.counter || !el.container) return;
+      const max = Number(el.container.getAttribute('data-message-max-length')) || 2000;
+      el.counter.textContent = el.message.value.length + '/' + max;
+    }
+
+    /**
+     * Paints the picked Related Record, or clears it.
+     *
+     * @param {object|null} record A hit from the search.
+     * @param {object} options keepText leaves the typed text alone, used while
+     *   staff are still typing so the field does not jump under the cursor.
+     */
+    function paintRelatedSelection(record, options) {
+      const opts = options || {};
+      const el = els();
+
+      selectedRelatedKey = record ? record.key : '';
+      if (el.relatedSelected) el.relatedSelected.classList.toggle('hidden', !record);
+      if (record) {
+        if (el.relatedRef) el.relatedRef.textContent = record.ref;
+        if (el.relatedDesc) {
+          el.relatedDesc.textContent = [record.type, record.label, record.sub].filter(Boolean).join(' - ');
+        }
+        if (el.relatedSearch) el.relatedSearch.value = record.ref;
+        if (el.relatedResults) el.relatedResults.classList.add('hidden');
+        if (el.relatedHint) el.relatedHint.classList.add('hidden');
+      } else {
+        if (el.relatedSearch && !opts.keepText) el.relatedSearch.value = '';
+        if (el.relatedResults) el.relatedResults.classList.add('hidden');
+      }
+      if (el.relatedKey) el.relatedKey.textContent = record ? record.key : 'none';
+    }
+
+    function renderRelatedResults(results, token) {
+      const el = els();
+      if (!el.relatedResults || token !== relatedSearchToken) return;
+
+      el.relatedResults.textContent = '';
+      if (!results.length) {
+        el.relatedResults.classList.add('hidden');
+        if (el.relatedHint) el.relatedHint.classList.toggle('hidden', !el.relatedSearch?.value.trim());
+        return;
+      }
+      if (el.relatedHint) el.relatedHint.classList.add('hidden');
+
+      results.forEach((record, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        // The record is addressed by index into the results the search returned,
+        // and the click is handled by one delegated listener on the list, so a row
+        // keeps working after the list is rebuilt.
+        button.setAttribute('data-notify-related-index', String(index));
+        button.className = 'w-full text-left px-2.5 py-2 hover:bg-blue-50/70 transition-colors flex items-center justify-between gap-2';
+
+        const main = document.createElement('div');
+        main.className = 'min-w-0';
+        const ref = document.createElement('div');
+        ref.className = 'font-mono text-[11px] font-bold text-slate-800 truncate';
+        ref.textContent = record.ref;
+        const label = document.createElement('div');
+        label.className = 'text-[11px] text-slate-500 truncate';
+        label.textContent = [record.type, record.label, record.sub].filter(Boolean).join(' - ');
+        main.appendChild(ref);
+        main.appendChild(label);
+
+        const status = document.createElement('span');
+        status.className = 'text-[10px] text-slate-400 shrink-0';
+        status.textContent = record.status || '';
+
+        button.appendChild(main);
+        button.appendChild(status);
+        el.relatedResults.appendChild(button);
+      });
+
+      relatedHits = results;
+      el.relatedResults.classList.remove('hidden');
+    }
+
+    /**
+     * Searches the records this customer owns, so the Related Record can point at
+     * any of them. The same endpoint backs the account action and document
+     * verification modals, so all three resolve a record the same way.
+     */
+    function runRelatedSearch() {
+      const el = els();
+      if (!el.relatedSearch || !el.container) return;
+      const term = el.relatedSearch.value.trim();
+
+      const token = ++relatedSearchToken;
+      fetch(
+        '/admin/customers/' +
+          el.container.getAttribute('data-customer-id') +
+          '/records/search?q=' +
+          encodeURIComponent(term)
+      )
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Search failed'))))
+        .then((data) => renderRelatedResults(data.results || [], token))
+        .catch(() => renderRelatedResults([], token));
+    }
+
+    /**
+     * The required fields of a notification, checked here as well as on the
+     * server so an obviously incomplete form is not sent for a round trip.
+     * The Related Record is deliberately absent: a customer-level notification
+     * has none.
+     */
+    function collectNotification() {
+      const el = els();
+      const channels = selectedChannels();
+      return {
+        notificationType: el.type ? el.type.value : '',
+        title: el.title ? el.title.value.trim() : '',
+        message: el.message ? el.message.value.trim() : '',
+        relatedRecordKey: selectedRelatedKey,
+        channels,
+      };
+    }
+
+    function validateNotification(payload) {
+      const missing = [];
+      if (!payload.notificationType) missing.push('Notification Type is required');
+      if (!payload.title) missing.push('Subject is required');
+      if (!payload.message) missing.push('Message is required');
+      if (!payload.channels.length) missing.push('Select at least one notification channel');
+      return missing;
+    }
+
+    function showPreview() {
+      const el = els();
+      if (!el.container) return;
+      setError('');
+
+      const payload = collectNotification();
+      const missing = validateNotification(payload);
+      if (missing.length) {
+        setError(missing[0]);
+        return;
+      }
+
+      const labels = channelLabels();
+      if (el.previewType) el.previewType.textContent = payload.notificationType;
+      if (el.previewRelated) {
+        el.previewRelated.textContent = selectedRelatedKey || 'None (customer-level notification)';
+      }
+      if (el.previewChannels) {
+        el.previewChannels.textContent = '';
+        payload.channels.forEach((channel) => {
+          const tag = document.createElement('span');
+          tag.className = 'px-2 py-0.5 rounded-full bg-blue-100/70 text-[10px] font-semibold text-blue-700';
+          tag.textContent = labels[channel] || channel;
+          el.previewChannels.appendChild(tag);
+        });
+      }
+      if (el.previewSubject) el.previewSubject.textContent = payload.title;
+      if (el.previewMessage) el.previewMessage.textContent = payload.message;
+
+      el.editView?.classList.add('hidden');
+      el.previewView?.classList.remove('hidden');
+      document.querySelector('[data-notify-action="preview"]')?.classList.add('hidden');
+      document.querySelector('[data-notify-action="back"]')?.classList.remove('hidden');
+    }
+
+    function backToEditing() {
+      const el = els();
+      if (!el.container) return;
+      el.previewView?.classList.add('hidden');
+      el.editView?.classList.remove('hidden');
+      document.querySelector('[data-notify-action="preview"]')?.classList.remove('hidden');
+      document.querySelector('[data-notify-action="back"]')?.classList.add('hidden');
+    }
+
+    function submitNotification() {
+      const el = els();
+      if (!el.form || !el.container) return;
+      setError('');
+
+      const payload = collectNotification();
+      const missing = validateNotification(payload);
+      if (missing.length) {
+        setError(missing[0]);
+        return;
+      }
+
+      const originalLabel = el.submitLabel ? el.submitLabel.textContent : '';
+      if (el.submit) el.submit.disabled = true;
+      if (el.submitLabel) el.submitLabel.textContent = 'Sending...';
+
+      fetch('/admin/customers/' + el.container.getAttribute('data-customer-id') + '/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then(async (response) => {
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.error || 'Could not send the notification');
+          return data;
+        })
+        .then(() => {
+          closeNotifyModal();
+          // The tab is re-read from the database rather than patched client-side,
+          // so the new row, its delivery evidence and the refreshed card counts
+          // all come from what was actually stored.
+          if (typeof switchTab === 'function') switchTab('audit');
+          else window.location.reload();
+        })
+        .catch((error) => {
+          setError(error.message);
+          if (el.submit) el.submit.disabled = false;
+          if (el.submitLabel) el.submitLabel.textContent = originalLabel;
+        });
+    }
+
+    function wire() {
+      if (wired) return;
+      wired = true;
+
+      const el = els();
+      if (!el.container) return;
+
+      el.form?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        submitNotification();
+      });
+
+      el.message?.addEventListener('input', refreshCounter);
+
+      // Related Record search. Debounced so a fast typist does not fire a request
+      // per keystroke, and delayed on first focus so the modal can offer the
+      // customer's most recent records without being asked to.
+      if (el.relatedSearch) {
+        let relatedTimer = null;
+        el.relatedSearch.addEventListener('input', () => {
+          // Typing invalidates any previous pick: what is submitted must match what
+          // is actually selected, never a stale hit from an earlier search.
+          paintRelatedSelection(null, { keepText: true });
+          window.clearTimeout(relatedTimer);
+          relatedTimer = window.setTimeout(runRelatedSearch, 250);
+        });
+        el.relatedSearch.addEventListener('focus', () => {
+          if (!el.relatedResults || el.relatedResults.classList.contains('hidden')) runRelatedSearch();
+        });
+      }
+      el.relatedResults?.addEventListener('click', (event) => {
+        const row = event.target.closest('[data-notify-related-index]');
+        if (!row) return;
+        const record = relatedHits[Number(row.getAttribute('data-notify-related-index'))];
+        if (record) paintRelatedSelection(record);
+      });
+      el.relatedClear?.addEventListener('click', () => paintRelatedSelection(null));
+
+      document.querySelectorAll('[data-notify-action="close"]').forEach((btn) =>
+        btn.addEventListener('click', closeNotifyModal)
+      );
+      document.querySelector('[data-notify-action="preview"]')?.addEventListener('click', showPreview);
+      document.querySelector('[data-notify-action="back"]')?.addEventListener('click', backToEditing);
+    }
+
+    function openNotifyModal() {
+      wire();
+      const el = els();
+      if (!el.container) return;
+      setError('');
+      backToEditing();
+      paintRelatedSelection(null);
+      if (el.submit) el.submit.disabled = false;
+      if (el.submitLabel) el.submitLabel.textContent = 'Send Notification';
+      el.container.classList.remove('hidden');
+      el.container.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      refreshCounter();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    function closeNotifyModal() {
+      const el = els();
+      if (!el.container) return;
+      el.container.classList.add('hidden');
+      el.container.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+
+    window.openNotifyModal = openNotifyModal;
+    window.closeNotifyModal = closeNotifyModal;
+
+    // Delegated, because the tab arrives via innerHTML.
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('[data-open-notification]')) openNotifyModal();
+      if (e.target.id === 'notifyModalContainer') closeNotifyModal();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        const el = els();
+        if (el.container && !el.container.classList.contains('hidden')) closeNotifyModal();
+      }
+    });
+  })();
+</script>

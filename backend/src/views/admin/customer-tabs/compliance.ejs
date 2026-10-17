@@ -1,0 +1,278 @@
+<!-- Compliance Tab Content -->
+<%
+  // Every value on this tab is read from the KYC tables by the controller:
+  // the summary cards, the Current Compliance Profile and the Compliance Review
+  // History all reflect what staff last saved through the Update Compliance
+  // Profile modal. Nothing here is derived from documents or from the account
+  // status, so a card always shows the stored value.
+  const fmtDateTime = (d) => d
+    ? new Date(d).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : 'Not reviewed yet';
+  const kycBadgeStyle = (status) => ({
+    'Verified': 'bg-[#022c19] text-[#22c55e] border-[#15803d]',
+    'Pending': 'bg-amber-500/10 text-amber-400 border-amber-500/40',
+    'Update Required': 'bg-amber-500/10 text-amber-400 border-amber-500/40',
+    'Rejected': 'bg-rose-500/10 text-rose-400 border-rose-500/40',
+    'Not Required Yet': 'bg-[#131f37] text-slate-300 border-[#233558]',
+  }[status] || 'bg-[#131f37] text-slate-300 border-[#233558]');
+  const riskBadgeStyle = (tier) => ({
+    'High': 'bg-rose-500/10 text-rose-400 border-rose-500/40',
+    'Medium': 'bg-amber-500/10 text-amber-400 border-amber-500/40',
+    'Standard': 'bg-emerald-950/60 text-emerald-400 border-emerald-500/30',
+  }[tier] || 'bg-[#131f37] text-slate-300 border-[#233558]');
+  const manualBadgeStyle = (state) => state === 'Required'
+    ? 'bg-amber-500/10 text-amber-400 border-amber-500/40'
+    : 'bg-emerald-950/60 text-emerald-400 border-emerald-500/30';
+  const countLabel = (n, word) => n + (n === 1 ? ' ' + word : ' ' + word + 's');
+%>
+<div class="space-y-5 bg-[#030a16] p-6 text-gray-200 font-sans min-h-screen">
+
+  <!-- Header Section -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <h1 class="text-xl font-bold text-white tracking-tight">Compliance</h1>
+      <p class="text-xs text-gray-400 mt-0.5">Review the customer's internal compliance profile and risk classification.</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 text-xs text-emerald-400 font-medium bg-emerald-950/20 px-3 py-2 rounded-lg border border-emerald-500/20">
+        <i data-lucide="lock" class="w-3.5 h-3.5 text-emerald-400"></i>
+        <span>Authorized Compliance Access</span>
+      </div>
+      <button data-open-compliance class="bg-[#f95700] hover:bg-[#e04e00] text-white text-xs font-semibold px-4 py-2.5 rounded-lg transition-colors shadow-sm">
+        Update Compliance Profile
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary Cards. These are read-only: they report the stored profile and
+       are deliberately not clickable filters. -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- KYC Status -->
+    <div class="bg-[#071224] border border-[#14233c] rounded-xl p-4 flex items-center gap-3.5">
+      <div class="p-2.5 rounded-lg border border-amber-500/40 text-amber-500 bg-amber-500/5">
+        <i data-lucide="shield" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <p class="text-xs text-gray-400 font-medium">KYC Status</p>
+        <span class="inline-block mt-1 px-2.5 py-0.5 rounded text-[11px] font-medium border <%= kycBadgeStyle(compliance.kycStatus) %>">
+          <%= compliance.kycStatus %>
+        </span>
+      </div>
+    </div>
+
+    <!-- Risk Tier -->
+    <div class="bg-[#071224] border border-[#14233c] rounded-xl p-4 flex items-center gap-3.5">
+      <div class="p-2.5 rounded-lg border border-amber-500/40 text-amber-500 bg-amber-500/5">
+        <i data-lucide="gauge-circle" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <p class="text-xs text-gray-400 font-medium">Risk Tier</p>
+        <span class="inline-block mt-1 px-3 py-0.5 rounded text-[11px] font-medium border <%= riskBadgeStyle(compliance.riskTier) %>">
+          <%= compliance.riskTier %>
+        </span>
+      </div>
+    </div>
+
+    <!-- Manual Review -->
+    <div class="bg-[#071224] border border-[#14233c] rounded-xl p-4 flex items-center gap-3.5">
+      <div class="p-2.5 rounded-lg border border-amber-500/40 text-amber-500 bg-amber-500/5">
+        <i data-lucide="clipboard-list" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <p class="text-xs text-gray-400 font-medium">Manual Review</p>
+        <span class="inline-block mt-1 px-3 py-0.5 rounded text-[11px] font-medium border <%= manualBadgeStyle(compliance.manualReviewRequired) %>">
+          <%= compliance.manualReviewRequired %>
+        </span>
+      </div>
+    </div>
+
+    <!-- Last Reviewed -->
+    <div class="bg-[#071224] border border-[#14233c] rounded-xl p-4 flex items-center gap-3.5">
+      <div class="p-2.5 rounded-lg border border-amber-500/40 text-amber-500 bg-amber-500/5">
+        <i data-lucide="clock" class="w-6 h-6"></i>
+      </div>
+      <div class="min-w-0">
+        <p class="text-xs text-gray-400 font-medium">Last Reviewed</p>
+        <% if (compliance.lastReviewedAt) { %>
+          <p class="text-sm font-semibold text-white mt-0.5"><%= new Date(compliance.lastReviewedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) %></p>
+          <p class="text-[11px] text-gray-400"><%= new Date(compliance.lastReviewedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) %></p>
+        <% } else { %>
+          <p class="text-sm font-semibold text-gray-400 mt-0.5">Never reviewed</p>
+          <p class="text-[11px] text-gray-400">No profile update on record</p>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Current Compliance Profile Card -->
+  <div class="bg-[#071224] border border-[#14233c] rounded-xl p-5 space-y-4">
+    <div class="flex items-start justify-between gap-3">
+      <h2 class="text-sm font-semibold text-white tracking-wide">Current Compliance Profile</h2>
+      <% if (!compliance.hasStoredProfile) { %>
+        <span class="shrink-0 text-[10px] font-medium px-2 py-0.5 rounded border border-[#233558] bg-[#131f37] text-slate-400">
+          No stored profile - showing default values
+        </span>
+      <% } %>
+    </div>
+
+    <div class="border-t border-[#14233c] pt-4 grid grid-cols-1 md:grid-cols-2 gap-y-3.5 gap-x-12 text-xs">
+      <div class="space-y-3">
+        <div class="flex items-center">
+          <span class="text-gray-400 w-44">KYC Status:</span>
+          <span class="text-gray-200 font-medium"><%= compliance.kycStatus %></span>
+        </div>
+        <div class="flex items-center">
+          <span class="text-gray-400 w-44">Risk Tier:</span>
+          <span class="text-gray-200 font-medium"><%= compliance.riskTier %></span>
+        </div>
+        <div class="flex items-center">
+          <span class="text-gray-400 w-44">Manual Review Required:</span>
+          <span class="text-gray-200 font-medium"><%= compliance.manualReviewRequired %></span>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <div class="flex items-center">
+          <span class="text-gray-400 w-36">Last Reviewed By:</span>
+          <span class="text-gray-200 font-medium">
+            <% if (compliance.lastReviewedBy) { %>
+              Staff #<%= compliance.lastReviewedBy %>
+            <% } else { %>
+              Not reviewed yet
+            <% } %>
+          </span>
+        </div>
+        <div class="flex items-center">
+          <span class="text-gray-400 w-36">Last Reviewed At:</span>
+          <span class="text-gray-200 font-medium"><%= fmtDateTime(compliance.lastReviewedAt) %></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Internal Review Note Alert -->
+    <div class="bg-[#050e1d] border border-[#102038] rounded-lg p-3.5 flex items-start gap-3">
+      <i data-lucide="info" class="w-4 h-4 text-sky-400 mt-0.5 shrink-0"></i>
+      <div class="text-xs">
+        <span class="font-medium text-sky-400 block mb-0.5">Internal Review Note</span>
+        <p class="text-gray-300 whitespace-pre-line"><%= compliance.internalReviewNote || 'No review note has been recorded for this customer yet.' %></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compliance Review History Table Card -->
+  <div class="bg-[#071224] border border-[#14233c] rounded-xl p-5 space-y-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <h2 class="text-sm font-semibold text-white tracking-wide">Compliance Review History</h2>
+
+      <div class="flex items-center gap-3">
+        <!-- Search Input -->
+        <div class="relative w-full sm:w-64">
+          <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-2 text-gray-400"></i>
+          <input type="text" data-compliance-search placeholder="Search by action or Staff ID" class="w-full bg-[#040b18] border border-[#14233c] rounded-lg pl-8 pr-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500 transition-colors">
+        </div>
+        <!-- Filter Dropdown -->
+        <div class="relative shrink-0">
+          <select data-compliance-filter class="bg-[#040b18] border border-[#14233c] rounded-lg pl-3 pr-8 py-1.5 text-xs text-gray-200 appearance-none focus:outline-none focus:border-sky-500 cursor-pointer">
+            <option value="">Action: All</option>
+            <option value="Update">Update</option>
+            <option value="Create">Create</option>
+          </select>
+          <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-2 pointer-events-none"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- History Table -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="text-gray-400 border-b border-[#14233c]">
+            <th class="py-2.5 font-medium">Date &amp; Time</th>
+            <th class="py-2.5 font-medium">Action</th>
+            <th class="py-2.5 font-medium">Previous State</th>
+            <th class="py-2.5 font-medium">New State</th>
+            <th class="py-2.5 font-medium">Performed By</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#14233c]/60 text-gray-300">
+          <% if (complianceHistory.length > 0) { %>
+            <% complianceHistory.forEach(item => { %>
+              <tr class="hover:bg-[#040c1a]/50 transition-colors" data-compliance-row
+                  data-action="<%= item.action %>"
+                  title="<%= item.changeSummary %>"
+                  data-search="<%= [item.action, item.performedBy, item.previousState, item.newState, item.changeSummary].join(' ').toLowerCase() %>">
+                <td class="py-3 text-gray-200 whitespace-nowrap"><%= fmtDateTime(item.dateTime) %></td>
+                <td class="py-3"><%= item.action %></td>
+                <td class="py-3 text-gray-400 whitespace-nowrap"><%= item.previousState %></td>
+                <td class="py-3 whitespace-nowrap">
+                  <span class="text-gray-200"><%= item.newState %></span>
+                  <span class="block text-[10px] text-sky-400/80 mt-0.5"><%= item.changeSummary %></span>
+                </td>
+                <td class="py-3 text-sky-400 font-mono whitespace-nowrap"><%= item.performedBy %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="5" class="py-6 text-center text-gray-500">No compliance review has been recorded for this customer.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination Footer -->
+    <div class="flex items-center justify-between pt-2 text-xs">
+      <span class="text-gray-400" data-compliance-count>Showing <%= countLabel(complianceHistory.length, 'record') %></span>
+      <div class="flex items-center gap-1.5">
+        <button disabled class="px-3 py-1 rounded-md bg-[#040b18] border border-[#14233c] text-gray-600 cursor-not-allowed">Previous</button>
+        <button class="w-7 h-7 rounded-md bg-[#040b18] border border-amber-600/80 text-amber-500 font-medium flex items-center justify-center">1</button>
+        <button disabled class="px-3 py-1 rounded-md bg-[#040b18] border border-[#14233c] text-gray-600 cursor-not-allowed">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Notice Alert -->
+  <div class="bg-[#050e1d] border border-[#102038] rounded-xl p-3.5 flex items-center gap-3">
+    <i data-lucide="info" class="w-4 h-4 text-sky-400 shrink-0"></i>
+    <p class="text-xs text-gray-300">
+      Email and phone verification are account verification, not KYC. Identity and business documents are managed under <a href="#" class="text-gray-100 underline decoration-gray-500 underline-offset-2 hover:text-white">Verification &amp; Documents</a>, and changing a document's verification status does not change this compliance profile.
+    </p>
+  </div>
+
+</div>
+
+<script>
+  // Compliance history filters, delegated because the tab arrives via innerHTML.
+  (function () {
+    function applyComplianceFilters() {
+      const term = (document.querySelector('[data-compliance-search]')?.value || '').trim().toLowerCase();
+      const action = document.querySelector('[data-compliance-filter]')?.value || '';
+      const rows = Array.from(document.querySelectorAll('[data-compliance-row]'));
+      let visible = 0;
+      rows.forEach((row) => {
+        const okAction = !action || row.getAttribute('data-action') === action;
+        const okSearch = !term || (row.getAttribute('data-search') || '').includes(term);
+        const show = okAction && okSearch;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      const counter = document.querySelector('[data-compliance-count]');
+      if (counter) {
+        const total = rows.length;
+        counter.textContent = (action || term) && visible !== total
+          ? 'Showing ' + visible + ' of ' + total + ' records'
+          : 'Showing ' + total + (total === 1 ? ' record' : ' records');
+      }
+    }
+
+    document.addEventListener('input', function (e) {
+      if (e.target.matches('[data-compliance-search]')) applyComplianceFilters();
+    });
+    document.addEventListener('change', function (e) {
+      if (e.target.matches('[data-compliance-filter]')) applyComplianceFilters();
+    });
+  })();
+</script>
+
+<!-- Update Compliance Profile popup, opened from the button above. -->
+<%- include('./compliance-modal') %>

@@ -1,0 +1,50 @@
+<%
+  /*
+    The document head for an admin page.
+
+    Every admin page loads the same Tailwind config, icon set and fonts, so it
+    lives here once. `pageTitle` is the browser tab title; `active` marks the
+    sidebar entry for the section the page belongs to.
+  */
+%><!DOCTYPE html>
+<html lang="en" class="h-full bg-[#0b0f19]">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= pageTitle %></title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            brand: {
+              dark: '#0b0f19', card: '#111726', border: '#1e293b',
+              orange: '#ff5c00', 'orange-hover': '#e05200',
+              accentBlue: '#38bdf8', accentGreen: '#22c55e',
+              accentPurple: '#a855f7', accentRed: '#ef4444',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <%#
+    A page may pass its own CSS through `extraStyles`. This exists so a page that
+    carries bespoke styling can keep it in the document head, where a style block
+    belongs, instead of the page having to emit one into the body to get around
+    this partial. Omitted by every page that does not need it.
+  %>
+  <% if (typeof extraStyles !== 'undefined' && extraStyles) { %>
+  <style><%- extraStyles %></style>
+  <% } %>
+</head>
+<body class="h-full bg-[#0b0f19] text-gray-200 font-sans antialiased overflow-x-hidden">
+  <div class="flex min-h-screen w-full">
+    <%- include('sidebar', { active: typeof active !== 'undefined' ? active : '' }) %>
+
+    <div class="flex-1 flex flex-col min-w-0">

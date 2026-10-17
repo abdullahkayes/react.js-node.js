@@ -1,0 +1,14 @@
+<div class="bg-[#081225] border border-[#1b2b48] rounded-md p-6 space-y-4">
+  <h2 class="text-sm font-bold text-white">Overview</h2>
+  <p class="text-[11px] text-slate-400">Purchase ID: <span class="font-mono text-blue-400"><%= typeof purchaseId !== 'undefined' ? purchaseId : 'N/A' %></span></p>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-[11px]">
+    <div class="bg-[#050c18] border border-[#1b2b48] rounded p-3">
+      <span class="text-slate-400">Status</span>
+      <p class="text-white font-semibold mt-1">In Progress</p>
+    </div>
+    <div class="bg-[#050c18] border border-[#1b2b48] rounded p-3">
+      <span class="text-slate-400">Customer</span>
+      <p class="text-white font-semibold mt-1">—</p>
+    </div>
+  </div>
+</div>

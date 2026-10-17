@@ -1,0 +1,110 @@
+<%
+  /*
+    The context rail shared by the three request details pages.
+
+    Customer, linked shipments and information requests mean the same thing for
+    every request type, so they are rendered once here. The three pages differ in
+    their main column, which is the part that actually differs between the tables.
+  */
+%>
+<div class="space-y-5 min-w-0">
+
+  <!-- Customer -->
+  <section class="bg-[#111726] border border-[#1a2333] rounded-xl overflow-hidden">
+    <div class="p-4 border-b border-[#1a2333] flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <i data-lucide="user" class="w-4 h-4 text-sky-400"></i>
+        <h3 class="text-sm font-bold text-white">Customer</h3>
+      </div>
+      <% if (customer) { %>
+        <a href="/admin/customers/<%= customer.id %>" class="text-[10px] text-sky-400 hover:text-sky-300">View Account</a>
+      <% } %>
+    </div>
+    <% if (customer) { %>
+      <dl class="p-4 space-y-3 text-xs">
+        <div class="flex items-start justify-between gap-3">
+          <dt class="text-gray-500 shrink-0">Name</dt>
+          <dd class="text-gray-200 text-right font-medium"><%= customer.name %></dd>
+        </div>
+        <div class="flex items-start justify-between gap-3">
+          <dt class="text-gray-500 shrink-0">Customer ID</dt>
+          <dd class="text-sky-400 font-mono text-right">#<%= customer.id %></dd>
+        </div>
+        <div class="flex items-start justify-between gap-3">
+          <dt class="text-gray-500 shrink-0">Email</dt>
+          <dd class="text-gray-300 text-right break-all"><%= customer.email %></dd>
+        </div>
+        <div class="flex items-start justify-between gap-3">
+          <dt class="text-gray-500 shrink-0">Phone</dt>
+          <dd class="text-gray-300 text-right"><%= customer.phone || 'Not registered' %></dd>
+        </div>
+        <div class="flex items-start justify-between gap-3">
+          <dt class="text-gray-500 shrink-0">Customer Type</dt>
+          <dd class="text-gray-300 text-right"><%= customer.accountType ? String(customer.accountType).replace(/_/g, ' ') : 'Not set' %></dd>
+        </div>
+        <div class="flex items-start justify-between gap-3">
+          <dt class="text-gray-500 shrink-0">Account Status</dt>
+          <dd class="text-gray-300 text-right"><%= customer.accountStatus || 'Active' %></dd>
+        </div>
+      </dl>
+    <% } else { %>
+      <div class="py-8 px-4 text-center text-gray-500 text-xs">The customer record for this request has been removed.</div>
+    <% } %>
+  </section>
+
+  <!-- Linked shipments -->
+  <section class="bg-[#111726] border border-[#1a2333] rounded-xl overflow-hidden">
+    <div class="p-4 border-b border-[#1a2333] flex items-center gap-2">
+      <i data-lucide="link" class="w-4 h-4 text-sky-400"></i>
+      <h3 class="text-sm font-bold text-white">Linked Shipment<%= shipments.length === 1 ? '' : 's' %></h3>
+    </div>
+    <% if (shipments.length) { %>
+      <ul class="divide-y divide-[#1a2333]/60">
+        <% shipments.forEach((shipment) => { %>
+          <li class="px-4 py-3 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <a href="<%= shipment.href %>" class="text-xs text-sky-400 font-mono hover:text-sky-300 hover:underline truncate block"><%= shipment.ref %></a>
+              <div class="text-[10px] text-gray-500 truncate"><%= shipment.status %></div>
+            </div>
+            <a href="<%= shipment.href %>" class="shrink-0 px-2.5 py-1 border border-[#1a2333] rounded text-[10px] text-gray-300 hover:bg-[#111a2e] transition-colors">Details</a>
+          </li>
+        <% }) %>
+      </ul>
+    <% } else { %>
+      <div class="py-8 px-4 text-center text-gray-500 text-xs">
+        <% if (row.status === 'Approved') { %>
+          No shipment has been created for this request yet.
+        <% } else { %>
+          A shipment is created once this request is approved.
+        <% } %>
+      </div>
+    <% } %>
+  </section>
+
+  <!-- Information requests raised for this customer -->
+  <section class="bg-[#111726] border border-[#1a2333] rounded-xl overflow-hidden">
+    <div class="p-4 border-b border-[#1a2333] flex items-center gap-2">
+      <i data-lucide="message-square-warning" class="w-4 h-4 text-orange-400"></i>
+      <h3 class="text-sm font-bold text-white">Information Requests</h3>
+    </div>
+    <% if (informationRequests.length) { %>
+      <ul class="divide-y divide-[#1a2333]/60 max-h-80 overflow-y-auto">
+        <% informationRequests.forEach((infoRequest) => { %>
+          <li class="px-4 py-3">
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-[10px] font-mono text-gray-500">REQ-<%= String(infoRequest.id).padStart(5, '0') %></span>
+              <span class="text-[10px] text-gray-500"><%= infoRequest.requestedAt ? new Date(infoRequest.requestedAt).toLocaleDateString() : '—' %></span>
+            </div>
+            <div class="text-xs text-gray-200 mt-1"><%= infoRequest.specificInformation %></div>
+            <div class="text-[10px] text-gray-500 mt-0.5">
+              <%= infoRequest.informationType %> &bull; <%= infoRequest.actionRequired %> &bull; Reason: <%= infoRequest.reason %>
+            </div>
+          </li>
+        <% }) %>
+      </ul>
+    <% } else { %>
+      <div class="py-8 px-4 text-center text-gray-500 text-xs">No information has been requested from this customer.</div>
+    <% } %>
+  </section>
+
+</div>

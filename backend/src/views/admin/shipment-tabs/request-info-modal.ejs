@@ -1,0 +1,287 @@
+<!--
+  Shipment information-request popup.
+
+  Markup only - behaviour lives in shipment-manage.ejs because inline <script>
+  tags do not run when this partial is injected via AJAX tab switching, and the
+  modal has to keep working after a tab partial is swapped in.
+
+  This is a shipment-level request: it has no Related Record field and it does
+  not introduce a shipment or account status. Every dropdown is populated from
+  the catalogue embedded below (config/informationRequests.js), which is the
+  same definition the create endpoint validates against.
+-->
+
+<!--
+  Option catalogue. Rendered as JSON rather than inline JavaScript so it can be
+  read back from a partial that was injected with innerHTML.
+-->
+<%
+  const catalog = typeof informationRequests !== 'undefined' ? informationRequests : { informationTypes: [], specificInformation: {}, actionRequired: [], reasons: [], otherReason: 'Other', notificationChannels: [] };
+  const channels = typeof availableChannels !== 'undefined' ? availableChannels : { Email: false, SMS: false, WhatsApp: false };
+%>
+<script type="application/json" data-req-catalog><%- JSON.stringify(catalog) %></script>
+
+<!-- Backdrop -->
+<div id="reqInfoBackdrop" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+  <div class="bg-white w-full max-w-6xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[96vh] font-sans">
+
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+      <div class="flex items-center gap-3.5">
+        <div class="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+          <i data-lucide="file-text" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h2 class="text-base font-bold text-slate-900 tracking-tight leading-none">Request Information</h2>
+          <p class="text-xs text-slate-500 mt-1">Request missing, incorrect, outdated or additional information for this shipment.</p>
+        </div>
+      </div>
+      <button type="button" data-req-action="close" title="Close" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer shrink-0">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Modal Body -->
+    <form data-req-form class="p-6 overflow-y-auto grid grid-cols-1 lg:grid-cols-12 gap-6 bg-white" autocomplete="off">
+
+      <!-- ================= LEFT COLUMN: form fields ================= -->
+      <div class="lg:col-span-7 space-y-4 text-xs">
+
+        <!-- 1) Shipment: read-only, pulled from the shipment record -->
+        <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+          <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 mb-2">
+            <i data-lucide="truck" class="w-3.5 h-3.5 text-blue-600"></i>
+            <span>Shipment</span>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <span class="block text-[11px] font-medium text-slate-500">Shipment ID</span>
+              <span class="block font-bold text-slate-800 font-mono mt-0.5"><%= shipment && shipment.shipmentId ? shipment.shipmentId : '—' %></span>
+            </div>
+            <div class="min-w-0">
+              <span class="block text-[11px] font-medium text-slate-500">Tracking Number</span>
+              <span class="block font-bold text-slate-800 mt-0.5 break-words"><%= shipment && shipment.trackingNumber ? shipment.trackingNumber : '—' %></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2) Information Type: drives the Specific Information options -->
+        <div>
+          <label for="reqInfoType" class="block font-semibold text-slate-700 mb-1">Information Type <span class="text-red-500">*</span></label>
+          <select id="reqInfoType" name="informationType" data-req-field="informationType"
+            class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800">
+            <option value="">Select an information type</option>
+          </select>
+          <p data-req-error="informationType" class="hidden text-[10px] text-rose-600 mt-1"></p>
+        </div>
+
+        <!-- 3) Specific Information Required: options depend on the type -->
+        <div>
+          <label for="reqSpecificInfo" class="block font-semibold text-slate-700 mb-1">Specific Information Required <span class="text-red-500">*</span></label>
+          <select id="reqSpecificInfo" name="specificInformation" data-req-field="specificInformation" disabled
+            class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+            <option value="">Select an information type first</option>
+          </select>
+          <p data-req-error="specificInformation" class="hidden text-[10px] text-rose-600 mt-1"></p>
+        </div>
+
+        <!-- 4) Action Required -->
+        <div>
+          <label for="reqActionRequired" class="block font-semibold text-slate-700 mb-1">Action Required <span class="text-red-500">*</span></label>
+          <select id="reqActionRequired" name="actionRequired" data-req-field="actionRequired"
+            class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800">
+            <option value="">Select an action</option>
+          </select>
+          <p class="text-[10px] text-slate-400 mt-1">Describes what must be done.</p>
+          <p data-req-error="actionRequired" class="hidden text-[10px] text-rose-600 mt-1"></p>
+        </div>
+
+        <!-- 5) Required Details -->
+        <div>
+          <label for="reqRequiredDetails" class="block font-semibold text-slate-700 mb-1">Required Details <span class="text-red-500">*</span></label>
+          <div class="relative">
+            <textarea id="reqRequiredDetails" name="requiredDetails" data-req-field="requiredDetails" rows="3" maxlength="1000"
+              placeholder="Describe exactly what information or document is required."
+              class="w-full p-3 pr-16 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white text-slate-800 placeholder:text-slate-400 resize-none"></textarea>
+            <span class="absolute right-3 bottom-2 text-[10px] text-slate-400"><span data-req-count="requiredDetails">0</span>/1000</span>
+          </div>
+          <p class="text-[10px] text-slate-400 mt-1">Used to generate the notification. Required.</p>
+          <p data-req-error="requiredDetails" class="hidden text-[10px] text-rose-600 mt-1"></p>
+        </div>
+
+        <!-- 6) Reason -->
+        <div>
+          <label for="reqReason" class="block font-semibold text-slate-700 mb-1">Reason <span class="text-red-500">*</span></label>
+          <select id="reqReason" name="reason" data-req-field="reason"
+            class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800">
+            <option value="">Select a reason</option>
+          </select>
+          <p data-req-error="reason" class="hidden text-[10px] text-rose-600 mt-1"></p>
+        </div>
+
+        <!-- 7) Reason Details: only shown, and only required, for Other -->
+        <div data-req-reason-details hidden>
+          <label for="reqReasonDetails" class="block font-semibold text-slate-700 mb-1">Reason Details <span class="text-red-500">*</span></label>
+          <div class="relative">
+            <textarea id="reqReasonDetails" name="reasonDetails" data-req-field="reasonDetails" rows="2" maxlength="1000"
+              placeholder="Explain the reason for this request clearly."
+              class="w-full p-3 pr-16 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white text-slate-800 placeholder:text-slate-400 resize-none"></textarea>
+            <span class="absolute right-3 bottom-2 text-[10px] text-slate-400"><span data-req-count="reasonDetails">0</span>/1000</span>
+          </div>
+          <p class="text-[10px] text-slate-400 mt-1">Required because Reason is set to Other.</p>
+          <p data-req-error="reasonDetails" class="hidden text-[10px] text-rose-600 mt-1"></p>
+        </div>
+
+        <!-- 8) Additional Instructions -->
+        <div>
+          <label for="reqAdditionalInstructions" class="block font-semibold text-slate-700 mb-1">Additional Instructions <span class="text-slate-400 font-normal">(Optional)</span></label>
+          <div class="relative">
+            <textarea id="reqAdditionalInstructions" name="additionalInstructions" data-req-field="additionalInstructions" rows="2" maxlength="1000"
+              placeholder="Any additional instructions."
+              class="w-full p-3 pr-16 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white text-slate-800 placeholder:text-slate-400 resize-none"></textarea>
+            <span class="absolute right-3 bottom-2 text-[10px] text-slate-400"><span data-req-count="additionalInstructions">0</span>/1000</span>
+          </div>
+        </div>
+
+        <!-- 9) Notification Channels -->
+        <div>
+          <label class="block font-semibold text-slate-700 mb-2">Notification Channels <span class="text-red-500">*</span></label>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5" data-req-channels>
+
+            <!-- Email -->
+            <label class="border border-blue-200 bg-blue-50/30 rounded-xl p-2.5 flex flex-col justify-between cursor-pointer relative">
+              <div class="flex items-center justify-between mb-1.5">
+                <div class="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                  <i data-lucide="mail" class="w-3.5 h-3.5"></i>
+                </div>
+                <input type="checkbox" name="notificationChannels" value="Email" data-req-channel
+                  <%= channels.Email ? 'checked' : '' %><%= channels.Email ? '' : 'disabled' %>
+                  class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+              </div>
+              <div>
+                <div class="font-bold text-slate-800 text-xs">Email</div>
+                <div class="text-[9px] text-slate-500 leading-tight mt-0.5">Send to registered email address<%= channels.Email ? '' : ' (not registered)' %></div>
+              </div>
+            </label>
+
+            <!-- SMS -->
+            <label class="border border-blue-200 bg-blue-50/30 rounded-xl p-2.5 flex flex-col justify-between cursor-pointer relative">
+              <div class="flex items-center justify-between mb-1.5">
+                <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                  <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+                </div>
+                <input type="checkbox" name="notificationChannels" value="SMS" data-req-channel
+                  <%= channels.SMS ? 'checked' : '' %><%= channels.SMS ? '' : 'disabled' %>
+                  class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+              </div>
+              <div>
+                <div class="font-bold text-slate-800 text-xs">SMS</div>
+                <div class="text-[9px] text-slate-500 leading-tight mt-0.5">Send to registered mobile number<%= channels.SMS ? '' : ' (not registered)' %></div>
+              </div>
+            </label>
+
+            <!-- WhatsApp -->
+            <label class="border border-blue-200 bg-blue-50/30 rounded-xl p-2.5 flex flex-col justify-between cursor-pointer relative">
+              <div class="flex items-center justify-between mb-1.5">
+                <div class="w-7 h-7 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
+                  <i data-lucide="phone" class="w-3.5 h-3.5"></i>
+                </div>
+                <input type="checkbox" name="notificationChannels" value="WhatsApp" data-req-channel
+                  <%= channels.WhatsApp ? 'checked' : '' %><%= channels.WhatsApp ? '' : 'disabled' %>
+                  class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+              </div>
+              <div>
+                <div class="font-bold text-slate-800 text-xs">WhatsApp</div>
+                <div class="text-[9px] text-slate-500 leading-tight mt-0.5">Send via WhatsApp<%= channels.WhatsApp ? '' : ' (not registered)' %></div>
+              </div>
+            </label>
+
+            <!-- In-App Notification -->
+            <label class="border border-blue-200 bg-blue-50/30 rounded-xl p-2.5 flex flex-col justify-between cursor-pointer relative">
+              <div class="flex items-center justify-between mb-1.5">
+                <div class="w-7 h-7 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+                  <i data-lucide="bell" class="w-3.5 h-3.5"></i>
+                </div>
+                <input type="checkbox" name="notificationChannels" value="In-App Notification" data-req-channel checked
+                  class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+              </div>
+              <div>
+                <div class="font-bold text-slate-800 text-xs">In-App Notification</div>
+                <div class="text-[9px] text-slate-500 leading-tight mt-0.5">Send to dashboard notifications</div>
+              </div>
+            </label>
+
+          </div>
+          <p data-req-error="notificationChannels" class="hidden text-[10px] text-rose-600 mt-1"></p>
+        </div>
+
+      </div>
+
+      <!-- ================= RIGHT COLUMN: generated message ================= -->
+      <div class="lg:col-span-5">
+        <div class="bg-gradient-to-b from-blue-50/40 to-slate-50/40 border border-blue-100/80 rounded-2xl p-5 h-full flex flex-col gap-4">
+
+          <!-- 10) Message: generated, read-only -->
+          <div class="flex items-center justify-between pb-3 border-b border-slate-200/60">
+            <div class="flex items-center gap-2">
+              <i data-lucide="eye" class="w-4 h-4 text-blue-600"></i>
+              <h3 class="font-bold text-slate-800 text-xs">Message Preview</h3>
+            </div>
+            <span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-semibold rounded-md">Auto-generated</span>
+          </div>
+
+          <p class="text-[11px] text-slate-500 leading-normal">
+            Generated from the request details above. Review it before sending.
+          </p>
+
+          <div class="space-y-3 flex-1">
+            <!-- Subject -->
+            <div>
+              <span class="block text-[11px] font-semibold text-slate-700 mb-1">Subject</span>
+              <div data-req-field="previewSubject"
+                class="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 shadow-xs min-h-[34px]">-</div>
+            </div>
+
+            <!-- Message -->
+            <div>
+              <span class="block text-[11px] font-semibold text-slate-700 mb-1">Message</span>
+              <pre data-req-field="previewMessage"
+                class="bg-white border border-slate-200 rounded-xl p-4 text-[11px] text-slate-600 shadow-xs leading-relaxed font-sans whitespace-pre-wrap overflow-y-auto max-h-[300px]">-</pre>
+            </div>
+          </div>
+
+          <!-- 11) Notification: what happens on submission -->
+          <div class="bg-white/70 border border-blue-100 rounded-xl p-3 space-y-2">
+            <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+              <i data-lucide="bell" class="w-3.5 h-3.5 text-blue-600"></i>
+              <span>Notification</span>
+            </div>
+            <p class="text-[10px] text-slate-500 leading-relaxed">
+              The recipient will be notified on submission using the selected channels, and this request will be recorded on the shipment.
+            </p>
+            <div class="flex flex-wrap items-center gap-1.5 pt-0.5" data-req-channel-summary></div>
+          </div>
+
+        </div>
+      </div>
+
+    </form>
+
+    <!-- Footer -->
+    <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center gap-3 shrink-0">
+      <p data-req-error-summary class="hidden flex-1 text-xs text-rose-600 leading-tight"></p>
+      <div class="flex items-center justify-end gap-3 sm:ml-auto">
+        <!-- 13) Cancel -->
+        <button type="button" data-req-action="close" class="px-5 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg transition-colors shadow-xs">
+          Cancel
+        </button>
+        <!-- 12) Send Request -->
+        <button type="button" data-req-action="send" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-2 shadow-sm">
+          <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          <span>Send Request</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>

@@ -1,0 +1,574 @@
+<!-- Main Container Wrapper -->
+<div id="verification-modal-wrapper" class="relative z-50 font-sans text-slate-800">
+
+  <!-- Modal Backdrop & Window -->
+  <div id="verification-modal-backdrop" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto transition-opacity duration-200">
+    
+    <!-- Modal Container -->
+    <div id="verification-modal-container" class="bg-[#f8fafc] w-full max-w-7xl rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[96vh] transition-all duration-300">
+      
+      <!-- Modal Header -->
+      <div class="bg-white px-5 py-3.5 border-b border-slate-200 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
+            <i data-lucide="file-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-slate-900 tracking-tight leading-none">Document Verification</h2>
+            <p class="text-[11px] text-slate-500 mt-1">Review the selected document, complete the verification and record the decision.</p>
+          </div>
+        </div>
+
+        <!-- Action Controls: Minimize & Close -->
+        <div class="flex items-center gap-1">
+          <!-- Cross / Close Icon (Triggers Minimize) -->
+          <button id="minimize-btn" onclick="minimizeModal()" title="Minimize" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Modal Body Grid -->
+      <div class="p-4 overflow-y-auto grid grid-cols-1 lg:grid-cols-12 gap-4 bg-[#f1f5f9]/50">
+        
+        <!-- ================= LEFT COLUMN ================= -->
+        <div class="lg:col-span-5 space-y-4">
+          
+          <!-- Document Information Card -->
+          <div class="bg-white border border-slate-200 rounded-lg shadow-2xl/5 overflow-hidden">
+            <div class="bg-[#f8fafc] px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+              <i data-lucide="file-text" class="w-4 h-4 text-blue-600"></i>
+              <h3 class="text-xs font-bold text-slate-800">Document Information</h3>
+            </div>
+            <div class="p-4 text-xs space-y-2.5">
+              <div class="grid grid-cols-12 gap-2">
+                <span class="col-span-4 text-slate-500 font-medium">Customer ID</span>
+                <span class="col-span-1 text-slate-400 text-center">:</span>
+                <span class="col-span-7 font-mono font-semibold text-slate-800"><%= typeof document !== 'undefined' && document.customerId ? document.customerId : 'CUST-2026-004521' %></span>
+              </div>
+              <div class="grid grid-cols-12 gap-2">
+                <span class="col-span-4 text-slate-500 font-medium">Customer Name</span>
+                <span class="col-span-1 text-slate-400 text-center">:</span>
+                <span class="col-span-7 font-semibold text-slate-800"><%= typeof document !== 'undefined' && document.customerName ? document.customerName : 'ABC Trading Ltd.' %></span>
+              </div>
+              <div class="grid grid-cols-12 gap-2">
+                <span class="col-span-4 text-slate-500 font-medium">Document ID</span>
+                <span class="col-span-1 text-slate-400 text-center">:</span>
+                <span class="col-span-7 font-mono text-slate-700"><%= typeof document !== 'undefined' && document.id ? document.id : 'DOC-2026-001284' %></span>
+              </div>
+              <div class="grid grid-cols-12 gap-2 items-center">
+                <span class="col-span-4 text-slate-500 font-medium">Document Type</span>
+                <span class="col-span-1 text-slate-400 text-center">:</span>
+                <div class="col-span-7">
+                  <span class="inline-block bg-blue-100/70 text-blue-700 font-medium px-2 py-0.5 rounded text-[11px]">
+                    <%= typeof document !== 'undefined' && document.documentType ? document.documentType : 'Trade License/Business document' %>
+                  </span>
+                </div>
+              </div>
+              <div class="grid grid-cols-12 gap-2 items-center">
+                <span class="col-span-4 text-slate-500 font-medium">Current Status</span>
+                <span class="col-span-1 text-slate-400 text-center">:</span>
+                <div class="col-span-7">
+                  <span class="inline-block bg-amber-100 text-amber-800 font-medium px-2 py-0.5 rounded text-[11px]">
+                    <%= typeof document !== 'undefined' && document.status ? document.status : 'Pending' %>
+                  </span>
+                </div>
+              </div>
+              <div class="grid grid-cols-12 gap-2">
+                <span class="col-span-4 text-slate-500 font-medium">File Name</span>
+                <span class="col-span-1 text-slate-400 text-center">:</span>
+                <span class="col-span-7 font-mono text-blue-600 hover:underline cursor-pointer truncate"><%= typeof document !== 'undefined' && document.fileName ? document.fileName : 'Trade_License_2026.pdf' %></span>
+              </div>
+              <div class="grid grid-cols-12 gap-2">
+                <span class="col-span-4 text-slate-500 font-medium">Uploaded By</span>
+                <span class="col-span-1 text-slate-400 text-center">:</span>
+                <span class="col-span-7 font-mono text-slate-700"><%= typeof document !== 'undefined' && document.uploadedBy ? document.uploadedBy : 'CUST-2026-004521' %></span>
+              </div>
+              <div class="grid grid-cols-12 gap-2">
+                <span class="col-span-4 text-slate-500 font-medium">Upload Date & Time</span>
+                <span class="col-span-1 text-slate-400 text-center">:</span>
+                <span class="col-span-7 text-slate-700"><%= typeof document !== 'undefined' && document.createdAt ? fmtDate(document.createdAt) : '10 Sep 2026, 03:24 PM' %></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Related Record Card -->
+          <div class="bg-white border border-slate-200 rounded-lg shadow-2xl/5 overflow-hidden">
+            <div class="bg-[#f8fafc] px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+              <i data-lucide="link-2" class="w-4 h-4 text-blue-600"></i>
+              <h3 class="text-xs font-bold text-slate-800">Related Record</h3>
+            </div>
+            <div class="p-4 text-xs space-y-3">
+              <p class="text-[11px] text-slate-500">Link this document to the relevant record (customer, request, shipment, claim, etc.).</p>
+              
+              <!-- Search Bar Input -->
+              <div class="relative">
+                <input type="text" placeholder="Search by ID or name (e.g. CUST-2026-..., REQ-2026-..., SHP-2026-...)" class="w-full pl-3 pr-9 py-2 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400" />
+                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5"></i>
+              </div>
+
+              <!-- Linked Tag Badge -->
+              <div class="bg-blue-50/60 border border-blue-200 rounded-md p-2.5 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-7 h-7 rounded bg-blue-600 flex items-center justify-center text-white shrink-0">
+                    <i data-lucide="building-2" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <div class="font-bold text-blue-950 font-mono leading-tight">CUST-2026-004521</div>
+                    <div class="text-[11px] text-slate-600 font-medium">ABC Trading Ltd.</div>
+                  </div>
+                </div>
+                <button class="text-slate-400 hover:text-slate-600 p-1">
+                  <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+              </div>
+
+              <div class="pt-1 space-y-2">
+                <div class="grid grid-cols-12 gap-2">
+                  <span class="col-span-4 text-slate-500">Record Type</span>
+                  <span class="col-span-1 text-slate-400 text-center">:</span>
+                  <span class="col-span-7 font-semibold text-slate-800">Customer</span>
+                </div>
+                <div class="grid grid-cols-12 gap-2">
+                  <span class="col-span-4 text-slate-500">Record ID</span>
+                  <span class="col-span-1 text-slate-400 text-center">:</span>
+                  <span class="col-span-7 font-mono text-slate-700">CUST-2026-004521</span>
+                </div>
+              </div>
+
+              <p class="text-[11px] text-slate-400 pt-1">You can change or clear the related record if required.</p>
+            </div>
+          </div>
+
+          <!-- Verification Checklist Card -->
+          <div class="bg-white border border-slate-200 rounded-lg shadow-2xl/5 overflow-hidden">
+            <div class="bg-[#f8fafc] px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i data-lucide="archive" class="w-4 h-4 text-blue-600"></i>
+                <h3 class="text-xs font-bold text-slate-800">Verification Checklist</h3>
+              </div>
+              <span class="text-xs font-bold text-emerald-600">8/12 <span class="font-normal text-slate-500">completed</span></span>
+            </div>
+
+            <div class="px-4 py-2 bg-slate-50 border-b border-slate-100">
+              <!-- Progress Bar -->
+              <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                <div class="bg-emerald-500 h-1.5 rounded-full" style="width: 66.6%;"></div>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-2">Please review the document and complete the applicable checks.</p>
+            </div>
+
+            <div class="p-4 space-y-4 text-xs">
+              <!-- Common Checks Accordion Section -->
+              <div class="space-y-2.5">
+                <div class="flex items-center justify-between font-bold text-slate-800 cursor-pointer">
+                  <div class="flex items-center gap-1.5">
+                    <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
+                    <span>Common Checks <span class="text-emerald-600 font-normal">(8/8)</span></span>
+                  </div>
+                  <i data-lucide="chevron-up" class="w-4 h-4 text-slate-400"></i>
+                </div>
+
+                <!-- Checklist Items -->
+                <div class="space-y-2 pl-1">
+                  <label class="flex items-center justify-between cursor-pointer group">
+                    <span class="flex items-center gap-2 text-slate-700">
+                      <input type="checkbox" checked class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                      <span>File opens successfully</span>
+                    </span>
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </label>
+                  <label class="flex items-center justify-between cursor-pointer group">
+                    <span class="flex items-center gap-2 text-slate-700">
+                      <input type="checkbox" checked class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                      <span>Document is readable and clear</span>
+                    </span>
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </label>
+                  <label class="flex items-center justify-between cursor-pointer group">
+                    <span class="flex items-center gap-2 text-slate-700">
+                      <input type="checkbox" checked class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                      <span>Document type matches the uploaded file</span>
+                    </span>
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </label>
+                  <label class="flex items-center justify-between cursor-pointer group">
+                    <span class="flex items-center gap-2 text-slate-700">
+                      <input type="checkbox" checked class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                      <span>Uploader account ID is correct</span>
+                    </span>
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </label>
+                  <label class="flex items-center justify-between cursor-pointer group">
+                    <span class="flex items-center gap-2 text-slate-700">
+                      <input type="checkbox" checked class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                      <span>Information is consistent with the submitted records</span>
+                    </span>
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </label>
+                  <label class="flex items-center justify-between cursor-pointer group">
+                    <span class="flex items-center gap-2 text-slate-700">
+                      <input type="checkbox" checked class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                      <span>No visible alteration or inconsistency identified</span>
+                    </span>
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </label>
+                  <label class="flex items-center justify-between cursor-pointer group">
+                    <span class="flex items-center gap-2 text-slate-700">
+                      <input type="checkbox" checked class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                      <span>Relevant dates / reference numbers are checked</span>
+                    </span>
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </label>
+                  <label class="flex items-center justify-between cursor-pointer group">
+                    <span class="flex items-center gap-2 text-slate-700">
+                      <input type="checkbox" checked class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                      <span>Expiry information is checked (where applicable)</span>
+                    </span>
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </label>
+                </div>
+              </div>
+
+              <hr class="border-slate-200" />
+
+              <!-- Specific Checks Accordion Section -->
+              <div class="space-y-2.5">
+                <div class="flex items-center justify-between font-bold text-slate-800 cursor-pointer">
+                  <div class="flex items-center gap-1.5">
+                    <i data-lucide="check-circle" class="w-4 h-4 text-slate-400"></i>
+                    <span class="text-xs">Trade License/Business Document Specific Checks <span class="text-slate-500 font-normal">(0/4)</span></span>
+                  </div>
+                  <i data-lucide="chevron-up" class="w-4 h-4 text-slate-400"></i>
+                </div>
+
+                <!-- Unchecked Specific Items -->
+                <div class="space-y-2 pl-1">
+                  <label class="flex items-center justify-between cursor-pointer group">
+                    <span class="flex items-center gap-2 text-slate-700">
+                      <input type="checkbox" class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                      <span>Issuing authority is verified</span>
+                    </span>
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </label>
+                  <label class="flex items-center justify-between cursor-pointer group">
+                    <span class="flex items-center gap-2 text-slate-700">
+                      <input type="checkbox" class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                      <span>Business / organization name matches</span>
+                    </span>
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </label>
+                  <label class="flex items-center justify-between cursor-pointer group">
+                    <span class="flex items-center gap-2 text-slate-700">
+                      <input type="checkbox" class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                      <span>Document reference number is valid</span>
+                    </span>
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </label>
+                  <label class="flex items-center justify-between cursor-pointer group">
+                    <span class="flex items-center gap-2 text-slate-700">
+                      <input type="checkbox" class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                      <span>Validity / expiry date is checked</span>
+                    </span>
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </label>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ================= RIGHT COLUMN ================= -->
+        <div class="lg:col-span-7 space-y-4">
+          
+          <!-- Document Preview Card -->
+          <div class="bg-white border border-slate-200 rounded-lg shadow-2xl/5 overflow-hidden">
+            <div class="bg-[#f8fafc] px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+              <i data-lucide="eye" class="w-4 h-4 text-blue-600"></i>
+              <h3 class="text-xs font-bold text-slate-800">Document Preview</h3>
+            </div>
+            
+            <div class="p-3 bg-slate-100/60 space-y-3">
+              <!-- Simulated PDF Viewer Container -->
+              <div class="bg-[#323639] rounded-t-md overflow-hidden shadow-md">
+                <!-- PDF Toolbar -->
+                <div class="bg-[#2a2e31] px-4 py-2 flex items-center justify-between text-xs text-slate-300">
+                  <div class="flex items-center gap-2 font-mono text-[11px] text-slate-200">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5 text-slate-400"></i>
+                    <span class="truncate max-w-[180px]">Trade_License_2026.pdf</span>
+                  </div>
+                  <div class="flex items-center gap-4 text-slate-300">
+                    <span class="text-[11px]">1 / 2</span>
+                    <div class="h-3 w-px bg-slate-600"></div>
+                    <div class="flex items-center gap-2">
+                      <button class="hover:text-white"><i data-lucide="minus" class="w-3.5 h-3.5"></i></button>
+                      <span class="text-[11px]">100%</span>
+                      <button class="hover:text-white"><i data-lucide="plus" class="w-3.5 h-3.5"></i></button>
+                    </div>
+                    <div class="h-3 w-px bg-slate-600"></div>
+                    <button class="hover:text-white"><i data-lucide="maximize-2" class="w-3.5 h-3.5"></i></button>
+                    <button class="hover:text-white"><i data-lucide="download" class="w-3.5 h-3.5"></i></button>
+                    <button class="hover:text-white"><i data-lucide="printer" class="w-3.5 h-3.5"></i></button>
+                  </div>
+                </div>
+
+                <!-- PDF Content Canvas Sheet -->
+                <div class="p-6 bg-[#525659] flex justify-center min-h-[250px]">
+                  <div class="bg-white w-full max-w-lg p-6 rounded shadow-lg text-[10px] text-slate-800 relative">
+                    
+                    <!-- Watermark / Government Emblem Header -->
+                    <div class="text-center space-y-1 mb-4">
+                      <div class="w-10 h-10 mx-auto rounded-full bg-emerald-700/10 border border-emerald-600 flex items-center justify-center text-emerald-700">
+                        <div class="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white text-[8px] font-bold">BD</div>
+                      </div>
+                      <p class="text-[9px] text-slate-500 font-medium">Government of the People's Republic of Bangladesh</p>
+                      <h4 class="text-sm font-bold text-slate-900 uppercase tracking-wide">Trade Licence</h4>
+                    </div>
+
+                    <!-- Right Corner Metadata -->
+                    <div class="absolute right-6 top-6 text-[8px] text-slate-500 text-right space-y-0.5 font-mono">
+                      <p>Licence No: 1234567890</p>
+                      <p>Issue Date: 01 Jan 2024</p>
+                      <p>Expiry Date: 31 Dec 2026</p>
+                    </div>
+
+                    <!-- Document Fields -->
+                    <div class="grid grid-cols-12 gap-y-1.5 text-[10px] my-4">
+                      <div class="col-span-4 text-slate-500">Business Name</div>
+                      <div class="col-span-1 text-slate-400">:</div>
+                      <div class="col-span-7 font-bold text-slate-900">ABC Trading Ltd.</div>
+
+                      <div class="col-span-4 text-slate-500">Owner Name</div>
+                      <div class="col-span-1 text-slate-400">:</div>
+                      <div class="col-span-7 font-semibold text-slate-800">Md. Tanvir Hossain</div>
+
+                      <div class="col-span-4 text-slate-500">Business Type</div>
+                      <div class="col-span-1 text-slate-400">:</div>
+                      <div class="col-span-7 text-slate-800">Trading</div>
+
+                      <div class="col-span-4 text-slate-500">Address</div>
+                      <div class="col-span-1 text-slate-400">:</div>
+                      <div class="col-span-7 text-slate-800 leading-tight">
+                        House # 12, Road # 5<br />
+                        Dhaka-1212, Bangladesh
+                      </div>
+                    </div>
+
+                    <!-- QR Code Mock -->
+                    <div class="absolute right-6 bottom-6 w-12 h-12 border border-slate-300 p-0.5 bg-white grid grid-cols-3 gap-0.5">
+                      <div class="bg-slate-900"></div><div class="bg-slate-900"></div><div class="bg-slate-200"></div>
+                      <div class="bg-slate-200"></div><div class="bg-slate-900"></div><div class="bg-slate-900"></div>
+                      <div class="bg-slate-900"></div><div class="bg-slate-200"></div><div class="bg-slate-900"></div>
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+
+              <!-- Open External Link Button & Note -->
+              <div class="flex items-center gap-3 pt-1">
+                <a href="#" target="_blank" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold flex items-center gap-1.5 shadow-sm shrink-0 transition-colors">
+                  <span>Open Document</span>
+                  <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                </a>
+                <p class="text-[11px] text-slate-500 leading-tight">
+                  The document will open in a new tab. Viewing the document does not change its verification status.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Verification Decision Card -->
+          <div class="bg-white border border-slate-200 rounded-lg shadow-2xl/5 overflow-hidden">
+            <div class="bg-[#f8fafc] px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+              <i data-lucide="gavel" class="w-4 h-4 text-blue-600"></i>
+              <h3 class="text-xs font-bold text-slate-800">Verification Decision</h3>
+            </div>
+
+            <div class="p-4 space-y-4 text-xs">
+              
+              <!-- Decision Options Grid -->
+              <div>
+                <label class="block text-xs font-bold text-slate-800 mb-2">Verification Decision <span class="text-red-500">*</span></label>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  
+                  <!-- Radio Option 1: Verified -->
+                  <label class="border border-slate-200 rounded-lg p-2.5 flex items-start gap-2 cursor-pointer hover:border-slate-300 transition-colors">
+                    <input type="radio" name="verification_decision" class="mt-0.5 text-blue-600 focus:ring-blue-500" />
+                    <div>
+                      <div class="font-bold text-slate-800 text-xs">Verified</div>
+                      <div class="text-[10px] text-slate-400 leading-tight mt-0.5">Complete all required checks to select.</div>
+                    </div>
+                  </label>
+
+                  <!-- Radio Option 2: Needs Correction (Selected) -->
+                  <label class="border-2 border-blue-600 bg-blue-50/30 rounded-lg p-2.5 flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="verification_decision" checked class="text-blue-600 focus:ring-blue-500" />
+                    <div class="font-bold text-blue-950 text-xs">Needs Correction</div>
+                  </label>
+
+                  <!-- Radio Option 3: Rejected -->
+                  <label class="border border-slate-200 rounded-lg p-2.5 flex items-center gap-2 cursor-pointer hover:border-slate-300 transition-colors">
+                    <input type="radio" name="verification_decision" class="text-blue-600 focus:ring-blue-500" />
+                    <div class="font-bold text-slate-800 text-xs">Rejected</div>
+                  </label>
+
+                </div>
+              </div>
+
+              <!-- Correction Details Sub-card (Red Notice) -->
+              <div class="border border-rose-200 bg-rose-50/40 rounded-lg p-3 space-y-3">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-rose-700">
+                  <i data-lucide="info" class="w-4 h-4 text-rose-600"></i>
+                  <span>Correction Details <span class="font-normal text-rose-600/80">(Required for Needs Correction)</span></span>
+                </div>
+
+                <!-- Problem Input -->
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-800 mb-1">Problem with Document <span class="text-red-500">*</span></label>
+                  <div class="relative">
+                    <textarea rows="2" placeholder="Describe what is wrong with the document (e.g. unclear, missing information, expired, mismatch, etc.)." class="w-full p-2.5 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 bg-white"></textarea>
+                    <span class="absolute right-2 bottom-1.5 text-[10px] text-slate-400">0/500</span>
+                  </div>
+                </div>
+
+                <!-- Correction Required Input -->
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-800 mb-1">Correction Required <span class="text-red-500">*</span></label>
+                  <div class="relative">
+                    <textarea rows="2" placeholder="Clearly state what the customer needs to correct or provide (e.g. upload a clear copy, provide missing page, valid document, etc.)." class="w-full p-2.5 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 bg-white"></textarea>
+                    <span class="absolute right-2 bottom-1.5 text-[10px] text-slate-400">0/500</span>
+                  </div>
+                </div>
+
+                <!-- Additional Instructions Input -->
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-800 mb-1">Additional Instructions <span class="font-normal text-slate-500">(Optional)</span></label>
+                  <div class="relative">
+                    <textarea rows="2" placeholder="Add any additional guidance for the customer." class="w-full p-2.5 text-xs border border-slate-300 rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 bg-white"></textarea>
+                    <span class="absolute right-2 bottom-1.5 text-[10px] text-slate-400">0/500</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Customer Notification (Preview) -->
+          <div class="bg-white border border-slate-200 rounded-lg shadow-2xl/5 overflow-hidden">
+            <div class="bg-[#f8fafc] px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i data-lucide="mail" class="w-4 h-4 text-blue-600"></i>
+                <h3 class="text-xs font-bold text-slate-800">Customer Notification (Preview)</h3>
+              </div>
+              <span class="text-[11px] text-slate-500">A notification will be sent to the customer when you save.</span>
+            </div>
+
+            <div class="p-4 text-xs space-y-2">
+              <div class="grid grid-cols-12 gap-2">
+                <span class="col-span-2 font-bold text-slate-700">Subject</span>
+                <span class="col-span-10 text-slate-800 font-medium">Document Correction Required - Trade License/Business document</span>
+              </div>
+
+              <div class="grid grid-cols-12 gap-2 pt-1">
+                <span class="col-span-2 font-bold text-slate-700">Message</span>
+                <div class="col-span-10 bg-slate-100/70 border border-slate-200 rounded-md p-3 text-slate-600 space-y-2 text-[11px]">
+                  <p>Dear Customer,</p>
+                  <p>Your submitted <strong>Trade License/Business document</strong> requires correction.</p>
+                  <p><strong>Problem with Document:</strong> <span class="text-slate-400">[Will be inserted from above]</span><br />
+                  <strong>Correction Required:</strong> <span class="text-slate-400">[Will be inserted from above]</span></p>
+                  <p>Please follow the instructions and resubmit the document.</p>
+                  <p class="pt-1">Regards,<br /><strong>Dazzling Shipping</strong></p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Verification Record Card -->
+          <div class="bg-white border border-slate-200 rounded-lg shadow-2xl/5 overflow-hidden">
+            <div class="bg-[#f8fafc] px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+              <i data-lucide="user-check" class="w-4 h-4 text-blue-600"></i>
+              <h3 class="text-xs font-bold text-slate-800">Verification Record</h3>
+            </div>
+
+            <div class="p-4 text-xs space-y-2">
+              <div class="grid grid-cols-12 gap-2">
+                <span class="col-span-4 text-slate-500 font-medium">Verifying Staff</span>
+                <span class="col-span-1 text-slate-400 text-center">:</span>
+                <span class="col-span-7 font-semibold text-slate-800">EMP-00123 (Tanvir Hossain)</span>
+              </div>
+              <div class="grid grid-cols-12 gap-2">
+                <span class="col-span-4 text-slate-500 font-medium">Verification Date & Time</span>
+                <span class="col-span-1 text-slate-400 text-center">:</span>
+                <span class="col-span-7 text-slate-500 italic">Will be recorded on submission</span>
+              </div>
+              <div class="grid grid-cols-12 gap-2">
+                <span class="col-span-4 text-slate-500 font-medium">Audit Trail</span>
+                <span class="col-span-1 text-slate-400 text-center">:</span>
+                <span class="col-span-7 text-slate-500 italic">Automatically recorded</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Modal Footer Actions -->
+      <div class="bg-white px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
+        <button type="button" onclick="minimizeModal()" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-md transition-colors shadow-xs">
+          Cancel
+        </button>
+        <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-md transition-colors flex items-center gap-2 shadow-sm">
+          <i data-lucide="save" class="w-3.5 h-3.5"></i>
+          <span>Save Verification</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Minimized Floating Widget Bar (Initially Hidden) -->
+  <div id="verification-minimized-bar" onclick="restoreModal()" class="hidden fixed bottom-4 right-4 bg-white border border-slate-300 shadow-xl rounded-lg px-4 py-2.5 items-center gap-3 cursor-pointer hover:bg-slate-50 transition-all group z-50">
+    <div class="w-7 h-7 rounded-md bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
+      <i data-lucide="file-check" class="w-4 h-4"></i>
+    </div>
+    <div class="text-xs">
+      <div class="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">Document Verification</div>
+      <div class="text-[10px] text-slate-500 font-mono">DOC-2026-001284 (Pending)</div>
+    </div>
+    <div class="pl-2 border-l border-slate-200 text-slate-400 group-hover:text-slate-600">
+      <i data-lucide="maximize-2" class="w-4 h-4"></i>
+    </div>
+  </div>
+
+</div>
+
+<!-- JavaScript Logic for Minimize & Restore -->
+<script>
+  function minimizeModal() {
+    const backdrop = document.getElementById('verification-modal-backdrop');
+    const minimizedBar = document.getElementById('verification-minimized-bar');
+    
+    // Hide full backdrop/modal
+    backdrop.classList.add('hidden');
+    
+    // Show floating bar at bottom right
+    minimizedBar.classList.remove('hidden');
+    minimizedBar.classList.add('flex');
+  }
+
+  function restoreModal() {
+    const backdrop = document.getElementById('verification-modal-backdrop');
+    const minimizedBar = document.getElementById('verification-minimized-bar');
+    
+    // Hide floating bar
+    minimizedBar.classList.add('hidden');
+    minimizedBar.classList.remove('flex');
+    
+    // Show full backdrop/modal
+    backdrop.classList.remove('hidden');
+  }
+</script>

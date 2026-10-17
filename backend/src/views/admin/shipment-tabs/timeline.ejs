@@ -1,0 +1,382 @@
+﻿<%
+  /* ---------------------------------------------------------------------------
+   * Manage Shipment - Shipment Timeline Tab
+   *
+   * The complete status history of this shipment: both status types, in one
+   * list, kept apart by the Status Type field rather than merged into one
+   * sequence. A Shipment Request Status is where the request or booking is in
+   * its own workflow, and a Shipment Status is where the shipment is in its
+   * operational lifecycle - showing them as one journey would put a
+   * contradiction in the middle of it.
+   *
+   * Everything here is read from the database, including each entry's label and
+   * visibility, so the timeline cannot disagree with what was recorded.
+   * ------------------------------------------------------------------------- */
+
+  const V = (typeof shipment !== 'undefined' && shipment) ? shipment : null;
+
+  /* The approved dropdown values. Read from the server so the page and the
+     endpoint validate against one list. */
+  const VISIBILITY_FILTERS = [
+    { value: 'all', label: 'All' },
+    { value: 'customer', label: 'Customer Visible' },
+    { value: 'internal', label: 'Internal Only' },
+  ];
+
+  /* Both status types, in one list, in the order the server built them. The
+     controller supplies the merged timeline; a top-level name is also read so a
+     page rendered without the shipment view still shows something coherent
+     rather than crashing. */
+  const nestedTimeline = (V && Array.isArray(V.timeline)) ? V.timeline : [];
+  const topLevelTimeline = (typeof timeline !== 'undefined' && Array.isArray(timeline)) ? timeline : [];
+  const timelineEntries = nestedTimeline.length ? nestedTimeline : topLevelTimeline;
+
+  const orDash = (value) => (
+    value === null || value === undefined || String(value).trim() === '' ? '—' : value
+  );
+
+  const fmtDate = (value) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const fmtTime = (value) => {
+    if (!value) return '';
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  };
+  const fmtDateTime = (value) => {
+    const day = fmtDate(value);
+    const time = fmtTime(value);
+    return time ? `${day}, ${time}` : day;
+  };
+
+  const VISIBILITY_LABEL = {
+    'Customer Visible': 'Customer Visible',
+    'Internal Only': 'Internal Only',
+  };
+
+  /* The visibility the filter is set to. Rendered from the control's value, so
+     the list and the control can never disagree about what is shown. */
+  const activeVisibility = 'all';
+
+  /* Which rows survive the visibility filter. Customer Visible shows only the
+     statuses the approved list marks customer-facing; Internal Only the rest. */
+  const visibleEntries = timelineEntries.filter((entry) => {
+    if (activeVisibility === 'all') return true;
+    const wanted = activeVisibility === 'customer' ? 'Customer Visible' : 'Internal Only';
+    return entry.visibility === wanted;
+  });
+
+  /* The current status, read from the shipment. Its most recent entry is the
+     one the timeline opens on. */
+  const currentStatus = (V && V.status) ? V.status : null;
+
+  /* The entry the panel on the right shows. The most recent of those the filter
+     leaves, so selecting a filter never leaves the panel showing something the
+     list no longer contains. */
+  const selected = visibleEntries.length ? visibleEntries[0] : null;
+
+  /* Status Type badges. The two types are visually distinct, because they are
+     two different sequences and a reader has to be able to tell them apart at a
+     glance. */
+  const statusTypeBadge = (type) => {
+    if (type === 'Shipment Request') {
+      return 'px-2 py-0.5 rounded-full bg-[#12213a] border border-[#20365c] text-[#60a5fa] text-[9.5px] font-semibold';
+    }
+    return 'px-2 py-0.5 rounded-full bg-[#3b2a10] border border-[#a16207]/40 text-[#fbbf24] text-[9.5px] font-semibold';
+  };
+  const visibilityBadge = (visibility) => {
+    if (visibility === 'Customer Visible') {
+      return 'px-2 py-0.5 rounded-full bg-[#1b2b48]/80 text-[#60a5fa] border border-[#2563eb]/30 text-[9.5px] font-medium';
+    }
+    return 'px-2 py-0.5 rounded-full bg-[#1e293b] text-slate-400 border border-slate-700 text-[9.5px] font-medium';
+  };
+%>
+
+<div id="shipment-timeline-container" class="space-y-4 text-slate-200 font-sans text-[12px] antialiased">
+
+  <!-- Header and actions -->
+  <div class="flex items-center justify-between gap-4 pb-1">
+    <div>
+      <h1 class="text-xl font-bold text-white tracking-tight">Shipment Timeline</h1>
+      <p class="text-[11px] text-slate-400 mt-0.5">Complete status history. Every recorded status uses the approved shipment or request status list.</p>
+    </div>
+
+    <div class="flex items-center gap-3 shrink-0">
+      <!-- Visibility filter. Reads the timeline's own rows, not a second list. -->
+      <div class="relative inline-block text-left">
+        <select id="timelineVisibilityFilter"
+                class="appearance-none bg-[#0b162a] border border-[#1b2b48] text-slate-300 rounded px-3 py-1.5 pr-7 text-[11px] font-medium focus:outline-none focus:border-blue-500 cursor-pointer">
+          <% VISIBILITY_FILTERS.forEach((opt) => { %>
+            <option value="<%= opt.value %>"><%= opt.label %></option>
+          <% }); %>
+        </select>
+        <svg class="w-3 h-3 text-slate-500 absolute right-2 top-2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </div>
+
+      <!-- Opens the Timeline Update modal. -->
+      <button type="button" data-open-timeline-modal class="px-3.5 py-1.5 bg-[#f97316] hover:bg-[#ea580c] text-white text-[11px] font-semibold rounded shadow transition-colors">
+        Add Timeline Update
+      </button>
+    </div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+    <!-- LEFT: All Recorded Shipment Statuses -->
+    <div class="lg:col-span-8 bg-[#081225] border border-[#1b2b48] rounded-md p-4 flex flex-col">
+
+      <div class="flex items-center justify-between pb-3 border-b border-[#1b2b48]">
+        <h2 class="text-sm font-bold text-white">All Recorded Shipment Statuses</h2>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] text-slate-400">Current:</span>
+          <span class="px-2.5 py-0.5 bg-[#78350f]/80 text-[#fef08a] border border-[#d97706]/40 text-[10px] font-semibold rounded-full">
+            <%= currentStatus || 'Not set' %>
+          </span>
+        </div>
+      </div>
+
+      <% if (visibleEntries.length === 0) { %>
+        <div class="py-12 text-center text-slate-400 text-[11px]" data-timeline-empty>
+          <% if (timelineEntries.length === 0) { %>
+            No status has been recorded for this shipment yet.
+          <% } else { %>
+            No timeline entry is visible under the current filter.
+          <% } %>
+        </div>
+      <% } else { %>
+
+        <!-- Timeline list -->
+        <div class="mt-4 relative pl-3" data-timeline-list>
+
+          <div class="space-y-0 relative">
+            <% visibleEntries.forEach((entry, idx) => { %>
+              <% const isLast = idx === visibleEntries.length - 1; %>
+              <% const isSelected = selected && entry.id === selected.id; %>
+
+              <div class="relative flex items-start group py-3 px-2 rounded-md hover:bg-[#0f1d35] transition-colors cursor-pointer <%= isSelected ? 'bg-[#0f1d35] ring-1 ring-[#1b2b48]' : '' %>"
+                   data-timeline-entry
+                   data-entry-id="<%= entry.id %>"
+                   data-visibility="<%= entry.visibility %>"
+                   data-status-type="<%= entry.statusType %>">
+
+                <!-- Vertical connecting line -->
+                <% if (!isLast) { %>
+                  <div class="absolute left-[13px] top-[26px] bottom-[-14px] w-[1px] bg-[#1b2b48]"></div>
+                <% } %>
+
+                <!-- Node -->
+                <div class="relative z-10 flex items-center justify-center shrink-0 w-5 h-5 mr-4 mt-0.5">
+                  <% if (entry.status === currentStatus) { %>
+                    <span class="w-3 h-3 rounded-full bg-[#f97316] ring-4 ring-[#f97316]/20"></span>
+                  <% } else { %>
+                    <span class="w-2.5 h-2.5 rounded-full <%= entry.visibility === 'Customer Visible' ? 'bg-[#22c55e]' : 'bg-slate-600' %>"></span>
+                  <% } %>
+                </div>
+
+                <!-- Entry details -->
+                <div class="grid grid-cols-12 gap-2 w-full items-start">
+
+                  <!-- Status and date/time -->
+                  <div class="col-span-12 sm:col-span-4">
+                    <div class="font-bold text-white text-[11.5px] line-clamp-1" title="<%= entry.status %>"><%= entry.status %></div>
+                    <div class="text-[10px] text-slate-400 mt-0.5"><%= fmtDate(entry.recordedAt) %><% if (fmtTime(entry.recordedAt)) { %>, <%= fmtTime(entry.recordedAt) %><% } %></div>
+                  </div>
+
+                  <!-- Label: the system's for a request status, the staff member's for a shipment one -->
+                  <div class="col-span-12 sm:col-span-5 pr-2">
+                    <p class="text-[11px] text-slate-300 leading-tight line-clamp-2" title="<%= entry.label %>"><%= entry.label ? entry.label : '—' %></p>
+                  </div>
+
+                  <!-- Status Type, visibility and creator -->
+                  <div class="col-span-12 sm:col-span-3 flex sm:flex-col items-center sm:items-end gap-1.5 shrink-0">
+                    <span class="<%= statusTypeBadge(entry.statusType) %>"><%= entry.statusType %></span>
+                    <span class="<%= visibilityBadge(entry.visibility) %>"><%= VISIBILITY_LABEL[entry.visibility] %></span>
+                    <span class="text-[10px] text-slate-400 font-medium truncate max-w-[120px]" title="<%= entry.createdBy %>">
+                      <%= entry.createdBy %>
+                    </span>
+                  </div>
+
+                </div>
+
+              </div>
+            <% }); %>
+
+          </div>
+
+        </div>
+      <% } %>
+
+      <!-- Footer note -->
+      <div class="mt-auto pt-3 border-t border-[#16243d] text-[10px] text-slate-500">
+        Showing <%= visibleEntries.length %> of <%= timelineEntries.length %> recorded <%= timelineEntries.length === 1 ? 'status' : 'statuses' %>. The two status types are shown together and labelled; they are separate sequences.
+      </div>
+
+    </div>
+
+    <!-- RIGHT: Selected Timeline Entry -->
+    <div class="lg:col-span-4 space-y-4">
+
+      <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-4">
+
+        <h2 class="text-sm font-bold text-white pb-3 border-b border-[#1b2b48]">
+          Selected Timeline Entry
+        </h2>
+
+        <% if (!selected) { %>
+          <div class="py-8 text-center text-slate-400 text-[11px]">
+            Select a timeline entry to see its details.
+          </div>
+        <% } else { %>
+
+          <!-- Every value is read from the stored entry. -->
+          <div class="space-y-3 text-[11px]" data-selected-entry data-entry-id="<%= selected.id %>">
+
+            <div class="grid grid-cols-12 gap-2">
+              <span class="col-span-4 text-slate-400 font-medium">Status</span>
+              <span class="col-span-8 text-white font-bold break-words"><%= selected.status %></span>
+            </div>
+
+            <div class="grid grid-cols-12 gap-2">
+              <span class="col-span-4 text-slate-400 font-medium">Status Type</span>
+              <span class="col-span-8">
+                <span class="<%= statusTypeBadge(selected.statusType) %>"><%= selected.statusType %></span>
+              </span>
+            </div>
+
+            <div class="grid grid-cols-12 gap-2">
+              <span class="col-span-4 text-slate-400 font-medium">Label</span>
+              <span class="col-span-8 text-white font-bold break-words"><%= selected.label ? selected.label : '—' %></span>
+            </div>
+
+            <div class="grid grid-cols-12 gap-2">
+              <span class="col-span-4 text-slate-400 font-medium">Visibility</span>
+              <span class="col-span-8">
+                <span class="<%= visibilityBadge(selected.visibility) %>"><%= VISIBILITY_LABEL[selected.visibility] %></span>
+              </span>
+            </div>
+
+            <div class="grid grid-cols-12 gap-2">
+              <span class="col-span-4 text-slate-400 font-medium">Created By</span>
+              <span class="col-span-8 text-slate-200 font-medium break-words"><%= selected.createdBy %></span>
+            </div>
+
+            <div class="grid grid-cols-12 gap-2">
+              <span class="col-span-4 text-slate-400 font-medium">Recorded At</span>
+              <span class="col-span-8 text-slate-200 font-medium"><%= fmtDateTime(selected.recordedAt) %></span>
+            </div>
+
+            <% if (selected.location) { %>
+              <div class="grid grid-cols-12 gap-2">
+                <span class="col-span-4 text-slate-400 font-medium">Location</span>
+                <span class="col-span-8 text-slate-200 font-medium break-words"><%= selected.location %></span>
+              </div>
+            <% } %>
+
+          </div>
+
+          <!-- How this entry was recorded -->
+          <div class="p-3 bg-[#0a162d] border-l-2 border-[#f97316] text-[10.5px] text-slate-400 leading-relaxed rounded-r">
+            <% if (selected.statusType === 'Shipment Request') { %>
+              A Shipment Request Status, recorded by the Request &amp; Booking workflow with a system-generated label. Request statuses cannot be set from the Timeline Update modal.
+            <% } else { %>
+              A Shipment Status, recorded through the Timeline Update modal. The status and this entry were written together, so the timeline always matches the shipment's current status.
+            <% } %>
+          </div>
+
+        <% } %>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+  (function () {
+    const container = document.getElementById('shipment-timeline-container');
+    if (!container) return;
+
+    const filter = document.getElementById('timelineVisibilityFilter');
+    const rows = Array.from(container.querySelectorAll('[data-timeline-entry]'));
+    const panel = container.querySelector('[data-selected-entry]');
+    const emptyNote = container.querySelector('[data-timeline-empty]');
+
+    /* The rows already render from the server. The filter narrows them in the
+       browser, using the same two values the server wrote onto each row, so what
+       is shown and what is offered cannot drift apart. */
+    const applyFilter = () => {
+      const value = filter ? filter.value : 'all';
+      let shown = 0;
+
+      rows.forEach((row) => {
+        const visibility = row.getAttribute('data-visibility');
+        const keep = value === 'all' || visibility ===
+          (value === 'customer' ? 'Customer Visible' : 'Internal Only');
+        row.style.display = keep ? '' : 'none';
+        if (keep) shown++;
+      });
+
+      /* The connecting line belongs to a row that follows a visible one, so
+         hiding a row would otherwise leave a line hanging in mid-air. */
+      const visible = rows.filter((r) => r.style.display !== 'none');
+      rows.forEach((row) => {
+        const line = row.querySelector('.absolute');
+        if (!line) return;
+        line.style.display = visible[visible.length - 1] === row ? 'none' : '';
+      });
+
+      if (emptyNote) {
+        const none = shown === 0;
+        emptyNote.classList.toggle('hidden', !none);
+        emptyNote.textContent = none
+          ? (rows.length === 0 ? 'No status has been recorded for this shipment yet.' : 'No timeline entry is visible under the current filter.')
+          : '';
+      }
+    };
+
+    if (filter) filter.addEventListener('change', applyFilter);
+
+    /* Every entry is clickable and selects itself in the panel on the right.
+       Selection is local: it changes what is shown, never what is stored. */
+    rows.forEach((row) => {
+      row.addEventListener('click', () => {
+        rows.forEach((r) => r.classList.remove('bg-[#0f1d35]', 'ring-1', 'ring-[#1b2b48]'));
+        row.classList.add('bg-[#0f1d35]', 'ring-1', 'ring-[#1b2b48]');
+
+        const entryId = row.getAttribute('data-entry-id');
+        if (!panel) return;
+        panel.setAttribute('data-entry-id', entryId);
+
+        const status = row.querySelector('.font-bold')?.textContent || '';
+        const label = row.querySelector('.line-clamp-2')?.textContent || '';
+        const when = row.querySelectorAll('[class*="mt-0.5"]')[0]?.textContent || '';
+        const typeBadge = row.querySelector('[class*="rounded-full"]');
+        const statusType = row.getAttribute('data-status-type');
+        const visibility = row.getAttribute('data-visibility');
+        const creator = row.querySelector('[title]:last-of-type')?.textContent || '';
+
+        const set = (name, value) => {
+          const cell = panel.querySelector(`[data-field="${name}"]`);
+          if (cell) cell.textContent = value || '—';
+        };
+        set('status', status);
+        set('label', label);
+        set('statusType', statusType);
+        set('visibility', visibility);
+        set('createdBy', creator);
+        set('recordedAt', when);
+      });
+    });
+
+    applyFilter();
+  })();
+</script>
+
+<%- include('./add-timeline-modal') %>

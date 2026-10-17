@@ -1,0 +1,30 @@
+<%#
+  404. Reached by navigation rather than by a data failure, so it keeps the same
+  sidebar and top bar as the page the reader came from - arriving here and losing
+  the navigation is worse than the mistake that caused it. The link returns
+  wherever they were.
+%>
+<%- include('partials/head', { pageTitle: '404 - Not Found - Dazzling Shipping', active: '' }) %>
+
+<%- include('partials/header', {
+  title: 'Page not found',
+  subtitle: 'The address does not match anything in the ERP',
+  user: typeof user !== 'undefined' ? user : {},
+}) %>
+
+<main class="flex-1 flex items-center justify-center p-6 overflow-y-auto">
+  <div class="text-center">
+    <h1 class="text-6xl font-bold text-gray-500 mb-4">404</h1>
+    <p class="text-sm text-gray-400 mb-6"><%= message %></p>
+    <a href="<%= typeof backHref !== 'undefined' && backHref ? backHref : '/admin' %>"
+       class="inline-block px-4 py-2 bg-[#ff5c00] hover:bg-[#e05200] text-white text-xs font-medium rounded-lg transition-colors">
+      <%= typeof backLabel !== 'undefined' && backLabel ? backLabel : 'Back to Dashboard' %>
+    </a>
+  </div>
+</main>
+
+<script>
+  if (window.lucide) lucide.createIcons();
+</script>
+</body>
+</html>

@@ -1,0 +1,387 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Manage Shipment - Items & Carrier Tracking Tab
+   *
+   * Read-only view of what the customer submitted, plus the carrier / local
+   * courier tracking numbers those items carry.
+   *
+   * Everything shown comes from the request that became this shipment, which is
+   * where the customer's own answers live. Item acceptance review lives in the
+   * Requests & Bookings workflow, so nothing here records a decision: the
+   * classification and status already stored are displayed, never changed, and
+   * there is no edit affordance anywhere on this tab.
+   * ------------------------------------------------------------------------- */
+  const V = (typeof shipment !== 'undefined' && shipment) ? shipment : null;
+
+  const serviceMode = (V && V.serviceMode) || 'Import';
+  /* Where goods are expected to land depends only on the direction of travel. */
+  const expectedFacility = serviceMode === 'Export' ? 'USA Warehouse' : 'Dhaka Hub';
+  const currency = (V && V.currency) || 'USD';
+  const shipmentTracking = (V && V.trackingNumber) ? String(V.trackingNumber).trim() : '';
+
+  const orDash = (value) => (
+    value === null || value === undefined || String(value).trim() === '' ? '—' : value
+  );
+
+  /* First non-empty value among the aliases a field is stored under. The three
+     request workflows spell the same customer answer differently - the seller is
+     store_name on self-purchase and assisted purchase, seller_store_name on an
+     export booking, and so on - so a row is read through one lookup that walks
+     them all rather than three separate renderers. */
+  const pick = (row, ...keys) => {
+    for (const key of keys) {
+      const value = row ? row[key] : null;
+      if (value !== null && value !== undefined && String(value).trim() !== '') return value;
+    }
+    return null;
+  };
+
+  const toNum = (value) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  };
+  const money2 = (value) => {
+    const n = toNum(value);
+    return n === null ? '—' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  const kg1 = (value) => {
+    const n = toNum(value);
+    return n === null ? '—' : n.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  };
+
+  /* ---------------------------------------------------------------------------
+   * Item rows
+   *
+   * The customer-submitted rows lead; the staff-side shipment item is matched
+   * by requestItemId and only fills in what the submission did not carry. A
+   * shipment with no request behind it falls back to shipment_items alone, so a
+   * directly-booked shipment still lists its items.
+   * ------------------------------------------------------------------------- */
+  const shipmentItems = (V && Array.isArray(V.items)) ? V.items : [];
+  /* The customer-submitted rows travel with the shipment view. The AJAX tab
+     switch renders this partial with the controller's own context, where they
+     are nested; the initial page render also passes them at the top level. Both
+     are read and the one that actually holds rows wins, so neither path
+     silently lists nothing - including a shipment that genuinely has none. */
+  const nestedItems = (V && Array.isArray(V.sourceRequestItems)) ? V.sourceRequestItems : [];
+  const topLevelItems = (typeof sourceRequestItems !== 'undefined' && Array.isArray(sourceRequestItems))
+    ? sourceRequestItems
+    : [];
+  const submittedItems = nestedItems.length ? nestedItems : topLevelItems;
+
+  const shipmentItemByRequestId = new Map();
+  shipmentItems.forEach((si) => {
+    if (si && si.requestItemId !== null && si.requestItemId !== undefined) {
+      shipmentItemByRequestId.set(Number(si.requestItemId), si);
+    }
+  });
+
+  const itemRows = [];
+  const usedShipmentItems = new Set();
+
+  submittedItems.forEach((raw) => {
+    const si = shipmentItemByRequestId.get(Number(raw.id)) || null;
+    if (si) usedShipmentItems.add(Number(si.id));
+
+    /* An item's own reference, styled after the document references the rest of
+       the admin area uses. */
+    const itemRef = 'ITM-' + String(raw.id).padStart(7, '0');
+
+    const dimensions = [pick(raw, 'lengthCm', 'length'), pick(raw, 'widthCm', 'width'), pick(raw, 'heightCm', 'height')]
+      .map((d) => toNum(d));
+    const hasDimensions = dimensions.every((d) => d !== null);
+
+    /* Only one weight is stored per item. Actual and chargeable are derived at
+       consolidation and are not kept per item, so they read as a dash rather
+       than being repeated from the estimate. */
+    const estimatedWeight = pick(raw, 'weightKg', 'weight_kg', 'estimatedWeight', 'estimated_weight');
+
+    const classification = pick(raw, 'acceptanceClassification', 'acceptance_classification');
+    const reviewStatus = pick(raw, 'acceptanceStatus', 'acceptance_status');
+    const reviewNote = pick(raw, 'acceptanceNote', 'acceptance_note');
+
+    itemRows.push({
+      ref: itemRef,
+      name: orDash(pick(raw, 'productName', 'product_name', 'productDescription', 'product_description', 'description')),
+      variant: orDash(pick(raw, 'variant')),
+      source: orDash(pick(raw, 'itemSource', 'item_source')),
+      seller: orDash(pick(raw, 'storeName', 'store_name', 'sellerStoreName', 'seller_store_name')),
+      type: orDash(pick(raw, 'itemType', 'item_type')),
+      category: orDash(pick(raw, 'productCategory', 'product_category', 'category')),
+      quantity: toNum(pick(raw, 'quantity')) ?? 0,
+      packageCount: pick(raw, 'packageCount', 'package_count'),
+      declaredValue: money2(pick(raw, 'invoiceValue', 'invoice_value', 'productPrice', 'product_price', 'totalPrice', 'total_price')),
+      weight: kg1(estimatedWeight),
+      dimensions: hasDimensions ? dimensions.map((d) => kg1(d)).join(' × ') : null,
+      trackingNumber: pick(raw, 'trackingNumber', 'tracking_number'),
+      /* Acceptance review, shown as recorded and never offered for change. */
+      classification: orDash(classification),
+      reviewStatus: orDash(reviewStatus),
+      reviewNote: orDash(reviewNote),
+    });
+  });
+
+  /* Items whose submission row is no longer attached still belong to the
+     shipment and are listed under their own reference. */
+  shipmentItems.forEach((si) => {
+    if (!si || usedShipmentItems.has(Number(si.id))) return;
+    itemRows.push({
+      ref: 'ITM-' + String(si.id).padStart(7, '0'),
+      name: orDash(si.description),
+      variant: '—',
+      source: '—',
+      seller: '—',
+      type: '—',
+      category: orDash(si.category),
+      quantity: toNum(si.quantity) ?? 0,
+      packageCount: null,
+      declaredValue: money2(pick(si, 'totalPrice', 'total_price')),
+      weight: kg1(pick(si, 'weightKg', 'weight_kg')),
+      dimensions: null,
+      trackingNumber: null,
+      classification: '—',
+      reviewStatus: '—',
+      reviewNote: '—',
+    });
+  });
+
+  /* ---------------------------------------------------------------------------
+   * Tracking numbers
+   *
+   * Grouped by the number each customer-submitted item carries, so one number
+   * that arrives on several parcels is listed once with every item it covers.
+   *
+   * A number is Matched when it is the number the shipment itself carries, and
+   * Unmatched while it is only on the customer's form. That is the distinction
+   * the Action column acts on: an unmatched number still has to be confirmed
+   * against the shipment, a matched one does not.
+   * ------------------------------------------------------------------------- */
+  const trackingGroups = new Map();
+  itemRows.forEach((row) => {
+    if (!row.trackingNumber) return;
+    const key = String(row.trackingNumber).trim();
+    if (!trackingGroups.has(key)) {
+      trackingGroups.set(key, {
+        number: key,
+        sources: [],
+        itemRefs: [],
+        /* Assisted purchase has nowhere to record a carrier, and no table in
+           the schema holds one, so this stays a dash rather than a guess. */
+        carrier: null,
+        status: shipmentTracking && shipmentTracking.toLowerCase() === key.toLowerCase() ? 'Matched' : 'Unmatched',
+      });
+    }
+    const group = trackingGroups.get(key);
+    if (row.source && row.source !== '—' && !group.sources.includes(row.source)) group.sources.push(row.source);
+    group.itemRefs.push(row.ref);
+  });
+
+  const trackingRows = Array.from(trackingGroups.values());
+
+  /* The header button is for numbers that still need confirming. With nothing
+     yet recorded it stays available, since otherwise the first number could
+     never be added; it hides only once every recorded number is matched. */
+  const showAddTrackingButton = trackingRows.length === 0 || trackingRows.some((r) => r.status === 'Unmatched');
+
+  const statusBadge = (status) => status === 'Matched'
+    ? 'px-2.5 py-0.5 rounded text-[10px] font-semibold bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40'
+    : 'px-2.5 py-0.5 rounded text-[10px] font-semibold bg-[#78350f]/80 text-[#fbbf24] border border-[#d97706]/40';
+%>
+
+<!-- Outer Container -->
+<div id="shipment-items-container" class="space-y-4 text-slate-200 font-sans text-[12px] antialiased">
+
+  <!-- Top View Header -->
+  <div class="flex items-center justify-between gap-4 border-b border-[#1b2b48] pb-4">
+    <div>
+      <h1 class="text-xl font-bold text-white tracking-tight">Items &amp; Carrier Tracking</h1>
+      <p class="text-[11px] text-slate-400 mt-0.5">Review item details, acceptance and carrier/local-courier links for this shipment.</p>
+    </div>
+    <% if (showAddTrackingButton) { %>
+      <button type="button" data-open-tracking-modal class="px-4 py-2 bg-[#f97316] hover:bg-[#ea580c] text-white text-[12px] font-semibold rounded shadow transition-colors shrink-0">
+        Add Tracking Number
+      </button>
+    <% } %>
+  </div>
+
+  <!-- Main Content Layout Grid -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+    <!-- LEFT COLUMN: Shipment Items & Carrier Tracking Tables -->
+    <div class="lg:col-span-12 space-y-5">
+
+      <!-- Shipment Items Box -->
+      <div class="bg-[#0b1426] border border-[#1b2b48] rounded-md p-4">
+        <div class="flex items-center justify-between pb-3 border-b border-[#16243d]">
+          <h2 class="text-sm font-bold text-white">Shipment Items</h2>
+          <span class="text-[11px] text-slate-400 font-medium">
+            <%= itemRows.length %> item<%= itemRows.length === 1 ? '' : 's' %>
+          </span>
+        </div>
+
+        <% if (itemRows.length === 0) { %>
+          <div class="py-8 text-center text-slate-400 text-[11px]">
+            No items have been recorded for this shipment yet.
+          </div>
+        <% } else { %>
+          <div class="overflow-x-auto mt-2">
+            <table class="w-full text-left border-collapse text-[11px]">
+              <thead>
+                <tr class="text-slate-400 border-b border-[#16243d] text-[10px] uppercase tracking-wider">
+                  <th class="py-2.5 pr-2 font-semibold">Item ID</th>
+                  <th class="py-2.5 px-2 font-semibold">Item</th>
+                  <th class="py-2.5 px-2 font-semibold">Source &amp; Seller</th>
+                  <th class="py-2.5 px-2 font-semibold">Type / Category</th>
+                  <th class="py-2.5 px-2 font-semibold">Qty</th>
+                  <th class="py-2.5 px-2 font-semibold">Declared Value</th>
+                  <th class="py-2.5 px-2 font-semibold">Weight (Est. / Actual / Chargeable)</th>
+                  <th class="py-2.5 pl-2 font-semibold">Acceptance / Review</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#16243d]/80 text-slate-300">
+                <% itemRows.forEach((row) => { %>
+                  <tr class="hover:bg-[#101b30] transition-colors">
+                    <td class="py-3 pr-2 font-mono text-white font-medium align-top"><%= row.ref %></td>
+                    <td class="py-3 px-2 align-top">
+                      <div class="text-white font-medium"><%= row.name %></div>
+                      <% if (row.variant && row.variant !== '—') { %>
+                        <div class="text-[10px] text-slate-400"><%= row.variant %></div>
+                      <% } %>
+                      <% if (row.dimensions) { %>
+                        <div class="text-[10px] text-slate-500"><%= row.dimensions %> cm</div>
+                      <% } %>
+                    </td>
+                    <td class="py-3 px-2 align-top">
+                      <div class="text-slate-200"><%= row.source %></div>
+                      <div class="text-[10px] text-slate-400"><%= row.seller %></div>
+                    </td>
+                    <td class="py-3 px-2 align-top">
+                      <div class="text-slate-200"><%= row.type %></div>
+                      <div class="text-[10px] text-slate-400"><%= row.category %></div>
+                    </td>
+                    <td class="py-3 px-2 align-top">
+                      <div class="text-white font-semibold"><%= row.quantity.toLocaleString('en-US') %></div>
+                      <% if (row.packageCount) { %>
+                        <div class="text-[10px] text-slate-400"><%= toNum(row.packageCount) %> package<%= toNum(row.packageCount) === 1 ? '' : 's' %></div>
+                      <% } %>
+                    </td>
+                    <td class="py-3 px-2 font-semibold text-slate-100 align-top"><%= currency %> <%= row.declaredValue %></td>
+                    <td class="py-3 px-2 font-medium text-slate-300 align-top"><%= row.weight %> / — / — kg</td>
+                    <td class="py-3 pl-2 align-top">
+                      <span class="inline-block px-2.5 py-1 rounded bg-[#12213a] border border-[#20365c] text-slate-200 text-[10px] font-semibold"><%= row.classification %></span>
+                      <div class="text-[9.5px] text-slate-400 mt-0.5"><%= row.reviewStatus %></div>
+                      <% if (row.reviewNote && row.reviewNote !== '—') { %>
+                        <div class="text-[9.5px] text-slate-500 mt-0.5 max-w-[180px] truncate" title="<%= row.reviewNote %>"><%= row.reviewNote %></div>
+                      <% } %>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- Carrier / Local Courier Tracking Numbers Box -->
+      <div class="bg-[#0b1426] border border-[#1b2b48] rounded-md p-4">
+        <div class="flex items-center justify-between pb-3 border-b border-[#16243d]">
+          <h2 class="text-sm font-bold text-white">Carrier / Local Courier Tracking Numbers</h2>
+          <span class="text-[10px] text-slate-400">One number may link to multiple Item IDs</span>
+        </div>
+
+        <% if (trackingRows.length === 0) { %>
+          <div class="py-8 text-center text-slate-400 text-[11px]">
+            No tracking numbers have been submitted for the items on this shipment.
+          </div>
+        <% } else { %>
+          <div class="overflow-x-auto mt-2">
+            <table class="w-full text-left border-collapse text-[11px]">
+              <thead>
+                <tr class="text-slate-400 border-b border-[#16243d] text-[10px] uppercase tracking-wider">
+                  <th class="py-2.5 pr-2 font-semibold">Tracking Number</th>
+                  <th class="py-2.5 px-2 font-semibold">Carrier</th>
+                  <th class="py-2.5 px-2 font-semibold">Source</th>
+                  <th class="py-2.5 px-2 font-semibold">Expected Facility</th>
+                  <th class="py-2.5 px-2 font-semibold">Status</th>
+                  <th class="py-2.5 px-2 font-semibold">Linked Item IDs</th>
+                  <th class="py-2.5 pl-2 text-right font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#16243d]/80 text-slate-300">
+                <% trackingRows.forEach((row) => { %>
+                  <tr class="hover:bg-[#101b30] transition-colors">
+                    <td class="py-3 pr-2 font-mono text-white align-top">
+                      <div class="flex items-center gap-2">
+                        <span class="copy-target"><%= row.number %></span>
+                        <button type="button" class="px-2 py-0.5 bg-[#12213a] border border-[#20365c] text-blue-400 hover:text-blue-300 rounded text-[10px] copy-btn">Copy</button>
+                      </div>
+                    </td>
+                    <td class="py-3 px-2 font-medium align-top"><%= orDash(row.carrier) %></td>
+                    <td class="py-3 px-2 text-slate-300 align-top"><%= row.sources.length ? row.sources.join(', ') : '—' %></td>
+                    <td class="py-3 px-2 text-slate-300 align-top"><%= expectedFacility %></td>
+                    <td class="py-3 px-2 align-top">
+                      <span class="<%= statusBadge(row.status) %>"><%= row.status %></span>
+                    </td>
+                    <td class="py-3 px-2 font-mono text-slate-300 align-top"><%= row.itemRefs.join(', ') %></td>
+                    <td class="py-3 pl-2 text-right align-top">
+                      <% if (row.status === 'Unmatched') { %>
+                        <button type="button" data-open-tracking-modal class="text-blue-400 hover:text-blue-300 font-medium">Add Tracking Number</button>
+                      <% } %>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+  if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+
+  /* Copy to Clipboard event listener setup */
+  (function () {
+    if (window._copyBtnHandlerAttached) return;
+    window._copyBtnHandlerAttached = true;
+
+    document.addEventListener('click', function (e) {
+      const btn = e.target.closest('.copy-btn');
+      if (!btn) return;
+      const container = btn.closest('td');
+      const target = container ? container.querySelector('.copy-target') : null;
+      const text = target ? target.textContent.trim() : '';
+      if (!text) return;
+
+      const done = () => {
+        const original = btn.textContent;
+        btn.textContent = 'Copied';
+        btn.classList.add('text-emerald-400');
+        setTimeout(() => {
+          btn.textContent = original;
+          btn.classList.remove('text-emerald-400');
+        }, 1200);
+      };
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(done);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (err) {}
+        ta.remove();
+        done();
+      }
+    });
+  })();
+</script>
+
+<!-- Add Tracking Number modal -->
+<%- include('./add-tracking-modal') %>

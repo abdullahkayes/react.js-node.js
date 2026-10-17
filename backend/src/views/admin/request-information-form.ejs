@@ -1,0 +1,426 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * The Request Information modal.
+   *
+   * Staff pick which items on the request the question is about, write the message
+   * the customer will receive, see exactly what will be sent, and send it. The
+   * scope of the notice and the wording are both the staff member's, so unlike the
+   * customer-level form there is no option catalogue behind this one.
+   *
+   * The modal is reached from the details page's Request Processing panel and from
+   * the queue, and it posts to a request-scoped endpoint that validates the item
+   * selection against this request's own items.
+   * ------------------------------------------------------------------------- */
+  const request = informationRequest;
+  const noticeItems = request.items || [];
+  // Channels the customer can actually receive. A channel with no registered
+  // destination would silently drop the notice, so it is shown as unavailable.
+  const channelEntries = Object.entries(request.channels || {});
+  const sendableChannels = channelEntries.filter(([, available]) => available).map(([channel]) => channel);
+%>
+<%- include('partials/head', { pageTitle: `Request Information - ${row.requestRef} - Dazzling Shipping`, active: 'bookings' }) %>
+
+<%- include('partials/header', {
+  title: 'Request Information',
+  subtitle: `${type.label} - ${row.requestRef}`,
+  user: typeof user !== 'undefined' ? user : {},
+}) %>
+
+<main class="flex-1 overflow-y-auto bg-[#030712] text-[#94a3b8] font-sans text-xs antialiased p-3 sm:p-6 lg:p-8" data-request-information-root>
+  <div class="w-full max-w-[1040px] mx-auto">
+
+    <!-- Breadcrumb -->
+    <div class="mb-3 flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-[#475569]">
+      <a href="/admin/bookings" class="hover:text-[#94A3B8] transition-colors">Requests &amp; Bookings</a>
+      <span>/</span>
+      <a href="<%= detailsHref %>" class="hover:text-[#94A3B8] transition-colors">Request Details</a>
+      <span>/</span>
+      <span class="text-[#CBD5E1]">Request Information</span>
+    </div>
+
+    <div class="bg-[#070e1b] rounded-xl border border-[#101b2d] shadow-2xl overflow-hidden">
+
+      <!-- Header -->
+      <div class="px-6 py-5 border-b border-[#101b2d] flex items-start justify-between gap-4" data-page-chrome>
+        <div>
+          <h1 class="text-xl font-bold text-white tracking-tight">Request Information</h1>
+          <p class="text-xs text-[#64748b] mt-1">Ask the customer to clarify or correct this request</p>
+        </div>
+        <a href="<%= detailsHref %>" data-overlay-close title="Close"
+           class="text-[#64748b] hover:text-white transition-colors p-1 rounded-md">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </a>
+      </div>
+
+      <form class="p-6 space-y-5" data-information-form novalidate>
+
+        <!-- Who this is going to, read from the request rather than typed -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <span class="block text-[10px] font-medium tracking-wide text-[#64748B] mb-1">Request ID</span>
+            <span class="font-mono text-white font-semibold tracking-wider"><%= row.requestRef %></span>
+          </div>
+          <div>
+            <span class="block text-[10px] font-medium tracking-wide text-[#64748B] mb-1">Customer</span>
+            <span class="text-white font-medium">
+              <%= orDash(customer && customer.name) %>
+              <% if (customer) { %>
+                <a href="/admin/customers/<%= customer.id %>" class="text-[#38BDF8] hover:underline font-mono ml-1">CUS-<%= String(customer.id).padStart(6, '0') %></a>
+              <% } %>
+            </span>
+          </div>
+        </div>
+
+        <!-- Related items: what this notice is about. -->
+        <div>
+          <label class="block text-xs font-semibold text-[#CBD5E1] mb-1.5">
+            Related Item(s) <span class="text-amber-500">*</span>
+          </label>
+
+          <% if (!noticeItems.length) { %>
+            <%/* No items on this request, so there is nothing to attach the notice
+                to and the whole-request option is the only scope available. */ %>
+            <div class="bg-[#040813] border border-[#132238] rounded-md p-3 text-[11px] text-[#64748B]">
+              This request has no items, so the notice can only be about the whole request.
+            </div>
+          <% } else { %>
+            <div class="flex items-start gap-2.5 p-2.5 rounded-md bg-[#040813] border border-[#132238] mb-2">
+              <input type="checkbox" id="wholeRequest" data-whole-request
+                     class="mt-0.5 w-3.5 h-3.5 bg-[#070D19] border-[#1E293B] rounded accent-amber-500 cursor-pointer">
+              <label for="wholeRequest" class="cursor-pointer">
+                <span class="text-white font-medium">Entire request / general information</span>
+                <span class="block text-[10px] text-[#64748B] mt-0.5">The question is about the request as a whole rather than one item.</span>
+              </label>
+            </div>
+
+            <div class="bg-[#040813] border border-[#132238] rounded-md p-2 space-y-1 max-h-56 overflow-y-auto" data-item-options>
+              <% noticeItems.forEach((item) => { %>
+                <label class="flex items-start gap-2.5 p-2 rounded hover:bg-[#0c172a] cursor-pointer text-[#94A3B8] transition-colors" data-item-option data-item-id="<%= item.id %>">
+                  <input type="checkbox" value="<%= item.id %>" data-item-checkbox
+                         class="mt-0.5 w-3.5 h-3.5 bg-[#070D19] border-[#1E293B] rounded accent-amber-500 shrink-0 cursor-pointer">
+                  <span class="min-w-0">
+                    <span class="block text-white font-mono text-[11px]"><%= item.ref %></span>
+                    <span class="block text-[11px] break-words"><%= item.name %></span>
+                  </span>
+                </label>
+              <% }) %>
+            </div>
+          <% } %>
+
+          <p class="text-[10px] mt-1.5 hidden text-[#F87171]" data-item-error></p>
+        </div>
+
+        <!-- The message the customer will receive. -->
+        <div>
+          <label for="informationRequired" class="block text-xs font-semibold text-[#CBD5E1] mb-1.5">
+            Information Required <span class="text-amber-500">*</span>
+          </label>
+          <textarea id="informationRequired" data-information-message rows="5"
+                    class="w-full bg-[#040813] border border-[#132238] focus:border-sky-500/80 rounded-md p-3.5 text-xs text-white placeholder-[#475569] focus:outline-none transition-colors leading-relaxed resize-y"
+                    placeholder="Describe exactly what the customer needs to provide."></textarea>
+          <div class="flex justify-between mt-1">
+            <p class="text-[10px] text-[#F87171] hidden" data-message-error></p>
+            <span class="text-[10px] text-[#475569] ml-auto"><span data-message-count>0</span> characters</span>
+          </div>
+        </div>
+
+        <!-- Where the notice goes. Only channels the customer can receive. -->
+        <div>
+          <label class="block text-xs font-semibold text-[#CBD5E1] mb-1.5">
+            Notify via <span class="text-amber-500">*</span>
+          </label>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <% channelEntries.forEach(([channel, available]) => { %>
+              <label class="flex items-center gap-2 p-2.5 rounded-md border <%= available ? 'bg-[#040813] border-[#132238] cursor-pointer hover:border-[#1e3454] transition-colors' : 'bg-[#04070D] border-[#0e1626] cursor-not-allowed opacity-50' %>">
+                <input type="checkbox" value="<%= channel %>" data-channel
+                       <%= available ? '' : 'disabled' %>
+                       <%= available && sendableChannels.includes(channel) ? 'checked' : '' %>
+                       class="w-3.5 h-3.5 bg-[#070D19] border-[#1E293B] rounded accent-amber-500 <%= available ? 'cursor-pointer' : '' %>">
+                <span class="text-[11px] <%= available ? 'text-white' : 'text-[#475569] line-through' %>"><%= channel %></span>
+              </label>
+            <% }) %>
+          </div>
+          <p class="text-[10px] mt-1.5 hidden text-[#F87171]" data-channel-error></p>
+        </div>
+
+        <!-- What the customer will actually receive.
+             Rebuilt as staff type from the same rules the server applies, and
+             replaced with the server's own stored copy once sent, so what was
+             previewed can always be checked against what was delivered. -->
+        <div class="bg-[#040813] border border-[#132238] rounded-lg p-4 sm:p-5 space-y-2">
+          <h3 class="text-xs font-bold text-white tracking-wide">Customer notification preview</h3>
+          <p class="text-[10px] font-mono text-[#64748B]" data-preview-subject></p>
+          <p class="text-xs text-[#94A3B8] leading-relaxed pt-1 whitespace-pre-line" data-preview-message></p>
+          <div class="pt-1">
+            <a href="<%= detailsHref %>" data-overlay-close class="text-xs text-[#38BDF8] hover:text-sky-300 underline font-medium transition-colors">Open Request</a>
+          </div>
+        </div>
+
+        <div class="bg-[#21170b] border border-[#3b2710] rounded-md p-3 text-[11px] text-[#FBBF24] leading-relaxed">
+          Sending changes this request to <span class="font-semibold text-amber-300">Needs More Information</span> and notifies the customer. Approval stays unavailable until the response has been reviewed.
+        </div>
+
+        <!-- Where a refused send is reported. The wording is always the server's. -->
+        <div class="hidden rounded-md p-3 text-[11px] bg-red-950/40 border border-red-800/50 text-red-300" data-information-error></div>
+        <div class="hidden rounded-md p-3 text-[11px] bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 space-y-1" data-information-sent></div>
+
+        <div class="flex items-center justify-end gap-3 pt-4 border-t border-[#101b2d] mt-6">
+          <a href="<%= detailsHref %>" data-overlay-close
+             class="px-5 py-2 bg-[#0d1726] hover:bg-[#132035] text-[#CBD5E1] hover:text-white rounded-md font-medium text-xs border border-[#1e2e47] transition-colors">
+            Cancel
+          </a>
+          <button type="button" data-send-request
+                  class="px-5 py-2 bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold rounded-md text-xs shadow-md transition-all">
+            Send Request
+          </button>
+        </div>
+      </form>
+
+      <footer class="px-6 py-2.5 bg-[#040710] border-t border-[#101b2d] text-[10px] text-[#475569]">
+        Dazzling Shipping ERP · <%= row.requestRef %> · <%= noticeItems.length %> item<%= noticeItems.length === 1 ? '' : 's' %> on this request
+      </footer>
+    </div>
+  </div>
+</main>
+
+<!-- Configuration for the modal. Serialised rather than inlined so nothing is
+     interpolated into the script, and the same script serves all three types. -->
+<script type="application/json" data-information-config>
+  <%- JSON.stringify({
+    endpoint: request.endpoint,
+    items: noticeItems,
+    requestRef: row.requestRef,
+    typeLabel: type.label,
+    customerName: orDash(customer && customer.name),
+    detailsHref: detailsHref,
+  }) %>
+</script>
+
+<script>
+  (function () {
+    'use strict';
+
+    var root = document.querySelector('[data-request-information-root]');
+    if (!root) return;
+
+    var config = JSON.parse(document.querySelector('[data-information-config]').textContent);
+    var form = root.querySelector('[data-information-form]');
+    var messageInput = root.querySelector('[data-information-message]');
+    var counter = root.querySelector('[data-message-count]');
+    var wholeRequestBox = root.querySelector('[data-whole-request]');
+    var sendButton = root.querySelector('[data-send-request]');
+    var errorBox = root.querySelector('[data-information-error]');
+    var sentBox = root.querySelector('[data-information-sent]');
+    var itemError = root.querySelector('[data-item-error]');
+    var messageError = root.querySelector('[data-message-error]');
+    var channelError = root.querySelector('[data-channel-error]');
+    var previewSubject = root.querySelector('[data-preview-subject]');
+    var previewMessage = root.querySelector('[data-preview-message]');
+
+    var itemBoxes = Array.prototype.slice.call(root.querySelectorAll('[data-item-checkbox]'));
+    var channelBoxes = Array.prototype.slice.call(root.querySelectorAll('[data-channel]:not([disabled])'));
+
+    function show(element, message) {
+      element.textContent = message;
+      element.classList.toggle('hidden', !message);
+    }
+    function showBox(element, message) {
+      element.textContent = message;
+      element.classList.toggle('hidden', !message);
+    }
+
+    function escapeHtml(value) {
+      return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    /* The name the notice refers to an item by, matching the server's wording so
+       the preview and the delivered subject agree. */
+    function labelFor(item) {
+      return item.ref + (item.name ? ' - ' + String(item.name).slice(0, 60) : '');
+    }
+
+    function selectedLabels() {
+      if (wholeRequestBox && wholeRequestBox.checked) return [];
+      return itemBoxes.filter(function (box) { return box.checked; })
+        .map(function (box) {
+          var match = config.items.filter(function (item) { return String(item.id) === box.value; })[0];
+          return match ? labelFor(match) : box.value;
+        });
+    }
+
+    /* The preview is the real message, not a placeholder.
+       buildRequestInformationNotification in config/informationRequests.js is the
+       source of truth for the wording; this mirrors it so it can update as staff
+       type, and the copy the server stores replaces it once sent. */
+    function buildPreview() {
+      var labels = selectedLabels();
+      var message = messageInput.value.trim();
+      var whole = labels.length === 0;
+      var firstName = String(config.customerName || '').trim().split(/\s+/)[0] || 'Customer';
+
+      var subject = whole || !labels.length
+        ? 'Action Required: Additional information for ' + config.requestRef
+        : 'Action Required: ' + labels.join(', ') + ' - ' + config.requestRef;
+
+      var scope = whole || !labels.length
+        ? 'Your ' + config.typeLabel + ' ' + config.requestRef + ' needs more information.'
+        : 'Your ' + config.typeLabel + ' ' + config.requestRef + ' needs more information about the following item'
+          + (labels.length === 1 ? '' : 's') + ':\n' + labels.map(function (label) { return '  - ' + label; }).join('\n');
+
+      var body = [
+        'Dear ' + firstName + ',',
+        '',
+        scope,
+        '',
+        'What we need from you',
+        message || '(your message will appear here)',
+        '',
+        'Please sign in to your Dazzling Shipping account to open this request and provide the requested details. The request stays on hold until we have received and reviewed your response.',
+        '',
+        'Regards,',
+        'Dazzling Shipping',
+        'International Shipping & Logistics',
+      ].join('\n');
+
+      previewSubject.textContent = subject;
+      previewMessage.textContent = body;
+    }
+
+    /* The whole-request option and the item checkboxes answer the same question, so
+       choosing one clears the other rather than storing an ambiguous scope. */
+    function syncScope() {
+      if (wholeRequestBox && wholeRequestBox.checked) {
+        itemBoxes.forEach(function (box) { box.checked = false; });
+      }
+      refreshOptionStyles();
+      buildPreview();
+    }
+
+    function refreshOptionStyles() {
+      itemBoxes.forEach(function (box) {
+        var label = box.closest('[data-item-option]');
+        if (!label) return;
+        label.classList.toggle('bg-[#0b1c36]', box.checked);
+        label.classList.toggle('border', box.checked);
+        label.classList.toggle('border-[#1e3b66]/50', box.checked);
+        label.classList.toggle('text-white', box.checked);
+      });
+    }
+
+    if (wholeRequestBox) wholeRequestBox.addEventListener('change', syncScope);
+    itemBoxes.forEach(function (box) { box.addEventListener('change', syncScope); });
+    channelBoxes.forEach(function (box) {
+      box.addEventListener('change', function () { show(channelError, ''); });
+    });
+
+    messageInput.addEventListener('input', function () {
+      counter.textContent = String(messageInput.value.length);
+      show(messageError, '');
+      buildPreview();
+    });
+
+    function selectedChannels() {
+      return channelBoxes.filter(function (box) { return box.checked; }).map(function (box) { return box.value; });
+    }
+
+    /* Checked before sending so staff are told what is missing without a round
+       trip. The server checks the same rules again. */
+    function validate() {
+      var labels = selectedLabels();
+      var problems = [];
+
+      if (!labels.length && !(wholeRequestBox && wholeRequestBox.checked)) {
+        show(itemError, 'Select at least one related item, or choose the whole request.');
+        problems.push('scope');
+      } else {
+        show(itemError, '');
+      }
+
+      if (!messageInput.value.trim()) {
+        show(messageError, 'Write what the customer needs to provide.');
+        problems.push('message');
+      } else {
+        show(messageError, '');
+      }
+
+      if (!selectedChannels().length) {
+        show(channelError, 'Select at least one notification channel.');
+        problems.push('channel');
+      } else {
+        show(channelError, '');
+      }
+
+      return problems;
+    }
+
+    sendButton.addEventListener('click', function () {
+      showBox(errorBox, '');
+      showBox(sentBox, '');
+      if (validate().length) return;
+
+      var labels = selectedLabels();
+      var wholeRequest = !labels.length;
+
+      sendButton.disabled = true;
+      sendButton.textContent = 'Sending...';
+
+      fetch(config.endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wholeRequest: wholeRequest,
+          itemIds: labels.length
+            ? itemBoxes.filter(function (box) { return box.checked; }).map(function (box) { return Number(box.value); })
+            : [],
+          message: messageInput.value.trim(),
+          notificationChannels: selectedChannels(),
+        }),
+      }).then(function (response) {
+        return response.json().catch(function () { return {}; }).then(function (data) {
+          return { ok: response.ok, data: data };
+        });
+      }).then(function (result) {
+        sendButton.disabled = false;
+        sendButton.textContent = 'Send Request';
+
+        if (!result.ok) {
+          showBox(errorBox, result.data.error || 'Could not send this request for information.');
+          return;
+        }
+
+        var sent = result.data.request || {};
+        var delivered = result.data.notification && result.data.notification.delivered;
+
+        // The stored copy is shown, not the previewed one, so what was delivered is
+        // what the staff member can read back.
+        showBox(sentBox,
+          'Sent to ' + (sent.relatedItems && sent.relatedItems.length ? sent.relatedItems.join(', ') : 'the whole request') + '.'
+          + (sent.statusChanged ? ' The request is now ' + sent.requestStatus + '.' : '')
+          + (delivered ? '' : ' No channel accepted the notice; it is recorded as queued.'));
+
+        var subject = document.createElement('div');
+        subject.className = 'font-mono text-[10px] text-emerald-200/80';
+        subject.textContent = sent.subject || '';
+        sentBox.appendChild(subject);
+
+        // The request status and its approval gate have both changed, so the page is
+        // refreshed to show what was actually recorded.
+        setTimeout(function () { window.location.href = config.detailsHref; }, 1800);
+      }).catch(function () {
+        sendButton.disabled = false;
+        sendButton.textContent = 'Send Request';
+        showBox(errorBox, 'Could not reach the server. Nothing was sent.');
+      });
+    });
+
+    refreshOptionStyles();
+    buildPreview();
+    if (window.lucide) lucide.createIcons();
+  })();
+</script>
+</body>
+</html>

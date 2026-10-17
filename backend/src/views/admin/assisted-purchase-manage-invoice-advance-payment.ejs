@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#050c18]">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoice & Advance Payment - SHP-2602847 - Dazzling Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            brand: {
+              dark: '#050c18', card: '#081225', border: '#1b2b48',
+              orange: '#f97316', 'orange-hover': '#ea580c',
+              accentBlue: '#38bdf8', accentGreen: '#22c55e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="h-full bg-[#050c18] text-slate-200 font-sans antialiased overflow-x-hidden">
+  <div class="flex min-h-screen w-full">
+    <%- include('partials/sidebar', { active: 'assisted-purchase' }) %>
+    
+    <div class="flex-1 flex flex-col min-w-0">
+      <%- include('partials/header', { 
+        title: 'Manage Purchase', 
+        subtitle: 'Coordinate the approved purchase and follow seller orders', 
+        user: typeof user !== 'undefined' ? user : {} 
+      }) %>
+
+      <main class="flex-1 p-6 space-y-5 overflow-y-auto">
+        <%
+          /* ---------------------------------------------------------------------------
+           * Invoice & Advance Payment Context & Data Setup
+           * ------------------------------------------------------------------------- */
+          const shipmentId = (typeof purchase !== 'undefined' && purchase.shipmentId) ? purchase.shipmentId : 'SHP-2602847';
+          const subtitle = 'Purchase invoice and linked advance-payment records';
+
+          const invoice = (typeof invoiceData !== 'undefined' && invoiceData) ? invoiceData : {
+            id: 'INV-2600912',
+            issueDate: '06 Sep 2026',
+            dueDate: '07 Sep 2026',
+            status: 'Paid',
+            productSubtotal: 'USD 900.00',
+            salesTax: 'USD 72.00',
+            domesticShipping: 'USD 28.00',
+            procurementFee: 'USD 30.00',
+            total: 'USD 1,030.00'
+          };
+
+          const invoiceItems = (typeof items !== 'undefined' && Array.isArray(items)) ? items : [
+            { id: 'ITM-260847-01', description: 'Cotton T-shirt', qty: 20, unitPrice: '12.00', amount: '240.00' },
+            { id: 'ITM-260847-02', description: 'Moisturizing cream', qty: 10, unitPrice: '18.00', amount: '180.00' },
+            { id: 'ITM-260847-03', description: 'Wireless headphones', qty: 4, unitPrice: '90.00', amount: '360.00' },
+            { id: 'ITM-260847-04', description: 'Running shoes', qty: 2, unitPrice: '60.00', amount: '120.00' }
+          ];
+
+          const linkedPayments = (typeof payments !== 'undefined' && Array.isArray(payments)) ? payments : [
+            {
+              id: 'PAY-2600731',
+              invoiceId: 'INV-2600912',
+              method: 'Bank Transfer',
+              amount: 'USD 1,030.00',
+              status: 'Completed',
+              paidAt: '07 Sep 2026\n09:00 AM'
+            }
+          ];
+
+          const controlsAudit = [
+            { record: 'Invoice - INV-2600912', preparedBy: 'STF-260012', checkedBy: 'STF-260015', approvedBy: 'STF-260003', approvedAt: '06 Sep 2026, 04:00 PM' },
+            { record: 'Payment - PAY-2600731', preparedBy: 'STF-260012', checkedBy: 'STF-260015', approvedBy: 'STF-260003', approvedAt: '07 Sep 2026, 09:30 AM' }
+          ];
+        %>
+
+        <!-- Top Breadcrumb & Title Section -->
+        <div class="flex items-center justify-between gap-4">
+          <div class="space-y-1">
+            <div class="text-[10.5px] text-slate-400 font-medium">
+              <a href="/admin/assisted-purchases" class="hover:underline">Assisted Purchase &amp; Procurement</a> 
+              <span class="mx-1 text-slate-600">/</span> 
+              <span class="text-slate-300">Manage Purchase</span>
+            </div>
+
+            <div class="flex items-center gap-3 pt-0.5">
+              <h1 class="text-xl font-bold text-white tracking-tight font-mono"><%= shipmentId %></h1>
+              <span class="text-slate-400 text-[11px]">• &nbsp;<%= subtitle %></span>
+            </div>
+          </div>
+
+          <button type="button" class="px-3.5 py-1.5 bg-[#0e1d38] hover:bg-[#152a4e] border border-[#233a63] text-slate-200 text-[11px] font-semibold rounded-md transition-colors shrink-0">
+            Open Finance &amp; Wallet
+          </button>
+        </div>
+
+        <!-- Section Sub-Tabs Navigation Strip -->
+        <div class="border-b border-[#1b2b48] flex items-center gap-6 text-[11.5px] font-medium pt-1">
+          <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Overview</a>
+          <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/items-purchase-preparation" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Items &amp; Purchase Preparation</a>
+          <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/invoice-advance-payment" class="pb-2.5 text-[#f97316] border-b-2 border-[#f97316] font-semibold">Invoice &amp; Advance Payment</a>
+          <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/seller-orders-tracking" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Seller Orders &amp; Tracking</a>
+          <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/documents" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Documents</a>
+          <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/audit-trail" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Audit Trail</a>
+        </div>
+
+        <!-- Main 2-Column Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          
+          <!-- LEFT COLUMN: Assisted Purchase Invoice (7 Cols) -->
+          <div class="lg:col-span-7 bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-4">
+            <div class="flex items-center justify-between border-b border-[#132238] pb-2.5">
+              <h2 class="text-xs font-bold text-white uppercase tracking-wider">Assisted Purchase Invoice</h2>
+              <button type="button" class="px-3 py-1 bg-[#12233f] hover:bg-[#182d50] text-slate-200 border border-[#23385d] text-[10.5px] font-semibold rounded transition-colors">
+                Manage Invoice
+              </button>
+            </div>
+
+            <!-- Invoice Header Bar -->
+            <div class="flex items-center justify-between">
+              <div>
+                <a href="#" class="text-blue-400 hover:underline font-mono text-[12px] font-bold"><%= invoice.id %></a>
+                <div class="text-[10px] text-slate-400 mt-0.5">Issued <%= invoice.issueDate %> · Due <%= invoice.dueDate %></div>
+              </div>
+              <span class="px-2.5 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[10px] font-semibold">
+                <%= invoice.status %>
+              </span>
+            </div>
+
+            <!-- Invoice Items Table -->
+            <div class="overflow-x-auto border border-[#13223b] rounded">
+              <table class="w-full text-left border-collapse text-[11px]">
+                <thead>
+                  <tr class="bg-[#050c18] border-b border-[#13223b] text-slate-400 text-[10px]">
+                    <th class="py-2 px-3 font-semibold">Item ID</th>
+                    <th class="py-2 px-3 font-semibold">Description</th>
+                    <th class="py-2 px-3 font-semibold text-center">Qty</th>
+                    <th class="py-2 px-3 font-semibold text-right">Unit Price (USD)</th>
+                    <th class="py-2 px-3 font-semibold text-right">Amount (USD)</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-[#13223b]/60 text-slate-300">
+                  <% invoiceItems.forEach((item) => { %>
+                    <tr class="hover:bg-[#0f1d35]/50 transition-colors">
+                      <td class="py-2.5 px-3 font-mono text-blue-400 font-medium"><%= item.id %></td>
+                      <td class="py-2.5 px-3 font-medium text-white"><%= item.description %></td>
+                      <td class="py-2.5 px-3 text-center text-slate-300"><%= item.qty %></td>
+                      <td class="py-2.5 px-3 text-right font-mono text-slate-300"><%= item.unitPrice %></td>
+                      <td class="py-2.5 px-3 text-right font-mono font-medium text-white"><%= item.amount %></td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Calculation Breakdown -->
+            <div class="space-y-1.5 pt-1 text-[11px]">
+              <div class="flex justify-between items-center text-slate-300">
+                <span class="font-medium">Product Subtotal</span>
+                <span class="font-mono font-bold text-white"><%= invoice.productSubtotal %></span>
+              </div>
+              <div class="flex justify-between items-center text-slate-300">
+                <span class="font-medium">USA Sales Tax</span>
+                <span class="font-mono text-slate-200"><%= invoice.salesTax %></span>
+              </div>
+              <div class="flex justify-between items-center text-slate-300">
+                <span class="font-medium">USA Domestic Shipping</span>
+                <span class="font-mono text-slate-200"><%= invoice.domesticShipping %></span>
+              </div>
+              <div class="flex justify-between items-center text-slate-300">
+                <span class="font-medium">Procurement Fee</span>
+                <span class="font-mono text-slate-200"><%= invoice.procurementFee %></span>
+              </div>
+              <div class="flex justify-between items-center pt-2 border-t border-[#132238] text-[12px] font-bold text-white">
+                <span>Invoice Total</span>
+                <span class="font-mono text-white"><%= invoice.total %></span>
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-[#132238] text-[10px] text-slate-400">
+              International shipping charges are invoiced separately at the applicable shipment stage. Insurance is requested; no premium is included in this example invoice.
+            </div>
+          </div>
+
+          <!-- RIGHT COLUMN: Advance Payment & Purchase Clearance (5 Cols) -->
+          <div class="lg:col-span-5 bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-4">
+            <div class="border-b border-[#132238] pb-2.5">
+              <h2 class="text-xs font-bold text-white uppercase tracking-wider">Advance Payment &amp; Purchase Clearance</h2>
+            </div>
+
+            <div class="space-y-3 text-[11px]">
+              <div>
+                <div class="text-xl font-bold text-white font-mono"><%= invoice.total %></div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Required advance payment</div>
+              </div>
+
+              <div class="space-y-2 pt-2 border-t border-[#13223b]">
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-300">Cleared Against Invoice</span>
+                  <span class="font-mono font-bold text-white">USD 1,030.00</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-300">Outstanding Advance</span>
+                  <span class="font-mono text-slate-400">USD 0.00</span>
+                </div>
+                <div class="flex items-center justify-between pt-1">
+                  <span class="text-slate-300">Payment Status</span>
+                  <span class="px-2 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-semibold">Completed</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-300">Payment Checking</span>
+                  <span class="px-2 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-semibold">Completed</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-300">Payment Approval</span>
+                  <span class="px-2 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-semibold">Completed</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-300">Customer Consent</span>
+                  <span class="px-2 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-semibold">Recorded</span>
+                </div>
+                <div class="flex items-center justify-between pt-1 border-t border-[#13223b]/50">
+                  <span class="text-slate-200 font-semibold">Purchase Clearance</span>
+                  <span class="px-2 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-semibold">Cleared to Proceed</span>
+                </div>
+              </div>
+
+              <div class="pt-2">
+                <button type="button" class="px-3 py-1 bg-[#12233f] hover:bg-[#182d50] text-slate-200 border border-[#23385d] text-[10.5px] font-semibold rounded transition-colors">
+                  View Payment
+                </button>
+              </div>
+
+              <div class="pt-2 border-t border-[#132238] text-[10px] text-slate-400">
+                Invoice and payment preparation, checking and approval take place in Finance &amp; Wallet.
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Linked Advance Payment Panel -->
+        <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+          <div class="border-b border-[#132238] pb-2.5">
+            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Linked Advance Payment</h3>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-[11px]">
+              <thead>
+                <tr class="border-b border-[#1b2b48] text-slate-400 text-[10px]">
+                  <th class="py-2.5 pr-3 font-semibold">Payment ID</th>
+                  <th class="py-2.5 px-3 font-semibold">Invoice ID</th>
+                  <th class="py-2.5 px-3 font-semibold">Method</th>
+                  <th class="py-2.5 px-3 font-semibold">Amount</th>
+                  <th class="py-2.5 px-3 font-semibold">Status</th>
+                  <th class="py-2.5 pl-3 text-right font-semibold">Paid At</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#16243d]/60 text-slate-300">
+                <% linkedPayments.forEach((pay) => { %>
+                  <tr class="hover:bg-[#0f1d35]/50 transition-colors">
+                    <td class="py-3 pr-3 font-mono font-medium text-blue-400 align-middle"><%= pay.id %></td>
+                    <td class="py-3 px-3 font-mono font-medium text-blue-400 align-middle"><%= pay.invoiceId %></td>
+                    <td class="py-3 px-3 text-white font-medium align-middle"><%= pay.method %></td>
+                    <td class="py-3 px-3 font-mono font-semibold text-white align-middle"><%= pay.amount %></td>
+                    <td class="py-3 px-3 align-middle">
+                      <span class="px-2.5 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[10px] font-semibold inline-block">
+                        <%= pay.status %>
+                      </span>
+                    </td>
+                    <td class="py-3 pl-3 text-right text-slate-400 whitespace-pre-line text-[10.5px] leading-snug align-middle"><%= pay.paidAt %></td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Invoice & Payment Controls Panel -->
+        <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+          <div class="border-b border-[#132238] pb-2.5">
+            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Invoice &amp; Payment Controls</h3>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-[11px]">
+              <thead>
+                <tr class="border-b border-[#1b2b48] text-slate-400 text-[10px]">
+                  <th class="py-2.5 pr-3 font-semibold">Record</th>
+                  <th class="py-2.5 px-3 font-semibold">Prepared / Recorded By</th>
+                  <th class="py-2.5 px-3 font-semibold">Checked By</th>
+                  <th class="py-2.5 px-3 font-semibold">Approved By</th>
+                  <th class="py-2.5 pl-3 text-right font-semibold">Approved At</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#16243d]/60 text-slate-300">
+                <% controlsAudit.forEach((ctrl) => { %>
+                  <tr class="hover:bg-[#0f1d35]/50 transition-colors">
+                    <td class="py-3 pr-3 font-medium text-white align-middle"><%= ctrl.record %></td>
+                    <td class="py-3 px-3 font-mono text-blue-400 align-middle"><%= ctrl.preparedBy %></td>
+                    <td class="py-3 px-3 font-mono text-blue-400 align-middle"><%= ctrl.checkedBy %></td>
+                    <td class="py-3 px-3 font-mono text-blue-400 align-middle"><%= ctrl.approvedBy %></td>
+                    <td class="py-3 pl-3 text-right text-slate-400 align-middle"><%= ctrl.approvedAt %></td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Developer Reference Footer Box -->
+        <div class="bg-[#050c18] border border-dashed border-[#1b2b48] rounded-md p-3.5 text-[11px] text-slate-400 space-y-1">
+          <div class="text-slate-300 font-semibold">Developer reference — outside the live tab</div>
+          <p class="text-[10.5px] leading-relaxed">
+            Manage Invoice opens this exact invoice record in Finance &amp; Wallet; available actions depend on staff permissions and invoice status. This is a linked finance view, not a second approval screen. Use payment_status values from the database; the invoice badge uses invoice_status. Display actual payment currency and the invoice-equivalent allocation when currencies differ. A completed payment alone does not clear a purchase unless the full required amount and all required approvals are satisfied.
+          </p>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    if (window.lucide) lucide.createIcons();
+  </script>
+</body>
+</html>

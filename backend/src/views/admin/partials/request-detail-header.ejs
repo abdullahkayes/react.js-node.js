@@ -1,0 +1,47 @@
+<%
+  /*
+    The heading block that leads a request details page: the breadcrumb back to the
+    queue the row was listed on, the request reference with its status, and the
+    action the queue offers at that status.
+
+    `type`, `row`, `backHref` and `primaryAction` all arrive from the details
+    handler, so every details page leads the same way even though the pages below
+    it differ.
+  */
+  const yesNo = (value) => (value ? 'Yes' : 'No');
+%>
+<div class="flex flex-wrap items-start justify-between gap-4">
+  <div class="min-w-0">
+    <div class="text-[10px] text-gray-500 mb-1">
+      ERP Dashboard / <a href="/admin/bookings" class="hover:text-gray-300">Requests &amp; Bookings</a> /
+      <a href="/admin/bookings/<%= type.slug %>" class="hover:text-gray-300"><%= type.label %></a> /
+      <span class="text-gray-200"><%= row.requestRef %></span>
+    </div>
+    <div class="flex flex-wrap items-center gap-3">
+      <h2 class="text-base font-bold text-white font-mono"><%= row.requestRef %></h2>
+      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium <%= row.statusBadgeClass %>"><%= row.status %></span>
+    </div>
+    <p class="text-[11px] text-gray-400 mt-1">
+      <%= type.label %> &bull; submitted <%= row.submittedAt ? new Date(row.submittedAt).toLocaleString() : 'not yet submitted' %>
+    </p>
+  </div>
+
+  <div class="flex items-center gap-2.5">
+    <a href="<%= backHref %>" class="px-3 py-1.5 bg-[#0b1120] hover:bg-[#111a2e] border border-[#1a2333] text-gray-300 rounded-md text-xs flex items-center gap-1.5 transition-colors">
+      <i data-lucide="arrow-left" class="w-3.5 h-3.5 text-gray-400"></i>
+      <span>Back to <%= type.shortLabel %></span>
+    </a>
+    <!--
+      The same action the queue offers for this status, so the queue and the
+      details page can never disagree about what should happen next.
+    -->
+    <a href="<%= primaryAction.href %>" title="<%= primaryAction.hint %>" class="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors">
+      <% if (primaryAction.kind === 'review') { %><i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i>
+      <% } else if (primaryAction.kind === 'information') { %><i data-lucide="message-square-warning" class="w-3.5 h-3.5"></i>
+      <% } else if (primaryAction.kind === 'shipment') { %><i data-lucide="package" class="w-3.5 h-3.5"></i>
+      <% } else { %><i data-lucide="eye" class="w-3.5 h-3.5"></i>
+      <% } %>
+      <span><%= primaryAction.label %></span>
+    </a>
+  </div>
+</div>

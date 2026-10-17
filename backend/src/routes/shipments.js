@@ -1,9 +1,24 @@
 import express from 'express';
 import { body, validationResult, query } from 'express-validator';
 import auth from '../middleware/auth.js';
-import { Shipment, Address, User, TrackingEvent, Payment } from '../models/index.js';
+import {
+  Shipment,
+  Address,
+  User,
+  TrackingEvent,
+  Payment,
+  ShipmentItem,
+  Invoice,
+  InvoiceItem,
+  Document,
+  ReturnRTO,
+  Insurance,
+} from '../models/index.js';
 import generateTrackingNumber from '../utils/generateTrackingNumber.js';
 import calculateQuote from '../services/rateService.js';
+import { generateShipmentReference } from '../config/shipmentReferences.js';
+
+const generateShipmentId = generateShipmentReference;
 
 const router = express.Router();
 
@@ -70,24 +85,29 @@ router.post(
       const trackingNumber = generateTrackingNumber();
 
       const shipment = await Shipment.create({
+        shipmentId: generateShipmentId(),
         trackingNumber,
         userId: req.user.id,
         senderAddressId: senderAddr.id,
         receiverAddressId: receiverAddr.id,
         serviceType,
+        serviceMode: senderAddr.country === 'USA' ? 'Import' : 'Export',
+        purchaseType: req.body.purchaseType || (senderAddr.country === 'USA' ? 'Self-Purchase' : 'N/A'),
+        sourceRequestType: req.body.sourceRequestType || 'direct',
+        sourceRequestId: req.body.sourceRequestId || null,
         weightKg,
         dimensions: dimensions || {},
         declaredValue: declaredValue || 0,
         price: quote.price,
         currency: quote.currency,
         paymentStatus: 'unpaid',
-        status: 'pending',
+        status: 'Awaiting Carrier Tracking',
       });
 
       await TrackingEvent.create({
         shipmentId: shipment.id,
-        status: 'pending',
-        note: 'Shipment created',
+        status: 'Awaiting Carrier Tracking',
+        note: 'Shipment created, awaiting carrier tracking',
         location: `${senderAddr.city}, ${senderAddr.country}`,
       });
 
@@ -96,7 +116,7 @@ router.post(
           { model: Address, as: 'sender' },
           { model: Address, as: 'receiver' },
           { model: TrackingEvent, as: 'trackingEvents' },
-          { model: Payment, as: 'payment' },
+          { model: Payment, as: 'payments' },
         ],
       });
 
@@ -145,7 +165,12 @@ router.get('/:id', async (req, res, next) => {
         { model: Address, as: 'sender' },
         { model: Address, as: 'receiver' },
         { model: TrackingEvent, as: 'trackingEvents' },
-        { model: Payment, as: 'payment' },
+        { model: Payment, as: 'payments' },
+        { model: ShipmentItem, as: 'items' },
+        { model: Invoice, as: 'invoices', include: [{ model: InvoiceItem, as: 'items' }] },
+        { model: Document, as: 'documents' },
+        { model: ReturnRTO, as: 'returnsRTOs' },
+        { model: Insurance, as: 'insurances' },
         { model: User, as: 'user' },
       ],
     });
@@ -157,6 +182,63 @@ router.get('/:id', async (req, res, next) => {
     }
 
     res.json(shipment);
+  } catch (err) {
+    next(err);
+  }
+});
+
+const WAREHOUSE_ARRIVAL_STATUSES = [
+  'Received at USA Warehouse',
+  'Received at Dhaka Hub',
+];
+
+const NON_CANCELABLE_STATUSES = [
+  ...WAREHOUSE_ARRIVAL_STATUSES,
+  'Delivered',
+  'Cancelled',
+  'Disposed',
+  'Seized',
+];
+
+router.put('/:id/cancel', async (req, res, next) => {
+  try {
+    const shipment = await Shipment.findByPk(req.params.id);
+
+    if (!shipment) {
+      return next({ statusCode: 404, message: 'Shipment not found' });
+    }
+
+    if (shipment.userId !== req.user.id && req.user.role !== 'admin') {
+      return next({ statusCode: 403, message: 'Access denied' });
+    }
+
+    if (NON_CANCELABLE_STATUSES.includes(shipment.status)) {
+      return next({
+        statusCode: 400,
+        message: `Cannot cancel shipment in ${shipment.status} status. Cancellation is no longer possible.`,
+      });
+    }
+
+    shipment.status = 'Cancelled';
+    await shipment.save();
+
+    await TrackingEvent.create({
+      shipmentId: shipment.id,
+      status: 'Cancelled',
+      note: 'Shipment cancelled by user',
+      location: 'System',
+    });
+
+    const updatedShipment = await Shipment.findByPk(shipment.id, {
+      include: [
+        { model: Address, as: 'sender' },
+        { model: Address, as: 'receiver' },
+        { model: TrackingEvent, as: 'trackingEvents' },
+        { model: Payment, as: 'payments' },
+      ],
+    });
+
+    res.json(updatedShipment);
   } catch (err) {
     next(err);
   }

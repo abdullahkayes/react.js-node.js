@@ -21,15 +21,15 @@ const getTransporter = () => {
   return transporter;
 };
 
-const sendEmail = async ({ to, subject, html }) => {
+const sendEmail = async ({ to, subject, html, attachments }) => {
   if (!process.env.SMTP_HOST) {
-    console.log(`[EMAIL] (smtp not configured) To: ${to} Subject: ${subject}`);
+    console.log(`[EMAIL] (smtp not configured) To: ${to} Subject: ${subject}${attachments && attachments.length ? ` Attachments: ${attachments.map((a) => a.filename).join(', ')}` : ''}`);
     return { messageId: 'simulated' };
   }
 
   const t = getTransporter();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-  const info = await t.sendMail({ from, to, subject, html });
+  const info = await t.sendMail({ from, to, subject, html, attachments });
   return info;
 };
 

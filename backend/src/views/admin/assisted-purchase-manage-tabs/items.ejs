@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#050c18]">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Items & Purchase Preparation - SHP-2602847 - Dazzling Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            brand: {
+              dark: '#050c18', card: '#081225', border: '#1b2b48',
+              orange: '#f97316', 'orange-hover': '#ea580c',
+              accentBlue: '#38bdf8', accentGreen: '#22c55e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="h-full bg-[#050c18] text-slate-200 font-sans antialiased overflow-x-hidden">
+  <div class="flex min-h-screen w-full">
+    <%- include('partials/sidebar', { active: 'assisted-purchase' }) %>
+    
+    <div class="flex-1 flex flex-col min-w-0">
+      <%- include('partials/header', { 
+        title: 'Manage Purchase', 
+        subtitle: 'Coordinate the approved purchase and follow seller orders', 
+        user: typeof user !== 'undefined' ? user : {} 
+      }) %>
+
+      <main class="flex-1 p-6 space-y-5 overflow-y-auto">
+        <%
+          /* ---------------------------------------------------------------------------
+           * Items & Purchase Preparation Context & Data Setup
+           * ------------------------------------------------------------------------- */
+          const shipmentId = (typeof purchase !== 'undefined' && purchase.shipmentId) ? purchase.shipmentId : 'SHP-2602847';
+          const subtitle = (typeof purchase !== 'undefined' && purchase.subtitle) ? purchase.subtitle : 'Review submitted products and confirmed purchase costs';
+
+          const purchaseItems = (typeof items !== 'undefined' && Array.isArray(items)) ? items : [
+            {
+              id: 'ITM-260847-01',
+              productName: 'Cotton T-shirt',
+              store: 'Amazon',
+              category: 'Category A',
+              quantity: 20,
+              variant: 'Navy / Medium',
+              unitPrice: '12.00',
+              lineTotal: '240.00',
+              acceptance: 'Approved',
+              purchased: 'Purchased'
+            },
+            {
+              id: 'ITM-260847-02',
+              productName: 'Moisturizing cream',
+              store: 'Amazon',
+              category: 'Category B',
+              quantity: 10,
+              variant: 'Fragrance-free / 16 oz',
+              unitPrice: '18.00',
+              lineTotal: '180.00',
+              acceptance: 'Approved',
+              purchased: 'Purchased'
+            },
+            {
+              id: 'ITM-260847-03',
+              productName: 'Wireless headphones',
+              store: 'Walmart',
+              category: 'Category D',
+              quantity: 4,
+              variant: 'Black / Standard',
+              unitPrice: '90.00',
+              lineTotal: '360.00',
+              acceptance: 'Approved',
+              purchased: 'Not Purchased',
+              selected: true
+            },
+            {
+              id: 'ITM-260847-04',
+              productName: 'Running shoes',
+              store: 'Walmart',
+              category: 'Category A',
+              quantity: 2,
+              variant: 'Grey / US 9',
+              unitPrice: '60.00',
+              lineTotal: '120.00',
+              acceptance: 'Approved',
+              purchased: 'Not Purchased'
+            }
+          ];
+
+          const selectedItem = purchaseItems.find(i => i.selected) || purchaseItems[2];
+
+          const returnTerms = [
+            { id: 'ITM-260847-01', seller: 'Amazon', window: '30 days from delivery', fee: 'None stated', eligibility: 'Subject to seller conditions', consent: 'Recorded' },
+            { id: 'ITM-260847-02', seller: 'Amazon', window: '30 days from delivery; unopened', fee: 'None stated', eligibility: 'Unopened product only', consent: 'Recorded' },
+            { id: 'ITM-260847-03', seller: 'Walmart', window: '30 days from delivery', fee: 'None stated', eligibility: 'Subject to seller conditions', consent: 'Recorded' },
+            { id: 'ITM-260847-04', seller: 'Walmart', window: '30 days from delivery; unworn', fee: 'None stated', eligibility: 'Unworn; original packaging', consent: 'Recorded' }
+          ];
+        %>
+
+        <!-- Top Breadcrumb & Title Section -->
+        <div class="space-y-1">
+          <div class="text-[10.5px] text-slate-400 font-medium">
+            <a href="/admin/assisted-purchases" class="hover:underline">Assisted Purchase &amp; Procurement</a> 
+            <span class="mx-1 text-slate-600">/</span> 
+            <span class="text-slate-300">Manage Purchase</span>
+          </div>
+
+          <div class="flex items-center gap-3 pt-0.5">
+            <h1 class="text-xl font-bold text-white tracking-tight font-mono"><%= shipmentId %></h1>
+            <span class="text-slate-400 text-[11px]">• &nbsp;<%= subtitle %>[cite: 12]</span>
+          </div>
+        </div>
+
+        <!-- Section Sub-Tabs Navigation Strip -->
+        <div class="border-b border-[#1b2b48] flex items-center gap-6 text-[11.5px] font-medium pt-1">
+          <a href="#" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Overview</a>
+          <a href="#" class="pb-2.5 text-[#f97316] border-b-2 border-[#f97316] font-semibold">Items &amp; Purchase Preparation[cite: 12]</a>
+          <a href="#" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Invoice &amp; Advance Payment</a>
+          <a href="#" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Seller Orders &amp; Tracking</a>
+          <a href="#" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Documents</a>
+          <a href="#" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Audit Trail</a>
+        </div>
+
+        <!-- Purchase Items Panel -->
+        <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+          <div class="flex items-center justify-between border-b border-[#132238] pb-2.5">
+            <h2 class="text-sm font-bold text-white">Purchase Items[cite: 12]</h2>
+            <div class="text-[11px] text-slate-400 font-medium">4 items · product subtotal USD 900.00[cite: 12]</div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-[11px]">
+              <thead>
+                <tr class="border-b border-[#1b2b48] text-slate-400 text-[10px]">
+                  <th class="py-2.5 pr-3 font-semibold">Item ID[cite: 12]</th>
+                  <th class="py-2.5 px-3 font-semibold">Product / Store[cite: 12]</th>
+                  <th class="py-2.5 px-3 font-semibold">Category[cite: 12]</th>
+                  <th class="py-2.5 px-3 font-semibold">Quantity[cite: 12]</th>
+                  <th class="py-2.5 px-3 font-semibold">Color / Size / Variant[cite: 12]</th>
+                  <th class="py-2.5 px-3 font-semibold">Confirmed Unit Price (USD)[cite: 12]</th>
+                  <th class="py-2.5 px-3 font-semibold">Line Total (USD)[cite: 12]</th>
+                  <th class="py-2.5 px-3 font-semibold">Acceptance[cite: 12]</th>
+                  <th class="py-2.5 px-3 font-semibold">Purchased[cite: 12]</th>
+                  <th class="py-2.5 pl-3 text-right font-semibold">Action[cite: 12]</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#16243d]/60 text-slate-300">
+                <% purchaseItems.forEach((item) => { %>
+                  <tr class="hover:bg-[#0f1d35]/50 transition-colors <%= item.selected ? 'bg-[#0e1d38]/60 border-l-2 border-[#f97316]' : '' %>">
+                    
+                    <!-- Item ID -->
+                    <td class="py-3.5 pr-3 font-mono font-medium text-blue-400 align-middle">
+                      <%= item.id %>[cite: 12]
+                    </td>
+
+                    <!-- Product / Store -->
+                    <td class="py-3.5 px-3 align-middle">
+                      <div class="text-white font-medium"><%= item.productName %>[cite: 12]</div>
+                      <div class="text-[10px] text-slate-400 mt-0.5"><%= item.store %>[cite: 12]</div>
+                    </td>
+
+                    <!-- Category -->
+                    <td class="py-3.5 px-3 text-slate-300 align-middle">
+                      <%= item.category %>[cite: 12]
+                    </td>
+
+                    <!-- Quantity -->
+                    <td class="py-3.5 px-3 text-slate-200 font-semibold align-middle">
+                      <%= item.quantity %>[cite: 12]
+                    </td>
+
+                    <!-- Variant -->
+                    <td class="py-3.5 px-3 text-slate-300 align-middle">
+                      <%= item.variant %>[cite: 12]
+                    </td>
+
+                    <!-- Unit Price -->
+                    <td class="py-3.5 px-3 font-mono text-slate-200 align-middle">
+                      <%= item.unitPrice %>[cite: 12]
+                    </td>
+
+                    <!-- Line Total -->
+                    <td class="py-3.5 px-3 font-mono font-semibold text-white align-middle">
+                      <%= item.lineTotal %>[cite: 12]
+                    </td>
+
+                    <!-- Acceptance Badge -->
+                    <td class="py-3.5 px-3 align-middle">
+                      <span class="px-2.5 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[10px] font-semibold">
+                        <%= item.acceptance %>[cite: 12]
+                      </span>
+                    </td>
+
+                    <!-- Purchased Status Badge -->
+                    <td class="py-3.5 px-3 align-middle">
+                      <% if (item.purchased === 'Purchased') { %>
+                        <span class="px-2.5 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[10px] font-semibold">
+                          <%= item.purchased %>[cite: 12]
+                        </span>
+                      <% } else { %>
+                        <span class="px-2.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-semibold">
+                          <%= item.purchased %>[cite: 12]
+                        </span>
+                      <% } %>
+                    </td>
+
+                    <!-- Action Link -->
+                    <td class="py-3.5 pl-3 text-right align-middle">
+                      <a href="#" class="text-blue-400 hover:underline font-medium text-[11px]">View / Edit[cite: 12]</a>
+                    </td>
+
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Selected Item Details & Purchase Preparation 2-Column Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          
+          <!-- LEFT COLUMN: Selected Item Details (7 Cols) -->
+          <div class="lg:col-span-7 bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-4">
+            <div class="flex items-center justify-between border-b border-[#132238] pb-2.5">
+              <h3 class="text-xs font-bold text-white">Selected Item · <%= selectedItem.id %>[cite: 12]</h3>
+              <button type="button" class="px-3 py-1 bg-[#12233f] hover:bg-[#182d50] text-slate-200 border border-[#23385d] text-[10.5px] font-semibold rounded transition-colors">
+                Edit Item Details[cite: 12]
+              </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-y-3 gap-x-4 text-[11px]">
+              <div>
+                <span class="text-[10px] text-slate-400 block">Product Name[cite: 12]</span>
+                <span class="text-white mt-0.5 block font-semibold"><%= selectedItem.productName %>[cite: 12]</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block">Store / Website Name[cite: 12]</span>
+                <span class="text-slate-200 mt-0.5 block font-medium"><%= selectedItem.store %>[cite: 12]</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block">Product Category[cite: 12]</span>
+                <span class="text-slate-200 mt-0.5 block font-medium"><%= selectedItem.category %>[cite: 12]</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block">Quantity[cite: 12]</span>
+                <span class="text-slate-200 mt-0.5 block font-medium"><%= selectedItem.quantity %>[cite: 12]</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block">Color / Size / Variant[cite: 12]</span>
+                <span class="text-slate-200 mt-0.5 block font-medium"><%= selectedItem.variant %>[cite: 12]</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block">Estimated Product Price (USD)[cite: 12]</span>
+                <span class="font-mono text-slate-200 mt-0.5 block font-medium">90.00[cite: 12]</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block">Product Link (USA Store)[cite: 12]</span>
+                <a href="#" class="text-blue-400 hover:underline mt-0.5 block font-medium">Open customer’s submitted product link[cite: 12]</a>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block">Cart Screenshot (Optional)[cite: 12]</span>
+                <a href="#" class="text-blue-400 hover:underline mt-0.5 block font-mono">headphones-cart.png[cite: 12]</a>
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-[#132238] text-[10px] text-slate-500 italic">
+              Customer-submitted information[cite: 12]
+            </div>
+          </div>
+
+          <!-- RIGHT COLUMN: Purchase Preparation (5 Cols) -->
+          <div class="lg:col-span-5 bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-4">
+            <div class="flex items-center justify-between border-b border-[#132238] pb-2.5">
+              <h3 class="text-xs font-bold text-white">Purchase Preparation[cite: 12]</h3>
+              <button type="button" class="px-3 py-1 bg-[#12233f] hover:bg-[#182d50] text-slate-200 border border-[#23385d] text-[10.5px] font-semibold rounded transition-colors">
+                Edit Purchase Details[cite: 12]
+              </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-y-3 gap-x-4 text-[11px]">
+              <div>
+                <span class="text-[10px] text-slate-400 block">Confirmed Unit Price (USD)[cite: 12]</span>
+                <span class="font-mono text-white mt-0.5 block font-semibold"><%= selectedItem.unitPrice %>[cite: 12]</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block">Product Line Total (USD)[cite: 12]</span>
+                <span class="font-mono text-white mt-0.5 block font-semibold"><%= selectedItem.lineTotal %>[cite: 12]</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block">Availability[cite: 12]</span>
+                <span class="text-slate-200 mt-0.5 block font-medium">In stock at last check[cite: 12]</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block mb-1">Acceptance Review[cite: 12]</span>
+                <span class="px-2 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-semibold inline-block">
+                  Approved[cite: 12]
+                </span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block">Price Checked At[cite: 12]</span>
+                <span class="text-slate-300 mt-0.5 block">06 Sep 2026, 03:20 PM[cite: 12]</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block">Checked By[cite: 12]</span>
+                <a href="#" class="text-blue-400 hover:underline font-mono mt-0.5 block">STF-260018[cite: 12]</a>
+              </div>
+            </div>
+
+            <div class="text-right pt-1">
+              <a href="#" class="text-blue-400 hover:underline text-[10.5px] font-medium">View Invoice Breakdown[cite: 12]</a>
+            </div>
+
+            <div class="pt-2 border-t border-[#132238] text-[10px] text-slate-400">
+              Recheck current price and availability before purchasing.[cite: 12]
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Seller Return Terms & Customer Consent Panel -->
+        <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+          <div class="border-b border-[#132238] pb-2.5">
+            <h3 class="text-xs font-bold text-white">Seller Return Terms &amp; Customer Consent[cite: 12]</h3>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-[11px]">
+              <thead>
+                <tr class="border-b border-[#1b2b48] text-slate-400 text-[10px]">
+                  <th class="py-2.5 pr-3 font-semibold">Item ID[cite: 12]</th>
+                  <th class="py-2.5 px-3 font-semibold">Seller[cite: 12]</th>
+                  <th class="py-2.5 px-3 font-semibold">Return Window / Conditions[cite: 12]</th>
+                  <th class="py-2.5 px-3 font-semibold">Restocking Fee[cite: 12]</th>
+                  <th class="py-2.5 px-3 font-semibold">Return Eligibility[cite: 12]</th>
+                  <th class="py-2.5 pl-3 text-right font-semibold">Customer Consent[cite: 12]</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#16243d]/60 text-slate-300">
+                <% returnTerms.forEach((term) => { %>
+                  <tr class="hover:bg-[#0f1d35]/50 transition-colors">
+                    <td class="py-3 pr-3 font-mono font-medium text-blue-400 align-middle"><%= term.id %>[cite: 12]</td>
+                    <td class="py-3 px-3 text-white font-medium align-middle"><%= term.seller %>[cite: 12]</td>
+                    <td class="py-3 px-3 text-slate-300 align-middle"><%= term.window %>[cite: 12]</td>
+                    <td class="py-3 px-3 text-slate-300 align-middle"><%= term.fee %>[cite: 12]</td>
+                    <td class="py-3 px-3 text-slate-300 align-middle"><%= term.eligibility %>[cite: 12]</td>
+                    <td class="py-3 pl-3 text-right align-middle">
+                      <span class="px-2.5 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[10px] font-semibold inline-block">
+                        <%= term.consent %>[cite: 12]
+                      </span>
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-[#132238] text-[10.5px] text-slate-400">
+            <span>Consent to applicable seller terms and non-refundable procurement/service fees recorded on 06 Sep 2026, 04:10 PM.[cite: 12]</span>
+            <a href="#" class="text-blue-400 hover:underline font-medium">View Recorded Consent[cite: 12]</a>
+          </div>
+        </div>
+
+        <!-- Developer Reference Footer Box -->
+        <div class="bg-[#050c18] border border-dashed border-[#1b2b48] rounded-md p-3.5 text-[11px] text-slate-400 space-y-1">
+          <div class="text-slate-300 font-semibold">Developer reference — outside the live tab[cite: 12]</div>
+          <p class="text-[10.5px] leading-relaxed">
+            Seller terms above are illustrative, not verified store policies. Preserve submitted values and log authorized changes. Changes affecting the approved product, variant, quantity, price or terms require the relevant customer agreement and finance review before the affected purchase. Taxes and shipping must not be counted twice across items and seller orders.[cite: 12]
+          </p>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    if (window.lucide) lucide.createIcons();
+  </script>
+</body>
+</html>

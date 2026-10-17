@@ -1,0 +1,907 @@
+<%
+  /*
+    Shared Requests & Bookings queue.
+
+    Included by all four queue pages (the combined one and the three per-type
+    pages), so a summary card, a filter control or a status badge behaves the same
+    whichever page it is shown on. Only the heading, the description and the base
+    path differ between them, and those arrive on `queue`.
+
+    Every link this partial builds goes through queueHref() below, which mirrors
+    buildQueueQuery() in the controller: it keeps the active filters and drops the
+    ones left at their default, so a card click, a page change and a filter change
+    all land on a URL that describes exactly the view being asked for.
+  */
+  const queueHref = (overrides) => {
+    const merged = { ...filters, ...(overrides || {}) };
+    const params = new URLSearchParams();
+    ['card', 'status', 'freight', 'customerType', 'itemType', 'date', 'search'].forEach((key) => {
+      const value = String(merged[key] ?? '').trim();
+      if (value && value !== 'all') params.set(key, value);
+    });
+    const modal = String(merged.informationRequest ?? '').trim();
+    if (modal) params.set('informationRequest', modal);
+    const page = parseInt(merged.page, 10);
+    if (page > 1) params.set('page', String(page));
+    const query = params.toString();
+    return query ? `${queue.basePath}?${query}` : queue.basePath;
+  };
+  const cardHref = (key) => (filters.card === key ? queueHref({ card: '' }) : queueHref({ card: key }));
+  const hasFilters = Boolean(filters.card || filters.status || filters.freight || filters.customerType || filters.itemType || filters.search || (filters.date && filters.date !== 'all'));
+  const formatDateTime = (value) => (value ? new Date(value).toLocaleString() : '—');
+  const freightLabel = (mode) => (mode ? String(mode).charAt(0).toUpperCase() + String(mode).slice(1) : '—');
+%>
+
+<!-- ================= SUMMARY CARDS ================= -->
+<!--
+  Every card is a link, not a button, so it works without scripting and shows its
+  destination on hover. Clicking the active card clears the filter.
+-->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5" id="summaryCards">
+  <% cards.forEach((card) => { %>
+    <%
+      const active = filters.card === card.key;
+      const tone = active ? `border-${card.colour}-500/60 bg-${card.colour}-500/[0.07]` : '';
+    %>
+    <a
+      href="<%= cardHref(card.key) %>"
+      data-queue-card="<%= card.key %>"
+      aria-current="<%= active ? 'true' : 'false' %>"
+      title="<%= active ? 'Clear this filter' : `Show only ${card.label.toLowerCase()}` %>"
+      class="bg-[#111726] border <%= active ? tone : 'border-[#1a2333]' %> rounded-xl p-3.5 flex items-start gap-3 hover:border-<%= card.colour %>-500/40 transition-colors group cursor-pointer"
+    >
+      <div class="p-2.5 rounded-lg bg-<%= card.colour %>-500/10 text-<%= card.colour %>-400 shrink-0">
+        <i data-lucide="<%= card.icon %>" class="w-5 h-5"></i>
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-1.5">
+          <span class="text-[10px] text-gray-400 font-medium truncate"><%= card.label %></span>
+          <% if (active) { %>
+            <i data-lucide="x" class="w-3 h-3 text-<%= card.colour %>-400 shrink-0"></i>
+          <% } %>
+        </div>
+        <div class="text-lg font-bold text-<%= card.colour %>-400 mt-0.5"><%= summaryCards[card.key] %></div>
+        <div class="text-[9px] text-gray-500 mt-0.5 leading-tight"><%= card.caption %></div>
+      </div>
+    </a>
+  <% }) %>
+</div>
+
+<!-- ================= MAIN DATA SECTION ================= -->
+<div class="bg-[#111726] border border-[#1a2333] rounded-xl overflow-hidden">
+
+  <!-- Section Title & Active Filter Summary -->
+  <div class="p-4 border-b border-[#1a2333] flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h3 class="text-sm font-bold text-white">
+        <% if (filters.card) { %>
+          <% const activeCard = cards.find((c) => c.key === filters.card); %>
+          <%= activeCard ? activeCard.label : 'All Requests' %>
+        <% } else { %>
+          <%= queue.activeType ? queue.title : 'All Requests' %>
+        <% } %>
+      </h3>
+      <p class="text-[10px] text-gray-400 mt-0.5">Latest submitted first &bull; Request ID is used for every workflow</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <% if (filters.card) { %>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20 text-[10px] font-medium">
+          <i data-lucide="filter" class="w-3 h-3"></i>
+          Filtered by summary card
+          <a href="<%= queueHref({ card: '' }) %>" class="hover:text-white" title="Clear this filter">
+            <i data-lucide="x" class="w-3 h-3"></i>
+          </a>
+        </span>
+      <% } %>
+      <!-- Refresh re-reads the queue from the database. -->
+      <button type="button" onclick="window.location.reload()" class="px-3 py-1.5 bg-[#0b1120] hover:bg-[#111a2e] border border-[#1a2333] text-gray-300 rounded-md text-xs flex items-center gap-1.5 transition-colors">
+        <i data-lucide="rotate-cw" class="w-3.5 h-3.5 text-gray-400"></i>
+        <span>Refresh</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= FILTER TOOLBAR ================= -->
+  <div id="queueToolbar" data-queue-base="<%= queue.basePath %>" class="p-3.5 border-b border-[#1a2333] bg-[#0b0f19]/60 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
+
+    <!-- Search -->
+    <div class="relative xl:col-span-2">
+      <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"></i>
+      <input
+        type="text"
+        id="filterSearch"
+        value="<%= filters.search %>"
+        placeholder="Search Request ID, customer, shipment..."
+        class="w-full bg-[#0b1120] border border-[#1a2333] rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-[#ff5c00] transition-colors"
+      />
+    </div>
+
+    <!-- Request Type: links to the individual queue pages rather than filtering. -->
+    <div class="relative">
+      <select
+        id="filterType"
+        class="appearance-none w-full bg-[#0b1120] border <%= queue.activeType ? 'border-[#ff5c00]/60' : 'border-[#1a2333]' %> rounded-lg pl-3 pr-8 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#ff5c00] cursor-pointer"
+        title="Opens the page for that request type"
+      >
+        <option value="<%= queue.allHref %>" <%= queue.allActive ? 'selected' : '' %>>All Request Types</option>
+        <% queue.typeOptions.forEach((type) => { %>
+          <option value="<%= type.href %>" <%= type.active ? 'selected' : '' %>><%= type.label %></option>
+        <% }) %>
+      </select>
+      <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+    </div>
+
+    <!-- Request Status -->
+    <div class="relative">
+      <select id="filterStatus" class="appearance-none w-full bg-[#0b1120] border <%= filters.status ? 'border-[#ff5c00]/60' : 'border-[#1a2333]' %> rounded-lg pl-3 pr-8 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#ff5c00] cursor-pointer">
+        <option value="">Request Status: All</option>
+        <% filterOptions.statuses.forEach((status) => { %>
+          <option value="<%= status %>" <%= filters.status === status ? 'selected' : '' %>><%= status %></option>
+        <% }) %>
+      </select>
+      <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+    </div>
+
+    <!-- Freight Mode -->
+    <div class="relative">
+      <select id="filterFreight" class="appearance-none w-full bg-[#0b1120] border <%= filters.freight ? 'border-[#ff5c00]/60' : 'border-[#1a2333]' %> rounded-lg pl-3 pr-8 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#ff5c00] cursor-pointer">
+        <option value="">Freight Mode: All</option>
+        <% filterOptions.freightModes.forEach((mode) => { %>
+          <option value="<%= mode %>" <%= filters.freight === mode ? 'selected' : '' %>><%= freightLabel(mode) %></option>
+        <% }) %>
+        <% if (!filterOptions.freightModes.length) { %>
+          <option value="" disabled>Freight Mode: (none recorded)</option>
+        <% } %>
+      </select>
+      <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+    </div>
+
+    <!-- Customer Type -->
+    <div class="relative">
+      <select id="filterCustomerType" class="appearance-none w-full bg-[#0b1120] border <%= filters.customerType ? 'border-[#ff5c00]/60' : 'border-[#1a2333]' %> rounded-lg pl-3 pr-8 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#ff5c00] cursor-pointer">
+        <option value="">Customer Type: All</option>
+        <% filterOptions.customerTypes.forEach((type) => { %>
+          <option value="<%= type %>" <%= filters.customerType === type ? 'selected' : '' %>><%= type %></option>
+        <% }) %>
+      </select>
+      <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+    </div>
+
+    <!-- Item Type -->
+    <div class="relative">
+      <select id="filterItemType" class="appearance-none w-full bg-[#0b1120] border <%= filters.itemType ? 'border-[#ff5c00]/60' : 'border-[#1a2333]' %> rounded-lg pl-3 pr-8 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#ff5c00] cursor-pointer">
+        <option value="">Item Type: All</option>
+        <% filterOptions.itemTypes.forEach((type) => { %>
+          <option value="<%= type %>" <%= filters.itemType === type ? 'selected' : '' %>><%= type %></option>
+        <% }) %>
+      </select>
+      <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+    </div>
+
+    <!-- Date Range -->
+    <div class="relative">
+      <select id="filterDate" class="appearance-none w-full bg-[#0b1120] border <%= filters.date && filters.date !== 'all' ? 'border-[#ff5c00]/60' : 'border-[#1a2333]' %> rounded-lg pl-3 pr-8 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#ff5c00] cursor-pointer">
+        <% dateRangeOptions.forEach((option) => { %>
+          <option value="<%= option.value %>" <%= filters.date === option.value ? 'selected' : '' %>><%= option.label %></option>
+        <% }) %>
+      </select>
+      <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+    </div>
+
+    <!-- Clear Filters -->
+    <button
+      type="button"
+      id="queueClearFilters"
+      <%= hasFilters ? '' : 'disabled' %>
+      class="w-full bg-[#0b1120] hover:bg-[#111a2e] border border-[#1a2333] text-gray-400 hover:text-gray-200 rounded-lg px-3 py-1.5 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#0b1120]"
+    >
+      Clear Filters
+    </button>
+  </div>
+
+  <!-- ================= DATA TABLE ================= -->
+  <div class="overflow-x-auto">
+    <table class="w-full text-left border-collapse text-xs">
+      <thead>
+        <tr class="border-b border-[#1a2333] bg-[#0b0f19]/40 text-gray-400 text-[10px] uppercase font-semibold">
+          <th class="py-3 px-4">Request ID</th>
+          <th class="py-3 px-4">Request Type</th>
+          <th class="py-3 px-4">Customer</th>
+          <th class="py-3 px-4">Item Type</th>
+          <th class="py-3 px-4">Items</th>
+          <th class="py-3 px-4">Request Status</th>
+          <th class="py-3 px-4">Linked Shipment</th>
+          <th class="py-3 px-4">Action</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-[#1a2333]/60">
+        <% if (rows.length) { %>
+          <% rows.forEach((row) => { %>
+            <tr class="hover:bg-[#0e1320]/50 transition-colors align-top">
+              <!-- Request ID doubles as the link into the request details page. -->
+              <td class="py-3 px-4">
+                <a href="<%= row.detailHref %>" class="font-mono text-sky-400 hover:text-sky-300 hover:underline"><%= row.requestRef %></a>
+                <div class="text-[9px] text-gray-500 mt-0.5"><%= formatDateTime(row.submittedAt || row.createdAt) %></div>
+              </td>
+              <td class="py-3 px-4">
+                <div class="font-medium text-gray-200"><%= row.typeShortLabel %></div>
+                <a href="<%= row.typeSlug ? `/admin/bookings/${row.typeSlug}` : '#' %>" class="text-[9px] text-sky-400/80 hover:text-sky-300"><%= row.typeLabel %></a>
+              </td>
+              <td class="py-3 px-4">
+                <% if (row.customer) { %>
+                  <a href="/admin/customers/<%= row.customer.id %>" class="font-medium text-gray-200 hover:text-sky-300 hover:underline"><%= row.customer.name %></a>
+                  <div class="text-[9px] text-sky-400 font-mono">#<%= row.customer.id %></div>
+                  <% if (row.customerType) { %>
+                    <div class="text-[9px] text-gray-500 mt-0.5"><%= row.customerType %></div>
+                  <% } %>
+                <% } else { %>
+                  <span class="text-gray-500">Customer record removed</span>
+                <% } %>
+              </td>
+              <td class="py-3 px-4 text-gray-300"><%= row.itemTypeSummary %></td>
+              <td class="py-3 px-4 font-medium text-gray-200"><%= row.itemCount %></td>
+              <td class="py-3 px-4">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium <%= row.statusBadgeClass %>">
+                  <%= row.status %>
+                </span>
+                <% if (row.freightMode) { %>
+                  <div class="text-[9px] text-gray-500 mt-1"><%= freightLabel(row.freightMode) %> freight</div>
+                <% } %>
+              </td>
+              <td class="py-3 px-4">
+                <% if (row.shipment) { %>
+                  <a href="<%= row.shipment.href %>" class="text-sky-400 font-mono hover:text-sky-300 hover:underline"><%= row.shipment.ref %></a>
+                  <div class="text-[9px] text-gray-500 mt-0.5"><%= row.shipment.status %></div>
+                <% } else { %>
+                  <span class="text-gray-500 font-mono">N/A</span>
+                <% } %>
+              </td>
+              <td class="py-3 px-4">
+                <!--
+                  One action per row, derived from the request status on the
+                  server: Review Request and View Request open the details page,
+                  Request Information opens the modal below, and Open Shipment goes
+                  to Shipments > Shipment Details.
+
+                  The Request Information link carries its row's details on the
+                  element, so the single modal below can be filled in for whichever
+                  row was clicked. Its href is the same view expressed as a URL, so
+                  the action still works when the script does not run.
+                -->
+                <a
+                  href="<%= row.action.href %>"
+                  data-queue-action="<%= row.action.kind %>"
+                  data-queue-row="<%= row.rowId %>"
+                  <% if (row.action.kind === 'information') { %>
+                    data-info-ref="<%= row.requestRef %>"
+                    data-info-type="<%= row.typeLabel %>"
+                    data-info-customer="<%= row.customer ? row.customer.name : 'Customer record removed' %>"
+                    data-info-status="<%= row.status %>"
+                    data-info-badge="<%= row.statusBadgeClass %>"
+                    data-info-endpoint="/admin/bookings/requests/<%= row.typeSlug %>/<%= row.id %>/information-request"
+                  <% } %>
+                  title="<%= row.action.hint %>"
+                  class="inline-flex items-center gap-1.5 font-medium text-sky-400 hover:text-sky-300 hover:underline"
+                ><%= row.action.label %></a>
+                <% if (row.action.kind === 'shipment' && !row.shipment) { %>
+                  <div class="text-[9px] text-amber-400/80 mt-1">No shipment linked yet</div>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        <% } else { %>
+          <tr>
+            <td colspan="8" class="py-10 px-4 text-center text-gray-500">
+              <i data-lucide="inbox" class="w-6 h-6 mx-auto mb-2 text-gray-600"></i>
+              <% if (hasFilters) { %>
+                No requests match the selected filters.
+              <% } else { %>
+                No requests have been submitted yet.
+              <% } %>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= PAGINATION ================= -->
+  <div class="px-4 py-3 border-t border-[#1a2333] bg-[#0b0f19]/40 flex flex-wrap items-center justify-between gap-3 text-[11px] text-gray-400">
+    <div>
+      Showing <span class="text-gray-200 font-medium"><%= firstRowIndex %>&ndash;<%= lastRowIndex %></span>
+      of <span class="text-gray-200 font-medium"><%= total %></span> request<%= total === 1 ? '' : 's' %>
+      <% if (totalPages > 1) { %>
+        &middot; page <span class="text-gray-200 font-medium"><%= currentPage %></span> of <span class="text-gray-200 font-medium"><%= totalPages %></span>
+      <% } %>
+    </div>
+
+    <% if (totalPages > 1) { %>
+      <div class="flex items-center gap-1">
+        <a href="<%= queueHref({ page: 1 }) %>" aria-label="First page" class="w-7 h-7 flex items-center justify-center rounded border border-[#1a2333] bg-[#0b1120] <%= currentPage === 1 ? 'text-gray-600 pointer-events-none' : 'text-gray-300 hover:bg-[#111a2e]' %>">
+          <i data-lucide="chevrons-left" class="w-3.5 h-3.5"></i>
+        </a>
+        <a href="<%= queueHref({ page: currentPage - 1 }) %>" aria-label="Previous page" class="w-7 h-7 flex items-center justify-center rounded border border-[#1a2333] bg-[#0b1120] <%= currentPage === 1 ? 'text-gray-600 pointer-events-none' : 'text-gray-300 hover:bg-[#111a2e]' %>">
+          <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+        </a>
+
+        <%
+          // A short window around the current page, always bounded by the ends.
+          const windowStart = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+          const windowEnd = Math.min(totalPages, Math.max(currentPage + 2, 5));
+        %>
+        <% for (let page = windowStart; page <= windowEnd; page += 1) { %>
+          <% if (page === currentPage) { %>
+            <span aria-current="page" class="w-7 h-7 flex items-center justify-center rounded bg-orange-500 text-white font-bold"><%= page %></span>
+          <% } else { %>
+            <a href="<%= queueHref({ page }) %>" class="w-7 h-7 flex items-center justify-center rounded border border-[#1a2333] bg-[#0b1120] text-gray-300 hover:bg-[#111a2e] hover:text-white"><%= page %></a>
+          <% } %>
+        <% } %>
+
+        <a href="<%= queueHref({ page: currentPage + 1 }) %>" aria-label="Next page" class="w-7 h-7 flex items-center justify-center rounded border border-[#1a2333] bg-[#0b1120] <%= currentPage === totalPages ? 'text-gray-600 pointer-events-none' : 'text-gray-300 hover:bg-[#111a2e]' %>">
+          <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+        </a>
+        <a href="<%= queueHref({ page: totalPages }) %>" aria-label="Last page" class="w-7 h-7 flex items-center justify-center rounded border border-[#1a2333] bg-[#0b1120] <%= currentPage === totalPages ? 'text-gray-600 pointer-events-none' : 'text-gray-300 hover:bg-[#111a2e]' %>">
+          <i data-lucide="chevrons-right" class="w-3.5 h-3.5"></i>
+        </a>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<!-- ================= REQUEST INFORMATION MODAL ================= -->
+<!--
+  A single modal shell, shared by every row that offers "Request Information". The
+  header and the endpoint are filled in from the clicked row's data attributes, so
+  one shell serves the whole page and opening it costs no page load.
+
+  It still works without scripting: the action's href is the same modal expressed
+  as a URL, and a page loaded with that parameter renders the shell already open.
+-->
+<% if (informationRequest.row) { %>
+  <script type="application/json" id="infoRequestCatalog"><%- JSON.stringify(informationRequest.catalog) %></script>
+  <script type="application/json" id="infoChannelsByRow"><%- JSON.stringify(informationRequest.channelsByRow) %></script>
+
+  <% const modalOpen = Boolean(filters.informationRequest); %>
+  <div id="infoModal" data-row="<%= informationRequest.row.rowId %>" class="<%= modalOpen ? '' : 'hidden ' %>fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+    <div class="bg-[#111726] w-full max-w-3xl rounded-2xl shadow-2xl border border-[#1a2333] overflow-hidden flex flex-col max-h-[96vh]">
+
+      <!-- Header -->
+      <div class="px-6 py-4 border-b border-[#1a2333] flex items-start justify-between gap-4 shrink-0">
+        <div class="flex items-center gap-3.5 min-w-0">
+          <div class="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 shrink-0">
+            <i data-lucide="message-square-warning" class="w-5 h-5"></i>
+          </div>
+          <div class="min-w-0">
+            <h2 class="text-base font-bold text-white tracking-tight leading-none">Request Information</h2>
+            <p class="text-xs text-gray-400 mt-1">Ask the customer for the missing information on this request.</p>
+          </div>
+        </div>
+        <button type="button" data-info-action="close" title="Close" class="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-[#0b1120] transition-colors cursor-pointer shrink-0">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="infoForm" class="p-6 overflow-y-auto space-y-4" autocomplete="off">
+        <input type="hidden" name="endpoint" value="/admin/bookings/requests/<%= informationRequest.row.typeSlug %>/<%= informationRequest.row.id %>/information-request">
+
+        <!-- Request being asked about: read-only, filled in from the row that opened it. -->
+        <div class="bg-[#0b1120] border border-[#1a2333] rounded-lg p-3">
+          <div class="flex items-center gap-1.5 text-[11px] font-bold text-gray-300 mb-2">
+            <i data-lucide="file-text" class="w-3.5 h-3.5 text-sky-400"></i>
+            <span>Request</span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="min-w-0">
+              <span class="block text-[10px] text-gray-500">Request ID</span>
+              <span data-info-header="ref" class="block font-bold text-sky-400 font-mono mt-0.5 truncate"><%= informationRequest.row.requestRef %></span>
+            </div>
+            <div class="min-w-0">
+              <span class="block text-[10px] text-gray-500">Request Type</span>
+              <span data-info-header="type" class="block font-bold text-gray-200 mt-0.5 truncate"><%= informationRequest.row.typeLabel %></span>
+            </div>
+            <div class="min-w-0">
+              <span class="block text-[10px] text-gray-500">Customer</span>
+              <span data-info-header="customer" class="block font-bold text-gray-200 mt-0.5 truncate"><%= informationRequest.row.customer ? informationRequest.row.customer.name : 'Customer record removed' %></span>
+            </div>
+            <div class="min-w-0">
+              <span class="block text-[10px] text-gray-500">Status</span>
+              <span data-info-header="status" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium <%= informationRequest.row.statusBadgeClass %> mt-0.5"><%= informationRequest.row.status %></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Information Type -->
+        <div>
+          <label for="infoType" class="block font-semibold text-gray-300 mb-1">Information Type <span class="text-rose-400">*</span></label>
+          <select id="infoType" name="informationType" class="w-full bg-[#0b1120] border border-[#1a2333] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-[#ff5c00]">
+            <option value="">Select an information type</option>
+          </select>
+          <p data-info-error="informationType" class="hidden text-[10px] text-rose-400 mt-1"></p>
+        </div>
+
+        <!-- Specific Information Required: options depend on the type -->
+        <div>
+          <label for="infoSpecific" class="block font-semibold text-gray-300 mb-1">Specific Information Required <span class="text-rose-400">*</span></label>
+          <select id="infoSpecific" name="specificInformation" disabled class="w-full bg-[#0b1120] border border-[#1a2333] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-[#ff5c00] disabled:opacity-50 disabled:cursor-not-allowed">
+            <option value="">Select an information type first</option>
+          </select>
+          <p data-info-error="specificInformation" class="hidden text-[10px] text-rose-400 mt-1"></p>
+        </div>
+
+        <!-- Action Required -->
+        <div>
+          <label for="infoActionRequired" class="block font-semibold text-gray-300 mb-1">Action Required <span class="text-rose-400">*</span></label>
+          <select id="infoActionRequired" name="actionRequired" class="w-full bg-[#0b1120] border border-[#1a2333] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-[#ff5c00]">
+            <option value="">Select an action</option>
+          </select>
+          <p class="text-[10px] text-gray-500 mt-1">Describes what the customer must do.</p>
+          <p data-info-error="actionRequired" class="hidden text-[10px] text-rose-400 mt-1"></p>
+        </div>
+
+        <!-- Required Details -->
+        <div>
+          <label for="infoRequiredDetails" class="block font-semibold text-gray-300 mb-1">Required Details <span class="text-rose-400">*</span></label>
+          <div class="relative">
+            <textarea id="infoRequiredDetails" name="requiredDetails" rows="3" maxlength="1000" placeholder="Describe exactly what information or document is required from the customer." class="w-full bg-[#0b1120] border border-[#1a2333] rounded-lg p-3 pr-16 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-[#ff5c00] resize-none"></textarea>
+            <span class="absolute right-3 bottom-2 text-[10px] text-gray-500"><span data-info-count="infoRequiredDetails">0</span>/1000</span>
+          </div>
+          <p data-info-error="requiredDetails" class="hidden text-[10px] text-rose-400 mt-1"></p>
+        </div>
+
+        <!-- Reason -->
+        <div>
+          <label for="infoReason" class="block font-semibold text-gray-300 mb-1">Reason <span class="text-rose-400">*</span></label>
+          <select id="infoReason" name="reason" class="w-full bg-[#0b1120] border border-[#1a2333] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-[#ff5c00]">
+            <option value="">Select a reason</option>
+          </select>
+          <p data-info-error="reason" class="hidden text-[10px] text-rose-400 mt-1"></p>
+        </div>
+
+        <!-- Reason Details: shown, and required, only for "Other" -->
+        <div id="infoReasonDetailsWrap" hidden>
+          <label for="infoReasonDetails" class="block font-semibold text-gray-300 mb-1">Reason Details <span class="text-rose-400">*</span></label>
+          <div class="relative">
+            <textarea id="infoReasonDetails" name="reasonDetails" rows="2" maxlength="1000" placeholder="Explain the reason for this request clearly." class="w-full bg-[#0b1120] border border-[#1a2333] rounded-lg p-3 pr-16 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-[#ff5c00] resize-none"></textarea>
+            <span class="absolute right-3 bottom-2 text-[10px] text-gray-500"><span data-info-count="infoReasonDetails">0</span>/1000</span>
+          </div>
+          <p class="text-[10px] text-gray-500 mt-1">Required because Reason is set to Other.</p>
+          <p data-info-error="reasonDetails" class="hidden text-[10px] text-rose-400 mt-1"></p>
+        </div>
+
+        <!-- Additional Instructions -->
+        <div>
+          <label for="infoAdditional" class="block font-semibold text-gray-300 mb-1">Additional Instructions <span class="text-gray-500 font-normal">(Optional)</span></label>
+          <div class="relative">
+            <textarea id="infoAdditional" name="additionalInstructions" rows="2" maxlength="1000" placeholder="Any additional customer-facing instructions." class="w-full bg-[#0b1120] border border-[#1a2333] rounded-lg p-3 pr-16 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-[#ff5c00] resize-none"></textarea>
+            <span class="absolute right-3 bottom-2 text-[10px] text-gray-500"><span data-info-count="infoAdditional">0</span>/1000</span>
+          </div>
+        </div>
+
+        <!-- Notification Channels -->
+        <div>
+          <label class="block font-semibold text-gray-300 mb-2">Notification Channels <span class="text-rose-400">*</span></label>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <%
+              const channels = [
+                { key: 'Email', icon: 'mail', note: 'Registered email address' },
+                { key: 'SMS', icon: 'message-square', note: 'Registered mobile number' },
+                { key: 'WhatsApp', icon: 'phone', note: 'Registered WhatsApp number' },
+                { key: 'In-App Notification', icon: 'bell', note: 'Customer dashboard' },
+              ];
+            %>
+            <% channels.forEach((channel) => { %>
+              <%
+                // Availability is per customer, so the shell starts on the row it
+                // will first be opened for and the script reapplies it whenever a
+                // different row is clicked.
+                const available = informationRequest.channelsByRow[informationRequest.row.rowId]?.[channel.key] === true;
+                // In-App always works; the external channels need a destination
+                // on the customer record or the notice would be silently dropped.
+                const preset = available && (channel.key === 'Email' || channel.key === 'In-App Notification');
+              %>
+              <label data-info-channel-label="<%= channel.key %>" class="border <%= available ? 'border-[#1a2333] bg-[#0b1120]' : 'border-[#1a2333] bg-[#0b0f19] opacity-50' %> rounded-xl p-2.5 flex flex-col justify-between cursor-pointer relative">
+                <div class="flex items-center justify-between mb-1.5">
+                  <div class="w-7 h-7 rounded-lg bg-[#0b1120] border border-[#1a2333] text-gray-300 flex items-center justify-center">
+                    <i data-lucide="<%= channel.icon %>" class="w-3.5 h-3.5"></i>
+                  </div>
+                  <input type="checkbox" name="notificationChannels" value="<%= channel.key %>" data-info-channel data-info-note="<%= available ? channel.note : 'No contact detail on file' %>" <%= preset ? 'checked' : '' %> <%= available ? '' : 'disabled' %> class="w-4 h-4 accent-orange-500 rounded border-[#1a2333]" />
+                </div>
+                <div>
+                  <div class="font-bold text-gray-200 text-xs"><%= channel.key %></div>
+                  <div data-info-note-text class="text-[9px] text-gray-500 leading-tight mt-0.5"><%= available ? channel.note : 'No contact detail on file' %></div>
+                </div>
+              </label>
+            <% }) %>
+          </div>
+          <p data-info-error="notificationChannels" class="hidden text-[10px] text-rose-400 mt-1"></p>
+        </div>
+
+        <p data-info-error-summary class="hidden text-xs text-rose-400 leading-tight"></p>
+      </form>
+
+      <!-- Footer -->
+      <div class="px-6 py-3.5 bg-[#0b0f19] border-t border-[#1a2333] flex items-center justify-end gap-3 shrink-0">
+        <button type="button" data-info-action="close" class="px-5 py-2 bg-[#0b1120] border border-[#1a2333] hover:bg-[#111a2e] text-gray-300 text-xs font-semibold rounded-lg transition-colors">
+          Cancel
+        </button>
+        <button type="button" data-info-action="send" class="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-2">
+          <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          <span>Send Request</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+<% } %>
+
+<!-- ================= FLASH MESSAGE ================= -->
+<% if (flash) { %>
+  <div
+    id="queueFlash"
+    role="status"
+    class="mt-4 flex items-start gap-2.5 px-3.5 py-2.5 rounded-lg border text-xs <%= flash.tone === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-rose-500/10 border-rose-500/20 text-rose-300' %>"
+  >
+    <i data-lucide="<%= flash.tone === 'success' ? 'check-circle-2' : 'alert-circle' %>" class="w-4 h-4 shrink-0 mt-px"></i>
+    <span><%= flash.text %></span>
+    <button type="button" onclick="this.parentElement.remove()" class="ml-auto hover:text-white" title="Dismiss">
+      <i data-lucide="x" class="w-3.5 h-3.5"></i>
+    </button>
+  </div>
+<% } %>
+
+<script>
+  (function () {
+    'use strict';
+
+    if (window.lucide) lucide.createIcons();
+
+    var toolbar = document.getElementById('queueToolbar');
+    var queueBase = toolbar ? toolbar.dataset.queueBase : window.location.pathname;
+
+    /* ------------------------------------------------------------------
+     * Filters.
+     *
+     * Every control writes to the same query string and lets the server
+     * re-read the queue, so the cards, the counts and the rows always come
+     * from one database read and cannot drift apart. Each change replaces
+     * only its own parameter, drops the page number so the new filter starts
+     * at page 1, and clears any open modal.
+     * ------------------------------------------------------------------ */
+    function navigateWithFilters(updates) {
+      var params = new URLSearchParams(window.location.search);
+      Object.keys(updates).forEach(function (key) {
+        var value = String(updates[key] == null ? '' : updates[key]).trim();
+        if (!value || value === 'all') params.delete(key);
+        else params.set(key, value);
+      });
+      params.delete('informationRequest');
+      params.delete('page');
+      var query = params.toString();
+      window.location.href = query ? queueBase + '?' + query : queueBase;
+    }
+
+    [
+      ['filterType', null],
+      ['filterStatus', 'status'],
+      ['filterFreight', 'freight'],
+      ['filterCustomerType', 'customerType'],
+      ['filterItemType', 'itemType'],
+      ['filterDate', 'date'],
+    ].forEach(function (entry) {
+      var control = document.getElementById(entry[0]);
+      if (!control) return;
+
+      // The Request Type dropdown navigates to that type's own page; the rest
+      // filter the current page in place.
+      if (!entry[1]) {
+        control.addEventListener('change', function () {
+          window.location.href = control.value;
+        });
+        return;
+      }
+
+      control.addEventListener('change', function () {
+        var update = {};
+        update[entry[1]] = control.value;
+        navigateWithFilters(update);
+      });
+    });
+
+    var search = document.getElementById('filterSearch');
+    if (search) {
+      search.addEventListener('input', function () {
+        clearTimeout(window._queueSearchTimeout);
+        window._queueSearchTimeout = setTimeout(function () {
+          navigateWithFilters({ search: search.value });
+        }, 500);
+      });
+    }
+
+    var clearFilters = document.getElementById('queueClearFilters');
+    if (clearFilters && !clearFilters.disabled) {
+      clearFilters.addEventListener('click', function () {
+        window.location.href = queueBase;
+      });
+    }
+
+    var flash = document.getElementById('queueFlash');
+    if (flash) {
+      setTimeout(function () { flash.remove(); }, 8000);
+    }
+
+    /* ------------------------------------------------------------------
+     * Request Information modal.
+     *
+     * One shell serves the whole page: the clicked row carries the reference,
+     * type, customer, status, endpoint and channel availability on the link
+     * itself, so opening the modal is instant and reload-free. The href is the
+     * same modal expressed as a URL, so the action still works when the script
+     * does not run - the page then loads with the shell already open.
+     * ------------------------------------------------------------------ */
+    var modal = document.getElementById('infoModal');
+    if (!modal) return;
+
+    var form = document.getElementById('infoForm');
+    var endpointField = form.querySelector('[name="endpoint"]');
+    var sendButton = modal.querySelector('[data-info-action="send"]');
+    var summary = modal.querySelector('[data-info-error-summary]');
+
+    var catalog = {};
+    var channelsByRow = {};
+    try {
+      catalog = JSON.parse(document.getElementById('infoRequestCatalog').textContent) || {};
+    } catch (error) {
+      catalog = {};
+    }
+    try {
+      channelsByRow = JSON.parse(document.getElementById('infoChannelsByRow').textContent) || {};
+    } catch (error) {
+      channelsByRow = {};
+    }
+
+    function fill(select, options, placeholder) {
+      select.innerHTML = '';
+      var blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = placeholder;
+      select.appendChild(blank);
+      options.forEach(function (option) {
+        var node = document.createElement('option');
+        node.value = option;
+        node.textContent = option;
+        select.appendChild(node);
+      });
+    }
+
+    var infoType = document.getElementById('infoType');
+    var infoSpecific = document.getElementById('infoSpecific');
+    var infoActionRequired = document.getElementById('infoActionRequired');
+    var infoReason = document.getElementById('infoReason');
+    var infoReasonDetails = document.getElementById('infoReasonDetails');
+    var reasonDetailsWrap = document.getElementById('infoReasonDetailsWrap');
+
+    fill(infoType, catalog.informationTypes || [], 'Select an information type');
+    fill(infoActionRequired, catalog.actionRequired || [], 'Select an action');
+    fill(infoReason, catalog.reasons || [], 'Select a reason');
+
+    // Specific Information Required depends on the Information Type, so it is
+    // rebuilt from the catalogue whenever the type changes.
+    function refreshSpecificOptions() {
+      var chosen = infoType.value;
+      var options = (catalog.specificInformation || {})[chosen] || [];
+      fill(infoSpecific, options, chosen ? 'Select the specific information' : 'Select an information type first');
+      infoSpecific.disabled = !chosen;
+    }
+    refreshSpecificOptions();
+
+    infoType.addEventListener('change', function () {
+      refreshSpecificOptions();
+      clearError('specificInformation');
+    });
+
+    // Reason Details is conditional: shown, and required, only for "Other".
+    infoReason.addEventListener('change', function () {
+      var isOther = infoReason.value === catalog.otherReason;
+      reasonDetailsWrap.hidden = !isOther;
+      if (!isOther) clearError('reasonDetails');
+    });
+
+    Array.prototype.forEach.call(modal.querySelectorAll('[data-info-count]'), function (counter) {
+      var field = document.getElementById(counter.dataset.infoCount);
+      if (!field) return;
+      field.addEventListener('input', function () { counter.textContent = String(field.value.length); });
+    });
+
+    function setError(field, message) {
+      var node = modal.querySelector('[data-info-error="' + field + '"]');
+      if (!node) return;
+      if (message) {
+        node.textContent = message;
+        node.classList.remove('hidden');
+      } else {
+        node.textContent = '';
+        node.classList.add('hidden');
+      }
+    }
+
+    function clearError(field) {
+      setError(field, '');
+    }
+
+    function clearErrors() {
+      ['informationType', 'specificInformation', 'actionRequired', 'requiredDetails', 'reason', 'reasonDetails', 'notificationChannels'].forEach(function (field) {
+        clearError(field);
+      });
+      summary.classList.add('hidden');
+      summary.textContent = '';
+    }
+
+    // Keeps the address bar in step with what is on screen, so a reload does not
+    // reopen a modal the user has already dismissed.
+    function syncModalParam(rowId) {
+      var url = new URL(window.location.href);
+      if (rowId) url.searchParams.set('informationRequest', rowId);
+      else url.searchParams.delete('informationRequest');
+      window.history.replaceState({}, '', url.pathname + url.search);
+    }
+
+    // Retargets the shell at a row: header, endpoint and which notification
+    // channels that customer can actually receive. The row's details are read
+    // from the action link itself, which is the one element that already has them.
+    function applyRow(trigger) {
+      var data = trigger.dataset;
+      modal.dataset.row = data.queueRow;
+
+      ['ref', 'type', 'customer', 'status'].forEach(function (field) {
+        var target = modal.querySelector('[data-info-header="' + field + '"]');
+        if (target) target.textContent = data['info' + field.charAt(0).toUpperCase() + field.slice(1)] || '';
+      });
+
+      var status = modal.querySelector('[data-info-header="status"]');
+      if (status) {
+        // The badge classes travel on the row link, so the status keeps the exact
+        // colour it has in the table instead of a second mapping to keep in step.
+        status.className = 'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium '
+          + (data.infoBadge || '') + ' mt-0.5';
+      }
+
+      endpointField.value = data.infoEndpoint || '';
+
+      var available = channelsByRow[data.queueRow] || {};
+      Array.prototype.forEach.call(modal.querySelectorAll('[data-info-channel]'), function (box) {
+        var isAvailable = available[box.value] === true;
+        box.disabled = !isAvailable;
+        // Email and In-App are the defaults whenever they are usable; the rest
+        // are opt-in so nothing goes out on a channel nobody chose.
+        box.checked = isAvailable && (box.value === 'Email' || box.value === 'In-App Notification');
+
+        var label = modal.querySelector('[data-info-channel-label="' + box.value + '"]');
+        if (label) {
+          label.className = 'border border-[#1a2333] rounded-xl p-2.5 flex flex-col justify-between cursor-pointer relative '
+            + (isAvailable ? 'bg-[#0b1120]' : 'bg-[#0b0f19] opacity-50');
+          var note = label.querySelector('[data-info-note-text]');
+          if (note) note.textContent = isAvailable ? box.dataset.infoNote : 'No contact detail on file';
+        }
+      });
+    }
+
+    function resetFields() {
+      [infoType, infoSpecific, infoReason, infoActionRequired].forEach(function (select) { select.value = ''; });
+      refreshSpecificOptions();
+      reasonDetailsWrap.hidden = true;
+      ['infoRequiredDetails', 'infoReasonDetails', 'infoAdditional'].forEach(function (id) {
+        document.getElementById(id).value = '';
+      });
+      Array.prototype.forEach.call(modal.querySelectorAll('[data-info-count]'), function (counter) {
+        counter.textContent = '0';
+      });
+      clearErrors();
+    }
+
+    function openModal(trigger) {
+      applyRow(trigger);
+      resetFields();
+      modal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      if (window.lucide) lucide.createIcons();
+      syncModalParam(trigger.dataset.queueRow);
+    }
+
+    function closeModal() {
+      modal.classList.add('hidden');
+      document.body.style.overflow = '';
+      syncModalParam(null);
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-queue-action="information"]'), function (trigger) {
+      trigger.addEventListener('click', function (event) {
+        // The href is a working URL, so the modal stays reachable if the script
+        // never runs; here it opens in place instead of reloading the queue.
+        event.preventDefault();
+        openModal(trigger);
+      });
+    });
+
+    Array.prototype.forEach.call(modal.querySelectorAll('[data-info-action="close"]'), function (trigger) {
+      trigger.addEventListener('click', closeModal);
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+    });
+
+    sendButton.addEventListener('click', function () {
+      clearErrors();
+
+      var payload = {
+        informationType: infoType.value,
+        specificInformation: infoSpecific.value,
+        actionRequired: infoActionRequired.value,
+        requiredDetails: document.getElementById('infoRequiredDetails').value,
+        reason: infoReason.value,
+        reasonDetails: infoReason.value === catalog.otherReason ? infoReasonDetails.value : '',
+        additionalInstructions: document.getElementById('infoAdditional').value,
+        notificationChannels: Array.prototype.map
+          .call(modal.querySelectorAll('[data-info-channel]:checked'), function (box) { return box.value; }),
+      };
+
+      var localErrors = [];
+      if (!payload.informationType) localErrors.push(['informationType', 'Information Type is required']);
+      if (!payload.specificInformation) localErrors.push(['specificInformation', 'Specific Information Required is required']);
+      if (!payload.actionRequired) localErrors.push(['actionRequired', 'Action Required is required']);
+      if (!payload.requiredDetails.trim()) localErrors.push(['requiredDetails', 'Required Details is required']);
+      if (!payload.reason) localErrors.push(['reason', 'Reason is required']);
+      if (infoReason.value === catalog.otherReason && !payload.reasonDetails.trim()) {
+        localErrors.push(['reasonDetails', 'Reason Details is required when Reason is Other']);
+      }
+      if (!payload.notificationChannels.length) localErrors.push(['notificationChannels', 'Select at least one notification channel']);
+
+      if (localErrors.length) {
+        localErrors.forEach(function (entry) { setError(entry[0], entry[1]); });
+        summary.textContent = 'Fix the highlighted fields before sending.';
+        summary.classList.remove('hidden');
+        return;
+      }
+
+      var endpoint = endpointField.value;
+      sendButton.disabled = true;
+      sendButton.classList.add('opacity-60');
+
+      fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then(function (response) {
+          return response.json().then(function (body) { return { ok: response.ok, body: body }; });
+        })
+        .then(function (result) {
+          if (!result.ok) {
+            (result.body.errors || []).forEach(function (message) {
+              // The endpoint reports which field failed, so the message can be
+              // attached to it rather than shown as a generic failure.
+              var field = ['informationType', 'specificInformation', 'actionRequired', 'requiredDetails', 'reason', 'reasonDetails', 'notificationChannels'].filter(function (candidate) {
+                return message.toLowerCase().indexOf(candidate.toLowerCase().replace(/ /g, '')) !== -1
+                  || message.toLowerCase().indexOf(candidate.toLowerCase()) !== -1;
+              })[0];
+              if (field) setError(field, message);
+            });
+            summary.textContent = result.body.error || 'The request could not be sent.';
+            summary.classList.remove('hidden');
+            return;
+          }
+
+          var url = new URL(queueBase, window.location.origin);
+          window.location.href = url.pathname + '?flash=information-request-sent';
+        })
+        .catch(function () {
+          summary.textContent = 'The request could not be sent. Check your connection and try again.';
+          summary.classList.remove('hidden');
+        })
+        .then(function () {
+          sendButton.disabled = false;
+          sendButton.classList.remove('opacity-60');
+        });
+    });
+  })();
+</script>

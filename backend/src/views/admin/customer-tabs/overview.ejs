@@ -1,0 +1,237 @@
+<%
+  // Helper for the Contact Verification section. The allowed values are
+  // Not Required / Pending / Verified; anything unexpected falls back to
+  // 'Not Required' so the UI never renders an unknown status.
+  const verificationStatus = (value) => {
+    const allowed = ['Not Required', 'Pending', 'Verified'];
+    return allowed.includes(value) ? value : 'Not Required';
+  };
+  const verificationBadge = (value) => {
+    const v = verificationStatus(value);
+    if (v === 'Verified') return 'bg-[#022c19] text-[#22c55e] border-[#15803d]';
+    if (v === 'Pending') return 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+    return 'bg-[#162032] text-gray-300 border-[#233149]';
+  };
+  const activityIcon = (type) => ({
+    shipment: 'package',
+    tracking: 'truck',
+    request: 'clipboard-list',
+    return: 'undo-2',
+    rto: 'alert-triangle',
+    payment: 'credit-card',
+    document: 'file-text',
+  }[type] || 'activity');
+  const activityColor = (type) => ({
+    shipment: 'text-sky-400 border-sky-500/30 bg-sky-500/10',
+    tracking: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
+    request: 'text-violet-400 border-violet-500/30 bg-violet-500/10',
+    return: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+    rto: 'text-rose-400 border-rose-500/30 bg-rose-500/10',
+    payment: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+    document: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
+  }[type] || 'text-gray-400 border-[#233149] bg-[#162032]');
+  const fmtDateTime = (d) => d
+    ? new Date(d).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : 'N/A';
+  const sectionTitle = (icon, title) => `
+    <div class="flex items-center gap-2 font-semibold text-sm text-white">
+      <i data-lucide="${icon}" class="w-4 h-4 text-gray-400"></i>
+      <h3>${title}</h3>
+    </div>`;
+%>
+
+<div class="space-y-6">
+
+  <!-- ================= Profile Information ================= -->
+  <div class="bg-[#111726] border border-[#1a2333] rounded-xl p-5 space-y-4">
+    <%- sectionTitle('user', 'Profile Information') %>
+    <div class="border-t border-[#1a2333] pt-3 text-xs space-y-3">
+      <div class="grid grid-cols-2">
+        <span class="text-gray-400">Full Name:</span>
+        <span class="text-gray-200 font-medium"><%= customer.name %></span>
+      </div>
+      <div class="grid grid-cols-2">
+        <span class="text-gray-400">Customer Type:</span>
+        <span class="text-gray-200"><%= customer.account_type || 'E-commerce/F-commerce' %></span>
+      </div>
+      <div class="grid grid-cols-2">
+        <span class="text-gray-400">Business Name:</span>
+        <span class="text-gray-200 font-medium"><%= customer.name %></span>
+      </div>
+      <div class="grid grid-cols-2">
+        <span class="text-gray-400">Customer ID:</span>
+        <span class="text-gray-200 font-mono">#<%= customer.id %></span>
+      </div>
+      <div class="grid grid-cols-2 items-center">
+        <span class="text-gray-400">Account Status:</span>
+        <div>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><%= customer.accountStatus %></span>
+        </div>
+      </div>
+      <div class="grid grid-cols-2">
+        <span class="text-gray-400">Registered:</span>
+        <span class="text-gray-200"><%= fmtDate(customer.createdAt) %></span>
+      </div>
+      <div class="grid grid-cols-2">
+        <span class="text-gray-400">Last Updated:</span>
+        <span class="text-gray-200"><%= fmtDate(customer.updatedAt) %></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Summary Cards ================= -->
+  <!-- Unclickable by design: they are read-only counters, not navigation. -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+
+    <% const summaryCards = [
+      { key: 'totalShipments', label: 'Total Shipments', value: stats.totalShipments, icon: 'package', color: 'text-sky-400 border-sky-500/30 bg-sky-500/10' },
+      { key: 'activeShipments', label: 'Active Shipments', value: stats.activeShipments, icon: 'truck', color: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' },
+      { key: 'activeRequests', label: 'Active Requests & Bookings', value: stats.activeRequests, icon: 'clipboard-list', color: 'text-violet-400 border-violet-500/30 bg-violet-500/10' },
+      { key: 'openClaims', label: 'Open Claims', value: stats.openClaims, icon: 'shield-alert', color: 'text-rose-400 border-rose-500/30 bg-rose-500/10' },
+      { key: 'openReturns', label: 'Open Returns', value: stats.openReturns, icon: 'undo-2', color: 'text-amber-400 border-amber-500/30 bg-amber-500/10' },
+      { key: 'activeRto', label: 'Active RTO Cases', value: stats.activeRto, icon: 'alert-triangle', color: 'text-orange-400 border-orange-500/30 bg-orange-500/10' },
+    ]; %>
+    <% summaryCards.forEach(card => { %>
+      <div class="bg-[#111726] border border-[#1a2333] rounded-xl p-4 flex items-center gap-4 select-none">
+        <div class="w-11 h-11 rounded-lg border flex items-center justify-center shrink-0 <%= card.color %>">
+          <i data-lucide="<%= card.icon %>" class="w-5 h-5"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="text-xs text-gray-400 truncate"><%= card.label %></p>
+          <p class="text-2xl font-bold text-white mt-0.5"><%= card.value %></p>
+        </div>
+      </div>
+    <% }); %>
+  </div>
+
+  <!-- ================= Identity & Business Information ================= -->
+  <div class="bg-[#111726] border border-[#1a2333] rounded-xl p-5 space-y-4">
+    <%- sectionTitle('briefcase', 'Identity &amp; Business Information') %>
+    <div class="border-t border-[#1a2333] pt-3 grid grid-cols-1 md:grid-cols-2 gap-y-3.5 gap-x-10 text-xs">
+      <div class="space-y-3">
+        <div class="grid grid-cols-3">
+          <span class="text-gray-400">Account Type:</span>
+          <span class="col-span-2 text-gray-200 font-medium"><%= customer.account_type || 'E-commerce/F-commerce' %></span>
+        </div>
+        <div class="grid grid-cols-3">
+          <span class="text-gray-400">Trade License/Business document:</span>
+          <span class="col-span-2 text-gray-200 font-mono break-all"><%= customer.trade_license || 'Not provided' %></span>
+        </div>
+        <div class="grid grid-cols-3">
+          <span class="text-gray-400">WhatsApp:</span>
+          <span class="col-span-2 text-gray-200 font-mono"><%= customer.whatsapp || 'Not provided' %></span>
+        </div>
+      </div>
+      <div class="space-y-3">
+        <div class="grid grid-cols-3">
+          <span class="text-gray-400">Home Address:</span>
+          <span class="col-span-2 text-gray-200"><%= customer.home_address || 'Not provided' %></span>
+        </div>
+        <div class="grid grid-cols-3">
+          <span class="text-gray-400">Warehouse Address:</span>
+          <span class="col-span-2 text-gray-200"><%= customer.warehouse_address || 'Not provided' %></span>
+        </div>
+        <div class="grid grid-cols-3">
+          <span class="text-gray-400">Account Status:</span>
+          <span class="col-span-2">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><%= customer.accountStatus %></span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Contact Verification ================= -->
+  <!-- Phone and email are verified during the registration process. -->
+  <div class="bg-[#111726] border border-[#1a2333] rounded-xl p-5 space-y-4">
+    <%- sectionTitle('badge-check', 'Contact Verification') %>
+    <div class="border-t border-[#1a2333] pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+      <% [
+        { label: 'Email', icon: 'mail', value: customer.emailVerificationStatus, at: customer.emailVerifiedAt },
+        { label: 'Phone', icon: 'phone', value: customer.phoneVerificationStatus, at: customer.phoneVerifiedAt },
+      ].forEach(c => { %>
+        <div class="bg-[#0d1526] border border-[#1a2333] rounded-lg p-3.5 space-y-2">
+          <div class="flex items-center gap-2">
+            <i data-lucide="<%= c.icon %>" class="w-4 h-4 text-gray-400"></i>
+            <span class="text-gray-200 font-medium"><%= c.label %> Verification</span>
+            <span class="ml-auto inline-block px-2 py-0.5 rounded text-[10px] font-medium border <%= verificationBadge(c.value) %>">
+              <%= verificationStatus(c.value) %>
+            </span>
+          </div>
+          <p class="text-[11px] text-gray-500">
+            <%= c.at ? 'Verified on ' + fmtDateTime(c.at) : 'Verified during the registration process' %>
+          </p>
+        </div>
+      <% }); %>
+    </div>
+  </div>
+
+  <!-- ================= Addresses ================= -->
+  <div class="bg-[#111726] border border-[#1a2333] rounded-xl p-5 space-y-4">
+    <%- sectionTitle('map-pin', 'Addresses') %>
+    <% if (addresses && addresses.length > 0) { %>
+      <div class="border-t border-[#1a2333] pt-3 grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs">
+        <% addresses.forEach(a => { %>
+          <div class="bg-[#0d1526] border border-[#1a2333] rounded-lg p-3.5 space-y-1.5">
+            <div class="flex items-center gap-2">
+              <i data-lucide="home" class="w-3.5 h-3.5 text-sky-400"></i>
+              <span class="text-gray-200 font-medium"><%= a.label || 'Address' %></span>
+              <span class="ml-auto text-[10px] text-gray-500 font-mono">#<%= a.id %></span>
+            </div>
+            <p class="text-gray-300"><%= a.fullName %></p>
+            <p class="text-gray-400 font-mono"><%= a.phone %></p>
+            <p class="text-gray-400 leading-relaxed">
+              <%= a.addressLine1 %><% if (a.addressLine2) { %>, <%= a.addressLine2 %><% } %><br />
+              <%= a.city %><% if (a.state) { %>, <%= a.state %><% } %> <%= a.postalCode || '' %><br />
+              <%= a.country %>
+            </p>
+          </div>
+        <% }); %>
+      </div>
+    <% } else { %>
+      <div class="border-t border-[#1a2333] pt-3">
+        <p class="text-xs text-gray-500">No addresses on file for this customer.</p>
+      </div>
+    <% } %>
+  </div>
+
+  <!-- ================= Recent Customer Activity ================= -->
+  <!-- The complete activity list is on the Communications & Audit tab. -->
+  <div class="bg-[#111726] border border-[#1a2333] rounded-xl p-5 space-y-4">
+    <div class="flex items-center justify-between gap-3">
+      <%- sectionTitle('activity', 'Recent Customer Activity') %>
+      <span class="text-[11px] text-gray-500">Showing the latest <%= Math.min(activity ? activity.length : 0, 8) %> of <%= activity ? activity.length : 0 %> events</span>
+    </div>
+    <% if (activity && activity.length > 0) { %>
+      <div class="border-t border-[#1a2333] pt-3 space-y-2">
+        <% activity.slice(0, 8).forEach(a => { %>
+          <div class="flex items-start gap-3 py-1.5">
+            <div class="w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 <%= activityColor(a.type) %>">
+              <i data-lucide="<%= activityIcon(a.type) %>" class="w-4 h-4"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-baseline gap-2 flex-wrap">
+                <span class="text-xs text-gray-200 font-medium"><%= a.title %></span>
+                <% if (a.reference) { %>
+                  <span class="text-[10px] text-gray-500 font-mono"><%= a.reference %></span>
+                <% } %>
+              </div>
+              <% if (a.detail) { %>
+                <p class="text-[11px] text-gray-400 truncate"><%= a.detail %></p>
+              <% } %>
+            </div>
+            <span class="text-[10px] text-gray-500 whitespace-nowrap"><%= fmtDateTime(a.occurredAt) %></span>
+          </div>
+        <% }); %>
+      </div>
+      <p class="text-[11px] text-gray-500 pt-1">
+        The complete activity list is available in the Communications &amp; Audit tab.
+      </p>
+    <% } else { %>
+      <div class="border-t border-[#1a2333] pt-3">
+        <p class="text-xs text-gray-500">No recorded activity for this customer yet.</p>
+      </div>
+    <% } %>
+  </div>
+
+</div>

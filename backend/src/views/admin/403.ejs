@@ -1,0 +1,29 @@
+<%#
+  403. Reached by navigation, so it keeps the sidebar and top bar: a reader who
+  hits this already has a session and should not have to sign in again to get
+  back to where they were.
+%>
+<%- include('partials/head', { pageTitle: '403 - Access Denied - Dazzling Shipping', active: '' }) %>
+
+<%- include('partials/header', {
+  title: 'Access denied',
+  subtitle: 'Your account does not have permission to open this page',
+  user: typeof user !== 'undefined' ? user : {},
+}) %>
+
+<main class="flex-1 flex items-center justify-center p-6 overflow-y-auto">
+  <div class="text-center">
+    <h1 class="text-6xl font-bold text-[#ef4444] mb-4">403</h1>
+    <p class="text-sm text-gray-400 mb-6"><%= message %></p>
+    <div class="flex items-center justify-center gap-3">
+      <a href="/admin" class="inline-block px-4 py-2 bg-[#ff5c00] hover:bg-[#e05200] text-white text-xs font-medium rounded-lg transition-colors">Back to Dashboard</a>
+      <a href="/admin/login" class="inline-block px-4 py-2 bg-[#111726] border border-[#1a2333] hover:bg-[#1a2333] text-gray-300 text-xs font-medium rounded-lg transition-colors">Login as admin</a>
+    </div>
+  </div>
+</main>
+
+<script>
+  if (window.lucide) lucide.createIcons();
+</script>
+</body>
+</html>

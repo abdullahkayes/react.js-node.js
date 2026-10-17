@@ -1,0 +1,306 @@
+<%
+  // Shipments & Related Records tab.
+  // Summary cards are clickable filters for their related table. Every card
+  // shows an aggregate count only and resets the other filters on that table.
+  //
+  // The status vocabularies that decide each count live in the controller and
+  // are emitted below as data-record-rules, so the client-side row filter and
+  // the server-side counts are driven by one definition and cannot disagree.
+
+  const rs = (typeof recordStats !== 'undefined' && recordStats) ? recordStats : {};
+  const rec = (typeof records !== 'undefined' && records) ? records : { requests: [], claims: [], returnsAndRto: [], shipments: [] };
+  const rules = (typeof recordRules !== 'undefined' && recordRules) ? recordRules : {};
+
+  // Case-insensitive: shipments and requests store Title Case ("Delivered"),
+  // returns and claims store lower case ("completed").
+  const normalize = (s) => String(s == null ? '' : s).trim().toLowerCase();
+
+  const badgeClass = (status) => {
+    const s = normalize(status);
+    if (s === 'delivered' || s === 'approved' || s === 'completed' || s === 'active') return 'bg-emerald-950/80 text-emerald-400 border-emerald-600/40';
+    if (s === 'cancelled' || s === 'rejected' || s === 'disposed' || s === 'seized') return 'bg-rose-950/80 text-rose-400 border-rose-600/40';
+    if (s.includes('review') || s.includes('pending') || s === 'initiated' || s === 'under_review') return 'bg-amber-950/80 text-amber-400 border-amber-600/40';
+    if (s.includes('transit') || s.includes('shipped') || s === 'in_progress') return 'bg-blue-950/80 text-blue-400 border-blue-600/40';
+    return 'bg-slate-800/80 text-slate-300 border-slate-700';
+  };
+  const statusBadge = (status) =>
+    '<span class="px-2 py-0.5 rounded text-[10px] font-medium border ' + badgeClass(status) + '">' + (status || 'N/A') + '</span>';
+
+  const fmtDateTime = (d) => d
+    ? new Date(d).toLocaleString('en-US', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : 'N/A';
+
+  const locationOf = (a) => (a && (a.city || a.country)) ? [a.city, a.country].filter(Boolean).join(', ') : null;
+
+  // Each card declares which table it filters and which predicate to apply.
+  const cards = [
+    { key: 'total',     label: 'Total Shipments',          value: rs.totalShipments,   icon: 'package',         table: 'shipments', mode: 'all' },
+    { key: 'active',    label: 'Active Shipments',         value: rs.activeShipments,  icon: 'truck',           table: 'shipments', mode: 'active' },
+    { key: 'delivered', label: 'Delivered Shipments',     value: rs.deliveredShipments, icon: 'check-circle-2', table: 'shipments', mode: 'delivered' },
+    { key: 'requests',  label: 'Active Requests & Bookings', value: rs.activeRequests, icon: 'clipboard-list',  table: 'requests',  mode: 'active' },
+    { key: 'claims',    label: 'Open Claims',              value: rs.openClaims,      icon: 'shield-alert',    table: 'claims',    mode: 'open' },
+    { key: 'returns',   label: 'Open Returns',             value: rs.openReturns,     icon: 'rotate-ccw',      table: 'returns',   mode: 'open' },
+    { key: 'rto',       label: 'Active RTO Cases',         value: rs.activeRtoCases,  icon: 'arrow-left-right', table: 'returns',  mode: 'rto' },
+  ];
+%>
+
+<%# One authoritative copy of the card predicates, read by the filter script. %>
+<script type="application/json" data-record-rules><%- JSON.stringify(rules) %></script>
+
+
+<!-- Shipments & Related Records Tab Content -->
+<div class="space-y-5 bg-[#08101e] text-slate-200 p-6 rounded-xl border border-[#152642] font-sans antialiased">
+
+  <!-- Header -->
+  <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div>
+      <h2 class="text-lg font-bold text-white tracking-tight">Shipments &amp; Related Records</h2>
+      <p class="text-xs text-slate-400 mt-0.5">Review this customer's shipment requests, shipments and related operational cases.</p>
+    </div>
+  </div>
+
+  <!-- Summary Cards: clickable filters. Counts are aggregates only. -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+    <% cards.forEach(card => { %>
+      <button type="button" data-record-filter="<%= card.key %>"
+        data-table="<%= card.table %>" data-mode="<%= card.mode %>"
+        aria-pressed="false"
+        class="record-card text-left bg-[#0b172a] border border-[#152642] rounded-lg p-3.5 flex items-center gap-3 hover:border-amber-500/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 transition-colors">
+        <div class="text-amber-500 p-2 rounded-lg bg-amber-500/10 shrink-0">
+          <i data-lucide="<%= card.icon %>" class="w-6 h-6"></i>
+        </div>
+        <div class="min-w-0">
+          <div class="text-[11px] font-medium text-slate-400 leading-tight"><%= card.label %></div>
+          <div class="text-xl font-bold text-white mt-0.5" data-card-count><%= card.value %></div>
+        </div>
+      </button>
+    <% }); %>
+  </div>
+
+  <!-- Active filter indicator -->
+  <div data-filter-indicator class="hidden items-center gap-2 text-[11px] text-slate-400 bg-[#0b172a] border border-[#152642] rounded-lg px-3 py-2">
+    <i data-lucide="filter" class="w-3.5 h-3.5 text-amber-500 shrink-0"></i>
+    <span data-filter-text></span>
+    <button type="button" data-clear-filters class="ml-auto text-amber-400 hover:text-amber-300 hover:underline">Clear</button>
+  </div>
+
+  <!-- Search (applies to every table on this tab) -->
+  <div class="flex flex-wrap items-center gap-2.5">
+    <div class="relative min-w-[260px]">
+      <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+      <input type="text" data-record-search placeholder="Search by ID, reference or status"
+        class="w-full bg-[#0d1c31] border border-[#1b2e4b] rounded-md pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 transition-colors" />
+    </div>
+  </div>
+
+  <!-- ================= Requests & Bookings ================= -->
+  <div class="bg-[#0b172a] border border-[#152642] rounded-lg p-4 space-y-3">
+    <div class="flex items-center justify-between gap-2 border-b border-[#152642] pb-3">
+      <div class="flex items-center gap-2 text-slate-100 font-bold text-sm">
+        <i data-lucide="clipboard-list" class="w-4 h-4 text-amber-500"></i>
+        <span>Requests &amp; Bookings</span>
+      </div>
+      <span class="text-[11px] text-slate-400" data-table-count="requests"></span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs" data-table="requests">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#152642] font-semibold">
+            <th class="py-2.5 px-2">Request ID</th>
+            <th class="py-2.5 px-2">Request Type</th>
+            <th class="py-2.5 px-2">Service Mode</th>
+            <th class="py-2.5 px-2">Purchase Type</th>
+            <th class="py-2.5 px-2">Freight Mode</th>
+            <th class="py-2.5 px-2">Status</th>
+            <th class="py-2.5 px-2">Submitted At</th>
+            <th class="py-2.5 px-2 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#152642]/60 text-slate-300" data-tbody="requests">
+          <% if (rec.requests.length > 0) { %>
+            <% rec.requests.forEach(r => { %>
+              <tr class="hover:bg-[#0f213a]/50 transition-colors"
+                  data-status="<%= r.status %>"
+                  data-type="<%= r.requestTypeKey %>"
+                  data-search="<%= (r.recordId + ' ' + (r.sourceRequestId || '') + ' ' + r.requestType + ' ' + (r.status || '')).toLowerCase() %>">
+                <td class="py-2.5 px-2 font-mono text-slate-200"><%= r.recordId %></td>
+                <td class="py-2.5 px-2"><%= r.requestType %></td>
+                <td class="py-2.5 px-2"><%= r.serviceMode || 'N/A' %></td>
+                <td class="py-2.5 px-2"><%= r.purchaseType || 'N/A' %></td>
+                <td class="py-2.5 px-2"><%= r.freightMode || 'N/A' %></td>
+                <td class="py-2.5 px-2"><%- statusBadge(r.status) %></td>
+                <td class="py-2.5 px-2 text-slate-400"><%= fmtDateTime(r.occurredAt) %></td>
+                <td class="py-2.5 px-2 text-right">
+                  <a href="/admin/bookings?requestId=<%= r.recordId %>&amp;type=<%= r.requestTypeKey %>"
+                     class="text-blue-400 hover:text-blue-300 font-medium hover:underline">View Request</a>
+                </td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr><td colspan="8" class="py-5 text-slate-500 text-center">No requests or bookings linked to this customer.</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ================= Shipments ================= -->
+  <div class="bg-[#0b172a] border border-[#152642] rounded-lg p-4 space-y-3">
+    <div class="flex items-center justify-between gap-2 border-b border-[#152642] pb-3">
+      <div class="flex items-center gap-2 text-slate-100 font-bold text-sm">
+        <i data-lucide="truck" class="w-4 h-4 text-amber-500"></i>
+        <span>Shipments</span>
+      </div>
+      <span class="text-[11px] text-slate-400" data-table-count="shipments"></span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs" data-table="shipments">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#152642] font-semibold">
+            <th class="py-2.5 px-2">Tracking #</th>
+            <th class="py-2.5 px-2">Customer</th>
+            <th class="py-2.5 px-2">Origin &rarr; Destination</th>
+            <th class="py-2.5 px-2">Status</th>
+            <th class="py-2.5 px-2">Price</th>
+            <th class="py-2.5 px-2 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#152642]/60 text-slate-300" data-tbody="shipments">
+          <% if (rec.shipments.length > 0) { %>
+            <% rec.shipments.forEach(s => { %>
+              <% const ref = s.shipmentId || (s.trackingNumber ? s.trackingNumber : s.id);
+                 const origin = locationOf(s.sender);
+                 const destination = locationOf(s.receiver); %>
+              <tr class="hover:bg-[#0f213a]/50 transition-colors"
+                  data-status="<%= s.status %>"
+                  data-mode="<%= s.serviceMode || '' %>"
+                  data-search="<%= (String(ref) + ' ' + (s.status || '') + ' ' + (s.serviceMode || '') + ' ' + (origin || '') + ' ' + (destination || '')).toLowerCase() %>">
+                <td class="py-2.5 px-2 font-mono text-slate-200"><%= ref %></td>
+                <td class="py-2.5 px-2 text-slate-300"><%= customer.name %></td>
+                <td class="py-2.5 px-2">
+                  <%= origin || 'N/A' %> &rarr; <%= destination || 'N/A' %>
+                </td>
+                <td class="py-2.5 px-2"><%- statusBadge(s.status) %></td>
+                <td class="py-2.5 px-2 font-mono"><%= s.price !== null && s.price !== undefined ? s.price : 'N/A' %> <%= s.currency || '' %></td>
+                <td class="py-2.5 px-2 text-right">
+                  <a href="/admin/shipments/<%= s.id %>" class="text-blue-400 hover:text-blue-300 font-medium hover:underline">View</a>
+                </td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr><td colspan="6" class="py-5 text-slate-500 text-center">No shipments linked to this customer.</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ================= Claims & Compensation ================= -->
+  <div class="bg-[#0b172a] border border-[#152642] rounded-lg p-4 space-y-3">
+    <div class="flex items-center justify-between gap-2 border-b border-[#152642] pb-3">
+      <div class="flex items-center gap-2 text-slate-100 font-bold text-sm">
+        <i data-lucide="shield-check" class="w-4 h-4 text-amber-500"></i>
+        <span>Claims &amp; Compensation</span>
+      </div>
+      <span class="text-[11px] text-slate-400" data-table-count="claims"></span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs" data-table="claims">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#152642] font-semibold">
+            <th class="py-2.5 px-2">Record ID</th>
+            <th class="py-2.5 px-2">Shipment ID</th>
+            <th class="py-2.5 px-2">Provider</th>
+            <th class="py-2.5 px-2">Coverage</th>
+            <th class="py-2.5 px-2">Premium</th>
+            <th class="py-2.5 px-2">Status</th>
+            <th class="py-2.5 px-2">Period</th>
+            <th class="py-2.5 px-2">Recorded At</th>
+            <th class="py-2.5 px-2 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#152642]/60 text-slate-300" data-tbody="claims">
+          <% if (rec.claims.length > 0) { %>
+            <% rec.claims.forEach(c => { %>
+              <tr class="hover:bg-[#0f213a]/50 transition-colors"
+                  data-status="<%= c.status %>"
+                  data-search="<%= (c.recordId + ' ' + (c.shipmentRef || '') + ' ' + (c.provider || '') + ' ' + (c.status || '')).toLowerCase() %>">
+                <td class="py-2.5 px-2 font-mono text-slate-200"><%= c.recordId %></td>
+                <td class="py-2.5 px-2 font-mono text-slate-300"><%= c.shipmentRef || 'N/A' %></td>
+                <td class="py-2.5 px-2"><%= c.provider || 'N/A' %></td>
+                <td class="py-2.5 px-2 font-mono"><%= c.coverageAmount %> <%= c.currency || '' %></td>
+                <td class="py-2.5 px-2 font-mono"><%= c.premium %> <%= c.currency || '' %></td>
+                <td class="py-2.5 px-2"><%- statusBadge(c.status) %></td>
+                <td class="py-2.5 px-2 text-slate-400">
+                  <%= c.startDate ? fmtDateTime(c.startDate) : 'N/A' %> &rarr; <%= c.endDate ? fmtDateTime(c.endDate) : 'N/A' %>
+                </td>
+                <td class="py-2.5 px-2 text-slate-400"><%= fmtDateTime(c.occurredAt) %></td>
+                <td class="py-2.5 px-2 text-right">
+                  <a href="/admin/insurance" class="text-blue-400 hover:text-blue-300 font-medium hover:underline">Open Claim</a>
+                </td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr><td colspan="9" class="py-5 text-slate-500 text-center">No claims or compensation records linked to this customer.</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ================= Returns & RTO ================= -->
+  <!-- Cancellations are not a separate table: a cancelled record appears in the
+       Requests & Bookings or Shipments table according to its record type. -->
+  <div class="bg-[#0b172a] border border-[#152642] rounded-lg p-4 space-y-3">
+    <div class="flex items-center justify-between gap-2 border-b border-[#152642] pb-3">
+      <div class="flex items-center gap-2 text-slate-100 font-bold text-sm">
+        <i data-lucide="arrow-left-right" class="w-4 h-4 text-amber-500"></i>
+        <span>Returns &amp; RTO</span>
+      </div>
+      <span class="text-[11px] text-slate-400" data-table-count="returns"></span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs" data-table="returns">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#152642] font-semibold">
+            <th class="py-2.5 px-2">Record Type</th>
+            <th class="py-2.5 px-2">Record ID</th>
+            <th class="py-2.5 px-2">Shipment ID</th>
+            <th class="py-2.5 px-2">Current Status</th>
+            <th class="py-2.5 px-2">Reason</th>
+            <th class="py-2.5 px-2">Updated At</th>
+            <th class="py-2.5 px-2 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#152642]/60 text-slate-300" data-tbody="returns">
+          <% if (rec.returnsAndRto.length > 0) { %>
+            <% rec.returnsAndRto.forEach(r => { %>
+              <tr class="hover:bg-[#0f213a]/50 transition-colors"
+                  data-status="<%= r.status %>"
+                  data-kind="<%= r.recordTypeKey %>"
+                  data-search="<%= (r.recordId + ' ' + r.recordType + ' ' + (r.status || '') + ' ' + (r.shipmentRef || '') + ' ' + (r.reason || '')).toLowerCase() %>">
+                <td class="py-2.5 px-2"><%= r.recordType %></td>
+                <td class="py-2.5 px-2 font-mono text-slate-200"><%= r.recordId %></td>
+                <td class="py-2.5 px-2 font-mono text-slate-300"><%= r.shipmentRef || 'N/A' %></td>
+                <td class="py-2.5 px-2"><%- statusBadge(r.status) %></td>
+                <td class="py-2.5 px-2 text-slate-400 max-w-[220px] truncate" title="<%= r.reason || '' %>"><%= r.reason || 'N/A' %></td>
+                <td class="py-2.5 px-2 text-slate-400"><%= fmtDateTime(r.occurredAt) %></td>
+                <td class="py-2.5 px-2 text-right">
+                  <a href="<%= r.recordTypeKey === 'rto' ? '/admin/returns' : '/admin/returns' %>"
+                     class="text-blue-400 hover:text-blue-300 font-medium hover:underline"><%= r.recordTypeKey === 'rto' ? 'Open RTO Case' : 'Open Return' %></a>
+                </td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr><td colspan="7" class="py-5 text-slate-500 text-center">No return or RTO records linked to this customer.</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>

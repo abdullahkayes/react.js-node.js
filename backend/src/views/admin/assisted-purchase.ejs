@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#050c18]">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Assisted Purchase & Procurement - Dazzling Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            brand: {
+              dark: '#050c18', card: '#081225', border: '#1b2b48',
+              orange: '#f97316', 'orange-hover': '#ea580c',
+              accentBlue: '#38bdf8', accentGreen: '#22c55e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="h-full bg-[#050c18] text-slate-200 font-sans antialiased overflow-x-hidden">
+  <div class="flex min-h-screen w-full">
+    <%- include('partials/sidebar', { active: 'assisted-purchase' }) %>
+    
+    <div class="flex-1 flex flex-col min-w-0">
+      <%- include('partials/header', { 
+        title: 'Assisted Purchase & Procurement', 
+        subtitle: 'Manage approved purchases from invoicing to USA warehouse arrival', 
+        user: typeof user !== 'undefined' ? user : {} 
+      }) %>
+
+      <main class="flex-1 p-6 space-y-5 overflow-y-auto">
+        <%
+          /* ---------------------------------------------------------------------------
+           * Assisted Purchase & Procurement Summary & Records
+           * ------------------------------------------------------------------------- */
+          const stats = (typeof purchasesStats !== 'undefined' && purchasesStats) ? purchasesStats : {
+            total: 86,
+            awaitingInvoice: 12,
+            awaitingPayment: 18,
+            readyToPurchase: 9,
+            actionRequired: 17
+          };
+
+          const purchases = (typeof assistedPurchases !== 'undefined' && Array.isArray(assistedPurchases) && assistedPurchases.length > 0)
+            ? assistedPurchases
+            : [
+                {
+                  shipmentId: 'SHP-2602850',
+                  customerName: 'Rahman Imports Ltd.',
+                  customerId: 'CUS-2600089',
+                  itemsCount: 5,
+                  invoiceAmount: 'Not yet issued',
+                  paymentStatus: '—',
+                  purchaseProgress: '0 of 5 items purchased',
+                  purchaseStatus: 'Awaiting Invoice',
+                  lastUpdated: '07 Sep 2026\n11:40 AM',
+                  actionText: 'Prepare Invoice'
+                },
+                {
+                  shipmentId: 'SHP-2602849',
+                  customerName: 'Nusrat Jahan',
+                  customerId: 'CUS-2600107',
+                  itemsCount: 2,
+                  invoiceAmount: 'USD 350.00',
+                  paymentStatus: 'Under Review',
+                  purchaseProgress: '0 of 2 items purchased',
+                  purchaseStatus: 'Awaiting Advance Payment',
+                  lastUpdated: '07 Sep 2026\n11:25 AM',
+                  actionText: 'Record Payment'
+                },
+                {
+                  shipmentId: 'SHP-2602848',
+                  customerName: 'Sadi',
+                  customerId: 'CUS-2600148',
+                  itemsCount: 3,
+                  invoiceAmount: 'USD 710.00',
+                  paymentStatus: 'Completed',
+                  purchaseProgress: '0 of 3 items purchased',
+                  purchaseStatus: 'Ready to Purchase',
+                  lastUpdated: '07 Sep 2026\n11:10 AM',
+                  actionText: null
+                },
+                {
+                  shipmentId: 'SHP-2602847',
+                  customerName: 'Urban Cart BD',
+                  customerId: 'CUS-2600032',
+                  itemsCount: 4,
+                  invoiceAmount: 'USD 1,030.00',
+                  paymentStatus: 'Completed',
+                  purchaseProgress: '2 of 4 items purchased',
+                  purchaseStatus: 'Partially Purchased',
+                  lastUpdated: '07 Sep 2026\n10:45 AM',
+                  actionText: null
+                },
+                {
+                  shipmentId: 'SHP-2602846',
+                  customerName: 'Farhan Ahmed',
+                  customerId: 'CUS-2600064',
+                  itemsCount: 2,
+                  invoiceAmount: 'USD 260.00',
+                  paymentStatus: 'Completed',
+                  purchaseProgress: '2 of 2 items purchased',
+                  purchaseStatus: 'Purchased',
+                  lastUpdated: '07 Sep 2026\n10:20 AM',
+                  actionText: 'Add Carrier Tracking Number'
+                },
+                {
+                  shipmentId: 'SHP-2602845',
+                  customerName: 'Bengal Wholesale Ltd.',
+                  customerId: 'CUS-2501721',
+                  itemsCount: 8,
+                  invoiceAmount: 'USD 3,840.00',
+                  paymentStatus: 'Completed',
+                  purchaseProgress: '8 of 8 items purchased',
+                  purchaseStatus: 'Received at USA Warehouse',
+                  lastUpdated: '07 Sep 2026\n09:50 AM',
+                  actionText: null
+                }
+              ];
+        %>
+
+        <!-- Top Breadcrumb & Page Action Strip -->
+        <div class="flex items-center justify-between gap-4 pb-1">
+          <div>
+            <div class="text-[10.5px] text-slate-400 font-medium">
+              ERP Dashboard <span class="mx-1 text-slate-600">/</span> <span class="text-slate-300">Assisted Purchase & Procurement</span>
+            </div>
+            <h1 class="text-xl font-bold text-white tracking-tight mt-1">Assisted Purchase &amp; Procurement</h1>
+            <p class="text-[11px] text-slate-400 mt-0.5">Prepare purchases, follow advance payments, and monitor seller orders.</p>
+          </div>
+          <button type="button" class="px-3.5 py-1.5 bg-[#0e1d38] hover:bg-[#152a4e] border border-[#233a63] text-slate-200 text-[11px] font-semibold rounded-md transition-colors flex items-center gap-1.5 shrink-0">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span>Refresh</span>
+          </button>
+        </div>
+
+        <!-- Metric Cards Grid (5 Columns) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+          <!-- Total Purchase Requests -->
+          <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-3.5 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-md bg-[#102242] border border-[#1d3663] flex items-center justify-center text-blue-400 shrink-0">
+              <i data-lucide="file-text" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="text-[10px] text-slate-400 font-medium">Total Purchase Requests</div>
+              <div class="text-xl font-bold text-white mt-0.5"><%= stats.total %></div>
+              <div class="text-[9.5px] text-slate-500">All approved assisted purchases</div>
+            </div>
+          </div>
+
+          <!-- Awaiting Invoice -->
+          <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-3.5 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-md bg-[#102242] border border-[#1d3663] flex items-center justify-center text-sky-400 shrink-0">
+              <i data-lucide="receipt" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="text-[10px] text-slate-400 font-medium">Awaiting Invoice</div>
+              <div class="text-xl font-bold text-white mt-0.5"><%= stats.awaitingInvoice %></div>
+              <div class="text-[9.5px] text-slate-500">Purchase invoice not yet issued</div>
+            </div>
+          </div>
+
+          <!-- Awaiting Advance Payment -->
+          <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-3.5 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-md bg-[#102242] border border-[#1d3663] flex items-center justify-center text-amber-400 shrink-0">
+              <i data-lucide="banknote" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="text-[10px] text-slate-400 font-medium">Awaiting Advance Payment</div>
+              <div class="text-xl font-bold text-white mt-0.5"><%= stats.awaitingPayment %></div>
+              <div class="text-[9.5px] text-slate-500">Advance payment not yet cleared</div>
+            </div>
+          </div>
+
+          <!-- Ready to Purchase -->
+          <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-3.5 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-md bg-[#102242] border border-[#1d3663] flex items-center justify-center text-emerald-400 shrink-0">
+              <i data-lucide="check-square" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="text-[10px] text-slate-400 font-medium">Ready to Purchase</div>
+              <div class="text-xl font-bold text-white mt-0.5"><%= stats.readyToPurchase %></div>
+              <div class="text-[9.5px] text-slate-500">Payment cleared · consent complete</div>
+            </div>
+          </div>
+
+          <!-- Action Required (Orange Focus Card) -->
+          <div class="bg-[#081225] border border-[#f97316]/50 rounded-md p-3.5 flex items-center gap-3 relative overflow-hidden group cursor-pointer hover:border-[#f97316]">
+            <div class="w-10 h-10 rounded-md bg-[#78350f]/40 border border-[#d97706]/50 flex items-center justify-center text-[#f97316] shrink-0">
+              <i data-lucide="alert-circle" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="text-[10px] text-[#f97316] font-bold uppercase tracking-wider">Action Required</div>
+              <div class="text-xl font-bold text-white mt-0.5"><%= stats.actionRequired %></div>
+              <div class="text-[9.5px] text-slate-400 group-hover:text-slate-200 transition-colors">Click to filter required actions</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter & Search Panel -->
+        <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+          
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-sm font-bold text-white">All Assisted Purchases</h2>
+            
+            <!-- Global Search Field -->
+            <div class="relative min-w-[280px] sm:min-w-[360px]">
+              <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2"></i>
+              <input type="text" placeholder="Search Shipment ID, Customer ID, seller order number or carrier tracking number" class="w-full bg-[#050c18] border border-[#1b2b48] text-slate-200 rounded-md pl-9 pr-3 py-1.5 text-[11px] focus:outline-none focus:border-blue-500 placeholder:text-slate-500" />
+            </div>
+            
+            <div class="text-[10.5px] text-slate-400 font-medium">Latest updated first</div>
+          </div>
+
+          <!-- Expanded Filter Columns Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-1">
+            
+            <!-- Purchase Status Filter -->
+            <div class="bg-[#050c18] border border-[#1b2b48] rounded-md overflow-hidden text-[11px]">
+              <div class="bg-[#09152a] px-3 py-1.5 text-slate-400 font-medium border-b border-[#1b2b48] flex justify-between items-center">
+                <span>Purchase Status</span>
+                <i data-lucide="chevron-up" class="w-3 h-3 text-slate-500"></i>
+              </div>
+              <div class="divide-y divide-[#13223b]/40 max-h-48 overflow-y-auto hidden">
+                <div class="px-3 py-1.5 bg-[#0e2140] text-white font-medium flex items-center gap-2 cursor-pointer">
+                  <i data-lucide="check" class="w-3 h-3 text-blue-400"></i>
+                  <span>All Purchase Statuses</span>
+                </div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Awaiting Invoice</div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Awaiting Advance Payment</div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Ready to Purchase</div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Partially Purchased</div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Purchased</div>
+              </div>
+            </div>
+
+            <!-- Payment Status Filter -->
+            <div class="bg-[#050c18] border border-[#1b2b48] rounded-md overflow-hidden text-[11px]">
+              <div class="bg-[#09152a] px-3 py-1.5 text-slate-400 font-medium border-b border-[#1b2b48] flex justify-between items-center">
+                <span>Payment Status</span>
+                <i data-lucide="chevron-up" class="w-3 h-3 text-slate-500"></i>
+              </div>
+              <div class="divide-y divide-[#13223b]/40 max-h-48 overflow-y-auto hidden">
+                <div class="px-3 py-1.5 bg-[#0e2140] text-white font-medium flex items-center gap-2 cursor-pointer">
+                  <i data-lucide="check" class="w-3 h-3 text-blue-400"></i>
+                  <span>All Payment Statuses</span>
+                </div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Pending</div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Completed</div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Failed</div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Reversed</div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Refunded</div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Partially Refunded</div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Under Review</div>
+              </div>
+            </div>
+
+            <!-- Freight Mode Filter -->
+            <div class="bg-[#050c18] border border-[#1b2b48] rounded-md overflow-hidden text-[11px]">
+              <div class="bg-[#09152a] px-3 py-1.5 text-slate-400 font-medium border-b border-[#1b2b48] flex justify-between items-center">
+                <span>Freight Mode</span>
+                <i data-lucide="chevron-up" class="w-3 h-3 text-slate-500"></i>
+              </div>
+              <div class="divide-y divide-[#13223b]/40 hidden">
+                <div class="px-3 py-1.5 bg-[#0e2140] text-white font-medium flex items-center gap-2 cursor-pointer">
+                  <i data-lucide="check" class="w-3 h-3 text-blue-400"></i>
+                  <span>All Freight Modes</span>
+                </div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Air</div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Sea</div>
+              </div>
+            </div>
+
+            <!-- Customer Type Filter -->
+            <div class="bg-[#050c18] border border-[#1b2b48] rounded-md overflow-hidden text-[11px]">
+              <div class="bg-[#09152a] px-3 py-1.5 text-slate-400 font-medium border-b border-[#1b2b48] flex justify-between items-center">
+                <span>Customer Type</span>
+                <i data-lucide="chevron-up" class="w-3 h-3 text-slate-500"></i>
+              </div>
+              <div class="divide-y divide-[#13223b]/40 hidden">
+                <div class="px-3 py-1.5 bg-[#0e2140] text-white font-medium flex items-center gap-2 cursor-pointer">
+                  <i data-lucide="check" class="w-3 h-3 text-blue-400"></i>
+                  <span>All Customer Types</span>
+                </div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Individual</div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">E-commerce / F-commerce</div>
+                <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Commercial</div>
+              </div>
+            </div>
+
+            <!-- Date Range Filter + Clear Button -->
+            <div class="space-y-2">
+              <div class="bg-[#050c18] border border-[#1b2b48] rounded-md overflow-hidden text-[11px]">
+                <div class="bg-[#09152a] px-3 py-1.5 text-slate-400 font-medium border-b border-[#1b2b48] flex justify-between items-center">
+                  <span>Date Range</span>
+                  <i data-lucide="chevron-up" class="w-3 h-3 text-slate-500"></i>
+                </div>
+                <div class="divide-y divide-[#13223b]/40 max-h-32 overflow-y-auto hidden">
+                  <div class="px-3 py-1.5 bg-[#0e2140] text-white font-medium flex items-center gap-2 cursor-pointer">
+                    <i data-lucide="check" class="w-3 h-3 text-blue-400"></i>
+                    <span>All Dates</span>
+                  </div>
+                  <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Today</div>
+                  <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Last 7 Days</div>
+                  <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Last 30 Days</div>
+                  <div class="px-3 py-1.5 text-slate-300 hover:bg-[#0a182e] cursor-pointer">Custom Range</div>
+                </div>
+              </div>
+
+              <button type="button" class="w-full bg-[#0e1d38] hover:bg-[#152a4e] border border-[#233a63] text-slate-300 text-[11px] font-semibold py-1.5 rounded-md transition-colors">
+                Clear Filters
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Assisted Purchases Table Panel -->
+        <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-[11px]">
+              <thead>
+                <tr class="border-b border-[#1b2b48] text-slate-400 text-[10.5px]">
+                  <th class="py-2.5 pr-3 font-semibold">Shipment ID</th>
+                  <th class="py-2.5 px-3 font-semibold">Customer</th>
+                  <th class="py-2.5 px-3 font-semibold text-center">Items</th>
+                  <th class="py-2.5 px-3 font-semibold">Invoice Amount</th>
+                  <th class="py-2.5 px-3 font-semibold">Payment Status</th>
+                  <th class="py-2.5 px-3 font-semibold">Purchase Progress</th>
+                  <th class="py-2.5 px-3 font-semibold">Purchase Status</th>
+                  <th class="py-2.5 px-3 font-semibold">Last Updated <i data-lucide="info" class="w-3 h-3 inline text-slate-500"></i></th>
+                  <th class="py-2.5 pl-3 text-right font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#16243d]/60 text-slate-300">
+                <% purchases.forEach((row) => { %>
+                  <tr class="hover:bg-[#0f1d35]/50 transition-colors">
+                    
+                    <!-- Shipment ID -->
+                    <td class="py-3.5 pr-3 font-mono font-medium text-white align-middle">
+                      <%= row.shipmentId %>
+                    </td>
+
+                    <!-- Customer -->
+                    <td class="py-3.5 px-3 align-middle">
+                      <div class="text-slate-200 font-medium"><%= row.customerName %></div>
+                      <a href="#" class="text-blue-400 hover:underline font-mono text-[10px] mt-0.5 block"><%= row.customerId %></a>
+                    </td>
+
+                    <!-- Items Count -->
+                    <td class="py-3.5 px-3 text-center font-bold text-white align-middle">
+                      <%= row.itemsCount %>
+                    </td>
+
+                    <!-- Invoice Amount -->
+                    <td class="py-3.5 px-3 font-medium text-slate-200 align-middle">
+                      <%= row.invoiceAmount %>
+                    </td>
+
+                    <!-- Payment Status Badge -->
+                    <td class="py-3.5 px-3 align-middle">
+                      <% if (row.paymentStatus === 'Completed') { %>
+                        <span class="px-2.5 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[10px] font-semibold">
+                          Completed
+                        </span>
+                      <% } else if (row.paymentStatus === 'Under Review') { %>
+                        <span class="px-2.5 py-0.5 rounded bg-[#78350f]/80 text-[#fbbf24] border border-[#d97706]/40 text-[10px] font-semibold">
+                          Under Review
+                        </span>
+                      <% } else { %>
+                        <span class="text-slate-500">—</span>
+                      <% } %>
+                    </td>
+
+                    <!-- Purchase Progress -->
+                    <td class="py-3.5 px-3 text-slate-300 align-middle font-medium">
+                      <%= row.purchaseProgress %>
+                    </td>
+
+                    <!-- Purchase Status Badge -->
+                    <td class="py-3.5 px-3 align-middle">
+                      <% if (row.purchaseStatus === 'Awaiting Invoice') { %>
+                        <span class="px-2.5 py-0.5 rounded bg-[#78350f]/90 text-[#fef08a] border border-[#d97706]/50 text-[10px] font-semibold">
+                          Awaiting Invoice
+                        </span>
+                      <% } else if (row.purchaseStatus === 'Awaiting Advance Payment') { %>
+                        <span class="px-2.5 py-0.5 rounded bg-[#7c2d12]/90 text-[#ff8c38] border border-[#ea580c]/50 text-[10px] font-semibold">
+                          Awaiting Advance Payment
+                        </span>
+                      <% } else if (row.purchaseStatus === 'Ready to Purchase') { %>
+                        <span class="px-2.5 py-0.5 rounded bg-[#064e3b]/90 text-[#34d399] border border-[#059669]/50 text-[10px] font-semibold">
+                          Ready to Purchase
+                        </span>
+                      <% } else if (row.purchaseStatus === 'Partially Purchased') { %>
+                        <span class="px-2.5 py-0.5 rounded bg-[#1e3a8a]/90 text-[#60a5fa] border border-[#2563eb]/50 text-[10px] font-semibold">
+                          Partially Purchased
+                        </span>
+                      <% } else if (row.purchaseStatus === 'Purchased') { %>
+                        <span class="px-2.5 py-0.5 rounded bg-[#1e3a8a]/90 text-[#60a5fa] border border-[#2563eb]/50 text-[10px] font-semibold">
+                          Purchased
+                        </span>
+                      <% } else if (row.purchaseStatus === 'Received at USA Warehouse') { %>
+                        <span class="px-2.5 py-0.5 rounded bg-[#064e3b]/90 text-[#34d399] border border-[#059669]/50 text-[10px] font-semibold">
+                          Received at USA Warehouse
+                        </span>
+                      <% } else { %>
+                        <span class="px-2.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-semibold">
+                          <%= row.purchaseStatus %>
+                        </span>
+                      <% } %>
+                    </td>
+
+                    <!-- Last Updated -->
+                    <td class="py-3.5 px-3 text-slate-400 whitespace-pre-line text-[10.5px] leading-snug align-middle">
+                      <%= row.lastUpdated %>
+                    </td>
+
+                    <!-- Action Links / Buttons -->
+                    <td class="py-3.5 pl-3 text-right align-middle space-y-1">
+                      <a href="/admin/assisted-purchase/manage/<%= row.shipmentId %>" class="inline-block px-3 py-1 bg-[#12233f] hover:bg-[#182d50] text-slate-200 border border-[#23385d] text-[11px] font-semibold rounded transition-colors">
+                        Manage Purchase
+                      </a>
+                      
+                      <% if (row.actionText === 'Prepare Invoice') { %>
+                        <div>
+                          <a href="#" data-open-invoice-modal class="text-blue-400 hover:text-blue-300 hover:underline text-[10.5px] font-medium">Prepare Invoice</a>
+                        </div>
+                      <% } else if (row.actionText === 'Record Payment') { %>
+                        <div>
+                          <a href="#" data-open-payment-modal class="text-blue-400 hover:text-blue-300 hover:underline text-[10.5px] font-medium">Record Payment</a>
+                        </div>
+                      <% } else if (row.actionText === 'Add Carrier Tracking Number') { %>
+                        <div>
+                          <a href="/admin/assisted-purchase/manage/<%= row.shipmentId %>/seller-orders-tracking" class="text-blue-400 hover:text-blue-300 hover:underline text-[10.5px] font-medium">Add Carrier Tracking Number</a>
+                        </div>
+                      <% } %>
+                    </td>
+
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination Footer -->
+          <div class="flex items-center justify-between pt-3 border-t border-[#1b2b48] text-[11px] text-slate-400">
+            <div>Showing 1–6 of 86 purchases</div>
+            <div class="flex items-center gap-1.5 font-medium">
+              <button type="button" class="px-2 py-1 bg-[#050c18] border border-[#1b2b48] rounded text-slate-500 hover:text-slate-300 disabled:opacity-50" disabled>&lt;</button>
+              <button type="button" class="px-2.5 py-1 bg-[#f97316] text-white rounded font-bold">1</button>
+              <button type="button" class="px-2.5 py-1 bg-[#050c18] border border-[#1b2b48] rounded hover:bg-[#0e1d38] text-slate-300">2</button>
+              <button type="button" class="px-2.5 py-1 bg-[#050c18] border border-[#1b2b48] rounded hover:bg-[#0e1d38] text-slate-300">3</button>
+              <span class="px-1 text-slate-500">…</span>
+              <button type="button" class="px-2.5 py-1 bg-[#050c18] border border-[#1b2b48] rounded hover:bg-[#0e1d38] text-slate-300">15</button>
+              <button type="button" class="px-2 py-1 bg-[#050c18] border border-[#1b2b48] rounded text-slate-300 hover:bg-[#0e1d38]">&gt;</button>
+            </div>
+          </div>
+
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    if (window.lucide) lucide.createIcons();
+    // Toggle filter dropdown panels on header click
+    document.querySelectorAll('.bg-\\[\\#09152a\\]').forEach(function(header) {
+      if (header.getAttribute('data-filter-toggle')) return;
+      header.setAttribute('data-filter-toggle', '1');
+      header.style.cursor = 'pointer';
+      header.addEventListener('click', function() {
+        const next = this.nextElementSibling;
+        if (next) next.classList.toggle('hidden');
+      });
+    });
+  </script>
+</body>
+</html>

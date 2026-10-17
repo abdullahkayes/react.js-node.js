@@ -1,0 +1,44 @@
+<header class="h-16 border-b border-[#1a2333] bg-[#0b0f19] px-6 flex items-center justify-between sticky top-0 z-20">
+  <!-- Title Section -->
+  <div>
+    <h2 class="text-xl font-bold text-white tracking-tight leading-none"><%= typeof title !== 'undefined' ? title : 'ERP Dashboard' %></h2>
+    <p class="text-[12px] text-gray-400 font-normal"><%= typeof subtitle !== 'undefined' ? subtitle : 'Operational overview and pending actions' %></p>
+  </div>
+
+  <!-- Right Controls Section -->
+  <div class="flex items-center gap-3.5">
+    <!-- Search Box -->
+    <div class="relative hidden md:block w-80">
+      <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"></i>
+      <input 
+        type="text" 
+        placeholder="Search Shipment ID, Customer ID, Item ID, Tracking No..."
+        class="w-full bg-[#111726] border border-[#1e293b] rounded-lg pl-10 pr-3 py-2 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors shadow-inner"
+      />
+    </div>
+
+    <!-- Date Selector -->
+    <div class="flex items-center gap-2 bg-[#111726] border border-[#1e293b] px-3.5 py-2 rounded-lg text-xs text-gray-300 cursor-pointer hover:border-gray-600 transition-colors">
+      <i data-lucide="calendar" class="w-3.5 h-3.5 text-gray-400"></i>
+      <span class="font-medium text-gray-200"><%= typeof dateDisplay !== 'undefined' ? dateDisplay : 'Sep 2, 2026' %></span>
+      <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-gray-400 ml-1"></i>
+    </div>
+
+    <!-- Notification Bell -->
+    <button class="relative p-2 rounded-full bg-[#111726] border border-[#1e293b] text-gray-300 hover:text-white transition-colors flex items-center justify-center w-9 h-9">
+      <i data-lucide="bell" class="w-4 h-4"></i>
+      <span class="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center border-2 border-[#0b0f19]"><%= typeof notificationCount !== 'undefined' ? notificationCount : 3 %></span>
+    </button>
+
+    <!-- User Profile -->
+    <div class="flex items-center gap-2 cursor-pointer pl-1">
+      <div class="w-8 h-8 rounded-full bg-[#1a233e] border border-[#2b3a58] text-sky-400 font-semibold text-xs flex items-center justify-center">
+        <%= typeof user !== 'undefined' && user.initials ? user.initials : 'SS' %>
+      </div>
+      <span class="text-xs font-medium text-gray-200 hidden lg:inline">
+        <%= typeof user !== 'undefined' && user.name ? user.name : 'Admin' %>
+      </span>
+      <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-gray-400"></i>
+    </div>
+  </div>
+</header>

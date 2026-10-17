@@ -1,0 +1,645 @@
+<!--
+  Communications & Audit tab.
+
+  Every table here reads from the database:
+
+    - Customer Notifications: one row per notification sent to this customer.
+    - Delivery Evidence: one row per channel delivery attempt, so a notification
+      sent on three channels appears three times.
+    - Policy Acceptance History: one row per policy acceptance record.
+    - Audit Trail: read-only. Derived from the customer's own records and never
+      editable from this page.
+
+  The summary cards are filters, not decoration: the two notification cards filter
+  the Customer Notifications table and the Audit Events card clears the Audit
+  Trail filters.
+-->
+<%
+  const fmtDateTime = (d) => d
+    ? new Date(d).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : 'N/A';
+
+  // Status colours. The overall notification status and the per-channel delivery
+  // status share one palette, because they use the same four words; they are
+  // still separate values and are never collapsed into each other.
+  const STATUS_STYLE = {
+    Sent: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+    Delivered: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    Viewed: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    Failed: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+  };
+  const statusStyle = (s) => STATUS_STYLE[s] || 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+
+  const AUDIT_ACTION_FILTERS = [
+    { value: '', label: 'All' },
+    { value: 'shipment', label: 'Shipment' },
+    { value: 'tracking', label: 'Tracking' },
+    { value: 'request', label: 'Request' },
+    { value: 'payment', label: 'Payment' },
+    { value: 'document', label: 'Document' },
+    { value: 'information_request', label: 'Information Request' },
+    { value: 'compliance', label: 'Compliance Review' },
+    { value: 'account_action', label: 'Account Action' },
+    { value: 'notification', label: 'Notification' },
+    { value: 'policy_acceptance', label: 'Policy Acceptance' },
+    { value: 'return', label: 'Return' },
+    { value: 'rto', label: 'RTO' },
+  ];
+
+  // Filters the summary cards can apply to the Customer Notifications table.
+  // "all" clears them, which is what Total Notifications and Audit Events do.
+  const NOTIFICATION_CARD_FILTERS = {
+    all: null,
+    notViewed: 'not-viewed',
+    formal: 'formal',
+  };
+%>
+<div class="space-y-6">
+
+  <!-- Header Banner & Action -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <h2 class="text-xl font-bold text-white">Communications &amp; Audit</h2>
+      <p class="text-xs text-gray-400 mt-1">Review customer notifications, delivery evidence, policy acceptances and recorded system activity.</p>
+    </div>
+    <button data-open-notification class="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-medium text-xs rounded-lg transition-colors shadow-lg shadow-orange-600/20 shrink-0">
+      <i data-lucide="send" class="w-4 h-4"></i>
+      <span>Send Notification</span>
+    </button>
+  </div>
+
+  <!--
+    Summary cards. Each is a real button with aria-pressed, because each one
+    applies a filter to the table below it.
+  -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <% [
+      // The filter tokens match the ones the script compares against, so a card
+      // cannot be wired to a filter the table does not understand.
+      { key: 'total', label: 'Total Notifications', value: auditStats.totalNotifications, icon: 'mail', filter: 'all', target: 'notifications' },
+      { key: 'notViewed', label: 'Not Yet Viewed', value: auditStats.notYetViewed, icon: 'eye', filter: 'not-viewed', target: 'notifications' },
+      { key: 'formal', label: 'Formal Notices', value: auditStats.formalNotices, icon: 'file-text', filter: 'formal', target: 'notifications' },
+      { key: 'audit', label: 'Audit Events', value: auditStats.auditEvents, icon: 'shield', filter: 'all', target: 'audit' },
+    ].forEach(card => { %>
+      <button type="button"
+              data-summary-card="<%= card.key %>"
+              data-filter="<%= card.filter %>"
+              data-target="<%= card.target %>"
+              aria-pressed="false"
+              class="text-left bg-[#111726] border border-[#1a2333] hover:border-orange-500/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/40 rounded-xl p-4 flex items-center gap-4 transition-colors">
+        <div class="w-12 h-12 rounded-full border border-orange-500/30 bg-orange-500/10 flex items-center justify-center text-orange-500 shrink-0">
+          <i data-lucide="<%= card.icon %>" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <p class="text-xs text-gray-400 font-medium"><%= card.label %></p>
+          <p class="text-2xl font-bold text-white mt-1"><%= card.value %></p>
+        </div>
+      </button>
+    <% }); %>
+  </div>
+
+  <!-- Customer Notifications Section -->
+  <div class="bg-[#111726] border border-[#1a2333] rounded-xl overflow-hidden space-y-3 p-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+      <h3 class="text-sm font-semibold text-white">Customer Notifications</h3>
+      <div class="flex items-center gap-2">
+        <span data-notification-filter-label class="text-[11px] text-gray-400"></span>
+        <div class="relative">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+          <input type="text" data-notification-search placeholder="Search notifications" class="bg-[#162032] border border-[#233149] rounded-lg pl-8 pr-3 py-1 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors w-44 sm:w-56" />
+        </div>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-[#162032] text-gray-400 font-medium border-b border-[#1a2333]">
+          <tr>
+            <th class="py-2.5 px-3">Notification ID</th>
+            <th class="py-2.5 px-3">Type</th>
+            <th class="py-2.5 px-3">Title</th>
+            <th class="py-2.5 px-3">Related Record</th>
+            <th class="py-2.5 px-3">Channels</th>
+            <th class="py-2.5 px-3">Status</th>
+            <th class="py-2.5 px-3">Sent At</th>
+            <th class="py-2.5 px-3">Viewed At</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#1a2333] text-gray-300" data-notification-body>
+          <% if (notifications.length > 0) { %>
+            <% notifications.forEach(n => { %>
+              <tr class="hover:bg-[#162032]/50 transition-colors"
+                  data-notification-row
+                  data-notification-id="<%= n.notificationId %>"
+                  data-type="<%= n.type %>"
+                  data-status="<%= n.status %>"
+                  data-search="<%= [n.notificationId, n.type, n.title, n.relatedRecord, n.channels, n.status].filter(Boolean).join(' ').toLowerCase() %>">
+                <!-- The ID opens the details view. It is a button rather than a
+                     link so the read is explicit and cannot be triggered by a
+                     stray click elsewhere in the row. -->
+                <td class="py-3 px-3">
+                  <button type="button" data-notification-open="<%= n.notificationId %>"
+                          class="text-sky-400 font-mono hover:text-sky-300 hover:underline underline-offset-2 transition-colors">
+                    <%= n.notificationId %>
+                  </button>
+                </td>
+                <td class="py-3 px-3"><%= n.type %></td>
+                <td class="py-3 px-3"><%= n.title %></td>
+                <td class="py-3 px-3 text-sky-400 font-mono"><%= n.relatedRecord || 'N/A' %></td>
+                <td class="py-3 px-3"><%= n.channels %></td>
+                <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] rounded border font-medium <%= statusStyle(n.status) %>"><%= n.status %></span></td>
+                <td class="py-3 px-3 text-gray-400"><%= fmtDateTime(n.sentAt) %></td>
+                <td class="py-3 px-3 text-gray-400"><%= n.viewedAt ? fmtDateTime(n.viewedAt) : 'N/A' %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr data-notification-empty>
+              <td colspan="8" class="py-6 text-center text-gray-500">No customer notification has been recorded for this customer.</td>
+            </tr>
+          <% } %>
+          <!-- Shown when a filter or search matches nothing, so an empty result is
+               never confused with an absence of notifications. -->
+          <tr data-notification-no-match class="hidden">
+            <td colspan="8" class="py-6 text-center text-gray-500">No notification matches the current filter.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex items-center justify-between border-t border-[#1a2333] pt-3 text-xs text-gray-400">
+      <span data-notification-count>
+        <% if (notifications.length) { %>
+          Showing <%= notifications.length %> <%= notifications.length === 1 ? 'notification' : 'notifications' %>
+        <% } %>
+      </span>
+    </div>
+  </div>
+
+  <!-- Delivery Evidence Section -->
+  <div class="bg-[#111726] border border-[#1a2333] rounded-xl overflow-hidden space-y-3 p-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+      <h3 class="text-sm font-semibold text-white">Delivery Evidence</h3>
+      <span class="text-[11px] text-gray-400">One row per channel delivery attempt. Channel status is kept separate from the overall notification status.</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-[#162032] text-gray-400 font-medium border-b border-[#1a2333]">
+          <tr>
+            <!-- Notification ID rather than a delivery log id, so staff can join
+                 each evidence row back to the notification it belongs to. -->
+            <th class="py-2.5 px-3">Notification ID</th>
+            <th class="py-2.5 px-3">Channel</th>
+            <th class="py-2.5 px-3">Delivery Status</th>
+            <th class="py-2.5 px-3">Provider Reference</th>
+            <th class="py-2.5 px-3">Destination</th>
+            <th class="py-2.5 px-3">Attempted At</th>
+            <th class="py-2.5 px-3">Delivered At</th>
+            <th class="py-2.5 px-3">Failure Reason</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#1a2333] text-gray-300">
+          <% if (deliveryEvidence.length > 0) { %>
+            <% deliveryEvidence.forEach(d => { %>
+              <tr class="hover:bg-[#162032]/50 transition-colors"
+                  data-delivery-row
+                  data-notification-id="<%= d.notificationId %>">
+                <td class="py-3 px-3 text-sky-400 font-mono"><%= d.recordId %></td>
+                <td class="py-3 px-3"><%= d.channel %></td>
+                <td class="py-3 px-3"><span class="px-2 py-0.5 text-[10px] rounded border font-medium <%= statusStyle(d.status) %>"><%= d.status %></span></td>
+                <td class="py-3 px-3 text-gray-400 font-mono"><%= d.providerRef || 'N/A' %></td>
+                <td class="py-3 px-3 text-gray-400 font-mono"><%= d.destination || 'N/A' %></td>
+                <td class="py-3 px-3 text-gray-400"><%= fmtDateTime(d.attemptedAt) %></td>
+                <td class="py-3 px-3 text-gray-400"><%= d.deliveredAt ? fmtDateTime(d.deliveredAt) : 'N/A' %></td>
+                <td class="py-3 px-3 text-gray-400"><%= d.failureReason || 'N/A' %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="8" class="py-6 text-center text-gray-500">No delivery evidence has been recorded for this customer.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Policy Acceptance History Section -->
+  <div class="bg-[#111726] border border-[#1a2333] rounded-xl overflow-hidden space-y-3 p-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+      <h3 class="text-sm font-semibold text-white">Policy Acceptance History</h3>
+      <span class="text-[11px] text-gray-400">Acceptances recorded for this customer only. Broadcasting a policy update is handled in policy management.</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-[#162032] text-gray-400 font-medium border-b border-[#1a2333]">
+          <tr>
+            <th class="py-2.5 px-3">Acceptance ID</th>
+            <th class="py-2.5 px-3">Policy</th>
+            <th class="py-2.5 px-3">Version</th>
+            <th class="py-2.5 px-3">Acceptance Method</th>
+            <th class="py-2.5 px-3">Accepted At</th>
+            <th class="py-2.5 px-3">IP Address</th>
+            <th class="py-2.5 px-3">Device / Browser</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#1a2333] text-gray-300">
+          <% if (policyAcceptances.length > 0) { %>
+            <% policyAcceptances.forEach(p => { %>
+              <tr class="hover:bg-[#162032]/50 transition-colors">
+                <td class="py-3 px-3 text-sky-400 font-mono"><%= p.recordId %></td>
+                <td class="py-3 px-3"><%= p.policy %></td>
+                <td class="py-3 px-3"><%= p.version %></td>
+                <td class="py-3 px-3"><%= p.method %></td>
+                <td class="py-3 px-3 text-gray-400"><%= fmtDateTime(p.acceptedAt) %></td>
+                <td class="py-3 px-3 text-gray-400 font-mono"><%= p.ipAddress || 'N/A' %></td>
+                <!-- The user agent is stored verbatim as evidence; it is long, so
+                     the full value is available as a tooltip rather than being
+                     truncated into something unreadable. -->
+                <td class="py-3 px-3 text-gray-400 max-w-[220px] truncate" title="<%= p.userAgent || 'Not captured' %>"><%= p.userAgent || 'Not captured' %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="7" class="py-6 text-center text-gray-500">No policy acceptance has been recorded for this customer.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Audit Trail Section. Read-only: there is no edit or delete path from this
+       page, because audit records are evidence and are preserved. -->
+  <div class="bg-[#111726] border border-[#1a2333] rounded-xl overflow-hidden p-4 space-y-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+      <div>
+        <h3 class="text-sm font-semibold text-white">Audit Trail</h3>
+        <p class="text-[11px] text-gray-500 mt-0.5">Read-only. Records are preserved and cannot be edited or deleted from this page.</p>
+      </div>
+
+      <!-- Filters -->
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+          <input type="text" data-audit-search placeholder="Search audit events" class="bg-[#162032] border border-[#233149] rounded-lg pl-8 pr-3 py-1 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors w-48 sm:w-64" />
+        </div>
+        <div class="flex items-center gap-1.5 bg-[#162032] border border-[#233149] rounded-lg px-2.5 py-1 text-xs">
+          <span class="text-gray-400">Action:</span>
+          <select data-audit-filter class="bg-transparent text-gray-200 outline-none cursor-pointer">
+            <% AUDIT_ACTION_FILTERS.forEach(f => { %>
+              <option value="<%= f.value %>"><%= f.label %></option>
+            <% }); %>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Audit Trail Table -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-[#162032] text-gray-400 font-medium border-b border-[#1a2333]">
+          <tr>
+            <th class="py-2.5 px-3">Audit Log ID</th>
+            <th class="py-2.5 px-3">Actor</th>
+            <th class="py-2.5 px-3">Action</th>
+            <th class="py-2.5 px-3">Entity Type</th>
+            <th class="py-2.5 px-3">Entity ID</th>
+            <th class="py-2.5 px-3">Change Summary</th>
+            <th class="py-2.5 px-3">Date &amp; Time</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#1a2333] text-gray-300">
+          <% if (auditTrail.length > 0) { %>
+            <% auditTrail.forEach(a => { %>
+              <tr class="hover:bg-[#162032]/50 transition-colors" data-audit-row
+                  data-type="<%= a.entityType %>"
+                  data-search="<%= [a.recordId, a.actor, a.action, a.entityType, a.entityId, a.changeSummary].filter(Boolean).join(' ').toLowerCase() %>">
+                <td class="py-3 px-3 text-sky-400 font-mono"><%= a.recordId %></td>
+                <td class="py-3 px-3 text-gray-300"><%= a.actor %></td>
+                <td class="py-3 px-3"><%= a.action %></td>
+                <td class="py-3 px-3 capitalize"><%= a.entityType %></td>
+                <td class="py-3 px-3 text-sky-400 font-mono break-all"><%= a.entityId %></td>
+                <td class="py-3 px-3 text-gray-300"><%= a.changeSummary %></td>
+                <td class="py-3 px-3 text-gray-400 whitespace-nowrap"><%= fmtDateTime(a.occurredAt) %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="7" class="py-6 text-center text-gray-500">No audit event has been recorded for this customer.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Table Footer -->
+    <div class="flex items-center justify-between border-t border-[#1a2333] pt-3 text-xs text-gray-400">
+      <span data-audit-count>Showing <%= auditTrail.length %> <%= auditTrail.length === 1 ? 'event' : 'events' %></span>
+    </div>
+  </div>
+
+  <!-- Bottom Information Notice -->
+  <div class="flex items-start gap-2.5 p-3 rounded-lg bg-[#162032]/60 border border-[#233149] text-xs text-gray-400">
+    <i data-lucide="info" class="w-4 h-4 text-sky-400 shrink-0 mt-0.5"></i>
+    <p>
+      Customer Notifications shows one row per notification. Delivery Evidence shows one row per channel delivery attempt. Staff opening a notification does not mark it Viewed by the customer.
+    </p>
+  </div>
+
+</div>
+
+<script>
+  /**
+   * Communications & Audit tab behaviour.
+   *
+   * The tab arrives via innerHTML, so every listener is delegated from the
+   * document and this partial can be re-injected safely.
+   *
+   * Two independent filter states are kept: one for the Customer Notifications
+   * table and one for the Audit Trail. A summary card always clears every other
+   * active filter before applying its own, so the tables never disagree about
+   * what is being shown.
+   */
+  (function () {
+    const FILTER_LABELS = {
+      'not-viewed': 'Showing notifications not yet viewed',
+      formal: 'Showing Formal notices',
+    };
+
+    let notificationFilter = '';
+    let activeCard = '';
+
+    function applyNotificationFilters() {
+      const term = (document.querySelector('[data-notification-search]')?.value || '').trim().toLowerCase();
+      const rows = Array.from(document.querySelectorAll('[data-notification-row]'));
+      const empty = document.querySelector('[data-notification-empty]');
+
+      let visible = 0;
+      rows.forEach((row) => {
+        const status = row.getAttribute('data-status') || '';
+        const type = row.getAttribute('data-type') || '';
+        // The card filters use exactly the vocabulary the table stores, so the
+        // count on the card and the rows shown can never drift apart.
+        const okStatus =
+          !notificationFilter ||
+          (notificationFilter === 'not-viewed' && status !== 'Viewed') ||
+          (notificationFilter === 'formal' && (type === 'Formal' || type === 'Policy Update'));
+        const okSearch = !term || (row.getAttribute('data-search') || '').includes(term);
+        const show = okStatus && okSearch;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+
+      if (empty) empty.classList.add('hidden');
+
+      // Distinguish "no notifications exist" from "the filter matched nothing",
+      // so an empty table after a card click is never read as missing data.
+      const noMatch = document.querySelector('[data-notification-no-match]');
+      if (noMatch) noMatch.classList.toggle('hidden', !rows.length || visible > 0);
+
+      const counter = document.querySelector('[data-notification-count]');
+      if (counter) {
+        const total = rows.length;
+        counter.textContent = !total
+          ? ''
+          : (notificationFilter || term) && visible !== total
+            ? 'Showing ' + visible + ' of ' + total + (total === 1 ? ' notification' : ' notifications')
+            : 'Showing ' + total + (total === 1 ? ' notification' : ' notifications');
+      }
+
+      const label = document.querySelector('[data-notification-filter-label]');
+      if (label) {
+        label.textContent = notificationFilter
+          ? FILTER_LABELS[notificationFilter] || ''
+          : term
+            ? 'Filtered by search'
+            : '';
+      }
+    }
+
+    function applyAuditFilters() {
+      const term = (document.querySelector('[data-audit-search]')?.value || '').trim().toLowerCase();
+      const type = document.querySelector('[data-audit-filter]')?.value || '';
+      const rows = Array.from(document.querySelectorAll('[data-audit-row]'));
+      let visible = 0;
+      rows.forEach((row) => {
+        const okType = !type || row.getAttribute('data-type') === type;
+        const okSearch = !term || (row.getAttribute('data-search') || '').includes(term);
+        const show = okType && okSearch;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      const counter = document.querySelector('[data-audit-count]');
+      if (counter) {
+        const total = rows.length;
+        counter.textContent = (type || term) && visible !== total
+          ? 'Showing ' + visible + ' of ' + total + ' events'
+          : 'Showing ' + total + (total === 1 ? ' event' : ' events');
+      }
+    }
+
+    /**
+     * Applies a summary card.
+     *
+     * Every card clears the filters it does not own: Total Notifications clears
+     * the notification filters, Audit Events clears the audit filters, and the
+     * two filtering cards clear anything else already applied to the
+     * notifications table before setting their own.
+     */
+    function applySummaryCard(card) {
+      const key = card.getAttribute('data-summary-card');
+      const filter = card.getAttribute('data-filter') || '';
+      const target = card.getAttribute('data-target');
+
+      // Toggling the card that is already active clears it, so a card behaves as
+      // an on/off switch rather than a one-way action.
+      const isOn = activeCard === key;
+      // "all" is a clear, not a filter: Total Notifications shows every row.
+      const nextFilter = isOn || filter === 'all' ? '' : filter;
+      activeCard = isOn ? '' : key;
+
+      document.querySelectorAll('[data-summary-card]').forEach((el) => {
+        el.setAttribute('aria-pressed', String(el === card && activeCard !== ''));
+        el.classList.toggle('border-orange-500/70', el === card && activeCard !== '');
+        el.classList.toggle('bg-orange-500/5', el === card && activeCard !== '');
+      });
+
+      if (target === 'audit') {
+        // Audit Events is a clear, not a filter: it resets the Audit Trail table.
+        const search = document.querySelector('[data-audit-search]');
+        const select = document.querySelector('[data-audit-filter]');
+        if (search) search.value = '';
+        if (select) select.value = '';
+        applyAuditFilters();
+        return;
+      }
+
+      // Any notification card clears the other notification filters first.
+      notificationFilter = nextFilter;
+      const search = document.querySelector('[data-notification-search]');
+      if (search) search.value = '';
+      applyNotificationFilters();
+    }
+
+    document.addEventListener('input', function (e) {
+      if (e.target.matches('[data-audit-search]')) applyAuditFilters();
+      if (e.target.matches('[data-notification-search]')) applyNotificationFilters();
+    });
+
+    document.addEventListener('change', function (e) {
+      if (e.target.matches('[data-audit-filter]')) applyAuditFilters();
+    });
+
+    document.addEventListener('click', function (e) {
+      const card = e.target.closest('[data-summary-card]');
+      if (card) {
+        applySummaryCard(card);
+        return;
+      }
+      if (e.target.closest('[data-notification-open]')) {
+        openNotificationDetails(e.target.closest('[data-notification-open]').getAttribute('data-notification-open'));
+      }
+    });
+  })();
+</script>
+
+<!--
+  Notification details, opened by clicking a Notification ID.
+
+  Reading a notification here is a staff action: the panel is populated by a
+  read-only endpoint and nothing on it can mark the notification as viewed by the
+  customer. Only the customer dashboard does that.
+-->
+<div id="notificationDetailPanel" data-customer-id="<%= customer.id %>" class="hidden fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+  <div class="w-full max-w-2xl bg-[#111726] border border-[#1a2333] rounded-xl shadow-2xl overflow-hidden my-auto">
+    <div class="flex items-center justify-between p-4 px-5 border-b border-[#1a2333]">
+      <div>
+        <h3 class="text-sm font-semibold text-white">Notification Details</h3>
+        <p class="text-[11px] text-gray-500 mt-0.5">
+          Opening a notification here does not mark it as viewed by the customer.
+        </p>
+      </div>
+      <button type="button" onclick="closeNotificationDetails()" class="p-1.5 text-gray-400 hover:text-orange-500 transition-colors">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div id="notificationDetailBody" class="p-5 space-y-4 text-xs text-gray-300 max-h-[70vh] overflow-y-auto"></div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    function closeNotificationDetails() {
+      const panel = document.getElementById('notificationDetailPanel');
+      if (panel) {
+        panel.classList.add('hidden');
+        panel.style.display = 'none';
+        document.body.style.overflow = '';
+      }
+    }
+
+    window.closeNotificationDetails = closeNotificationDetails;
+
+    const cell = (label, value, mono) => `
+      <div class="flex items-center justify-between gap-3 px-3 py-2">
+        <span class="text-gray-500">${label}</span>
+        <span class="${mono ? 'font-mono' : ''} text-gray-200 text-right">${value}</span>
+      </div>`;
+
+    const fmt = (d) => (d ? new Date(d).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A');
+
+    async function openNotificationDetails(notificationId) {
+      const panel = document.getElementById('notificationDetailPanel');
+      const body = document.getElementById('notificationDetailBody');
+      if (!panel || !body) return;
+
+      body.textContent = 'Loading...';
+      panel.classList.remove('hidden');
+      panel.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+
+      // Read from the panel itself rather than from whichever modal happens to be
+      // on the page, so the customer id cannot come from an unrelated component.
+      const customerId = document.getElementById('notificationDetailPanel')?.getAttribute('data-customer-id');
+      if (!customerId) {
+        body.innerHTML = '<p class="text-rose-400">Could not determine which customer this notification belongs to.</p>';
+        return;
+      }
+
+      try {
+        const response = await fetch('/admin/customers/' + customerId + '/notifications/' + encodeURIComponent(notificationId));
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Could not load the notification');
+
+        const n = data.notification;
+        const deliveries = data.deliveries || [];
+
+        // Everything is escaped into the panel rather than interpolated raw: the
+        // notification body is customer-facing text that staff wrote.
+        const esc = (value) => String(value ?? '')
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        body.innerHTML = `
+          <div class="bg-[#162032] border border-[#1a2333] rounded-lg divide-y divide-[#1a2333]">
+            ${cell('Notification ID', esc(n.notificationId), true)}
+            ${cell('Type', esc(n.type))}
+            ${cell('Status', esc(n.status))}
+            ${cell('Related Record', esc(n.relatedRecord || 'N/A'), true)}
+            ${cell('Raised by', esc(n.sentBy))}
+            ${cell('Sent At', fmt(n.sentAt))}
+            ${cell('Viewed At', n.viewedAt ? fmt(n.viewedAt) : 'Not viewed by the customer')}
+          </div>
+
+          <div>
+            <p class="font-semibold text-white mb-1.5">Title</p>
+            <p class="bg-[#162032] border border-[#1a2333] rounded-lg p-3">${esc(n.title)}</p>
+          </div>
+
+          <div>
+            <p class="font-semibold text-white mb-1.5">Message</p>
+            <p class="bg-[#162032] border border-[#1a2333] rounded-lg p-3 whitespace-pre-wrap leading-relaxed">${esc(n.message)}</p>
+          </div>
+
+          <div>
+            <p class="font-semibold text-white mb-1.5">Delivery Evidence</p>
+            ${
+              deliveries.length
+                ? `<div class="bg-[#162032] border border-[#1a2333] rounded-lg divide-y divide-[#1a2333]">
+                    ${deliveries.map((d) => `
+                      <div class="px-3 py-2 space-y-1">
+                        <div class="flex items-center justify-between gap-3">
+                          <span class="text-gray-200">${esc(d.channel)}</span>
+                          <span class="text-gray-200 font-medium">${esc(d.deliveryStatus)}</span>
+                        </div>
+                        <div class="text-[11px] text-gray-500 space-y-0.5">
+                          <p>Provider reference: ${esc(d.providerRef || 'N/A')}</p>
+                          <p>Destination: ${esc(d.destination || 'N/A')}</p>
+                          <p>Attempted: ${fmt(d.attemptedAt)}</p>
+                          <p>Delivered: ${fmt(d.deliveredAt)}</p>
+                          ${d.failureReason ? `<p class="text-rose-400">Failure reason: ${esc(d.failureReason)}</p>` : ''}
+                        </div>
+                      </div>`).join('')}
+                  </div>`
+                : '<p class="text-gray-500">No delivery attempt recorded.</p>'
+            }
+          </div>`;
+      } catch (error) {
+        body.innerHTML = `<p class="text-rose-400">${error.message}</p>`;
+      }
+    }
+
+    window.openNotificationDetails = openNotificationDetails;
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeNotificationDetails();
+    });
+
+    document.addEventListener('click', function (e) {
+      if (e.target.id === 'notificationDetailPanel') closeNotificationDetails();
+    });
+  })();
+</script>
+
+<!-- Send Notification popup, opened from the button above. -->
+<%- include('./notification-modal') %>

@@ -1,0 +1,518 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Review Item Acceptance.
+   *
+   * One item is reviewed at a time. The dropdown lists every item on the request
+   * with its id, name and current status, and switching items loads that item's
+   * submitted details, its documents and its recorded decision, so a reviewer
+   * never edits one item while looking at another's data.
+   *
+   * Two rules decide whether an item may be Approved, and both are enforced on the
+   * server as well as here: the classification must not be Prohibited, and every
+   * document on the item must be Verified.
+   * ------------------------------------------------------------------------- */
+  const STATUSES = acceptanceStatuses;
+  const CLASSIFICATIONS = acceptanceClassifications;
+  const reviewItems = itemSections.map((item, index) => ({
+    index,
+    id: item.id,
+    ref: item.ref,
+    name: orDash(item.productName || item.productDescription || item.storeName || item.sellerStoreName),
+    fields: item.fields,
+    volumeLabel: item.volume.available ? item.volume.label : chargeableVolume.label,
+    volumeUnit: item.volume.unit || chargeableVolume.unit,
+    volumeText: item.volumeText,
+    dimensionsText: item.dimensionsText,
+    dimensionsKnown: item.dimensionsKnown,
+    files: item.files,
+    documents: (item.documents || []).map((doc) => ({
+      label: doc.label,
+      fileName: doc.fileName,
+      url: doc.url,
+      status: doc.verificationStatus,
+    })),
+    documentsVerified: item.documentsVerified,
+    documentsReason: item.documentsReason,
+    status: item.acceptanceStatus,
+    classification: item.acceptanceClassification,
+    note: item.acceptanceNote || '',
+  }));
+
+  // Opens on the first item still awaiting a decision, so the reviewer is put on
+  // the work that is actually outstanding.
+  const firstOutstanding = reviewItems.findIndex((item) => item.status !== 'Approved');
+  const initialIndex = firstOutstanding === -1 ? 0 : firstOutstanding;
+%>
+<%- include('partials/head', { pageTitle: `Review Item Acceptance - ${row.requestRef} - Dazzling Shipping`, active: 'bookings' }) %>
+
+<%- include('partials/header', {
+  title: 'Review Item Acceptance',
+  subtitle: `${type.label} - ${row.requestRef}`,
+  user: typeof user !== 'undefined' ? user : {},
+}) %>
+
+<!-- Configuration the script reads, so nothing below is interpolated into it. -->
+<script type="application/json" data-acceptance-config>
+  <%- JSON.stringify({
+    endpoint: endpoints.acceptance,
+    requestRef: row.requestRef,
+    classifications: CLASSIFICATIONS,
+    statuses: STATUSES,
+    items: reviewItems,
+    initialIndex,
+  }) %>
+</script>
+
+<main class="flex-1 overflow-y-auto bg-[#070b12] text-[#94a3b8] text-xs font-sans p-3 sm:p-6" data-acceptance-root>
+  <div class="w-full max-w-[1240px] bg-[#0c1322] rounded-xl border border-[#1e293b] shadow-2xl overflow-hidden flex flex-col my-auto mx-auto">
+
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] divide-y lg:divide-y-0 lg:divide-x divide-[#1e293b]">
+
+      <!-- ================= LEFT: the review ================= -->
+      <div class="p-5 sm:p-7 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between pb-4 border-b border-[#1e293b]/60 mb-6" data-page-chrome>
+            <div>
+              <h1 class="text-xl sm:text-2xl font-bold text-white tracking-tight">Review Item Acceptance</h1>
+              <!-- Subheader: the request and the mode this workflow states, which is
+                   the purchase mode for an import and the service mode for an export. -->
+              <p class="text-[11px] text-[#64748b] mt-1 font-mono">
+                <%= row.requestRef %> · <%= subheaderMode.label %>: <%= subheaderMode.upper ? String(subheaderMode.value || '').toUpperCase() : orDash(subheaderMode.value) %>
+              </p>
+            </div>
+            <a href="<%= detailsHref %>" data-overlay-close class="text-[#64748b] hover:text-white transition-colors p-1" title="Close" aria-label="Close">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </a>
+          </div>
+
+          <% if (!reviewItems.length) { %>
+            <div class="bg-[#090e1a] border border-[#1e293b]/80 rounded-lg p-6 text-center">
+              <div class="text-white font-semibold mb-1">This request has no items to review</div>
+              <div class="text-[#64748b] text-[11px]">Approval is decided from the item acceptance states, so a request with no items cannot be reviewed or approved.</div>
+            </div>
+          <% } else { %>
+
+          <form class="space-y-5" data-acceptance-form novalidate>
+            <!-- Item: every item on the request, with its id, name and status -->
+            <div>
+              <label for="itemSelector" class="block text-[11px] font-semibold text-[#94a3b8] mb-1.5">Item <span class="text-amber-500">*</span></label>
+              <div class="relative">
+                <select id="itemSelector" class="w-full bg-[#0a0f1d] border border-[#1e293b] focus:border-amber-500 rounded-md px-3 py-2.5 text-xs text-white appearance-none focus:outline-none transition-colors cursor-pointer pr-10">
+                  <% reviewItems.forEach((item) => { %>
+                    <option value="<%= item.index %>" <%= item.index === initialIndex ? 'selected' : '' %>><%= item.ref %> · <%= String(item.name).slice(0, 44) %> — <%= item.status %></option>
+                  <% }) %>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[#64748b]">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- Submitted item details: drawn by the script from the selected item's
+                 own fields, so this partial names no column. -->
+            <div class="bg-[#090e1a] border border-[#1e293b]/80 rounded-lg p-4 sm:p-5">
+              <div class="flex items-center justify-between gap-2 mb-3">
+                <h3 class="text-xs font-bold text-white tracking-wide">Submitted item details</h3>
+                <span class="px-2 py-0.5 text-[10px] font-semibold rounded border bg-amber-950/80 border-amber-800/60 text-amber-300" data-current-status-badge><%= reviewItems[initialIndex].status %></span>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4" data-item-fields></div>
+
+              <div class="space-y-2 pt-1 border-t border-[#1e293b]/40">
+                <div>
+                  <span class="block text-[10px] text-[#64748b] font-medium uppercase tracking-wider mb-0.5">Description</span>
+                  <p class="text-xs text-white leading-relaxed" data-field="description"></p>
+                </div>
+                <div class="flex flex-col gap-1.5 pt-1" data-item-links></div>
+
+                <!-- This item's documents, with the state that gates approval. -->
+                <div class="pt-2 border-t border-[#1e293b]/40" data-item-documents></div>
+              </div>
+            </div>
+
+            <!-- Classification and decision -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label for="itemClassification" class="block text-[11px] font-semibold text-[#94a3b8] mb-1.5">Item Classification <span class="text-amber-500">*</span></label>
+                <div class="relative">
+                  <select id="itemClassification" class="w-full bg-[#0a0f1d] border border-[#1e293b] focus:border-amber-500 rounded-md px-3 py-2 text-xs text-white appearance-none focus:outline-none cursor-pointer pr-8">
+                    <% CLASSIFICATIONS.forEach((option) => { %><option value="<%= option %>"><%= option %></option><% }) %>
+                  </select>
+                  <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-[#64748b]">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label for="reviewDecision" class="block text-[11px] font-semibold text-[#94a3b8] mb-1.5">Review Decision <span class="text-amber-500">*</span></label>
+                <div class="relative">
+                  <select id="reviewDecision" class="w-full bg-[#0a0f1d] border border-[#1e293b] focus:border-amber-500 rounded-md px-3 py-2 text-xs text-white appearance-none focus:outline-none cursor-pointer pr-8">
+                    <% STATUSES.forEach((option) => { %><option value="<%= option %>"><%= option %></option><% }) %>
+                  </select>
+                  <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-[#64748b]">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                  </div>
+                </div>
+                <!-- Why Approved is unavailable, or what it will record. -->
+                <p class="text-[10px] mt-1" data-decision-hint></p>
+              </div>
+            </div>
+
+            <!-- Internal review note -->
+            <div>
+              <label for="reviewNote" class="block text-[11px] font-semibold text-[#94a3b8] mb-1.5">Internal Review Note</label>
+              <textarea id="reviewNote" rows="3" class="w-full bg-[#0a0f1d] border border-[#1e293b] focus:border-amber-500 rounded-md p-3 text-xs text-white placeholder-[#475569] focus:outline-none transition-colors" placeholder="Internal only — not shown to the customer."></textarea>
+            </div>
+
+            <div class="bg-amber-950/30 border border-amber-800/40 rounded-md p-3 text-[11px] text-amber-300/90 leading-relaxed">
+              Saving this item's review does not approve the whole request. The request becomes approvable only when every item is Approved.
+            </div>
+
+            <div class="hidden rounded-md p-3 text-[11px] bg-red-950/40 border border-red-800/50 text-red-300" data-acceptance-error></div>
+            <div class="hidden rounded-md p-3 text-[11px] bg-emerald-950/40 border border-emerald-800/50 text-emerald-300" data-acceptance-saved></div>
+          </form>
+          <% } %>
+        </div>
+
+        <% if (reviewItems.length) { %>
+          <div class="flex items-center justify-between gap-3 pt-6 border-t border-[#1e293b]/60 mt-6">
+            <div class="text-[11px] text-[#64748b]" data-progress><%= acceptance.approved %> of <%= acceptance.total %> approved</div>
+            <div class="flex items-center gap-2">
+              <a href="<%= detailsHref %>" data-overlay-close class="px-5 py-2 bg-[#1e293b]/50 hover:bg-[#1e293b] text-white rounded-md font-medium text-xs border border-[#334155] transition-colors">Cancel</a>
+              <button type="button" data-save-acceptance class="px-5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold rounded-md text-xs shadow-md shadow-orange-950/20 transition-all">Save Review</button>
+            </div>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- ================= RIGHT: what this decision affects ================= -->
+      <div class="p-5 sm:p-6 bg-[#0a0f1d]/50 space-y-4">
+        <h4 class="text-xs font-bold text-white tracking-wide">How this is applied</h4>
+
+        <div class="space-y-3 text-[11px] leading-relaxed text-[#64748b]">
+          <div>
+            <h4 class="text-xs font-semibold text-white mb-1">Only this item is saved</h4>
+            <p>Save Review records the selected item's classification, decision and internal note. The other items are left exactly as they are.</p>
+          </div>
+
+          <div>
+            <h4 class="text-xs font-semibold text-white mb-1">Three decisions only</h4>
+            <p>An item is Pending, Approved or Rejected. Every item starts Pending, and that is what the request details page shows until a decision is recorded here.</p>
+          </div>
+
+          <div>
+            <h4 class="text-xs font-semibold text-white mb-1">Approved needs two things</h4>
+            <p>The classification must not be Prohibited, and every document on the item must already be Verified. Approved is unavailable until both hold, and the server refuses it as well.</p>
+          </div>
+
+          <div>
+            <h4 class="text-xs font-semibold text-white mb-1">Approval needs every item</h4>
+            <p>Approving the request is only offered once every item is Approved. One Pending or Rejected item keeps it unavailable.</p>
+          </div>
+
+          <div>
+            <h4 class="text-xs font-semibold text-white mb-1">This modal does not create the shipment</h4>
+            <p>The shipment and its Shipment ID are created by the Approve Request button on the details page, once acceptance is complete.</p>
+          </div>
+
+          <div>
+            <h4 class="text-xs font-semibold text-white mb-1">Internal Review Note stays internal</h4>
+            <p>The note is recorded against the item for staff and is not sent to the customer.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="px-5 py-2.5 bg-[#080c15] border-t border-[#1e293b]/60 text-[10px] text-[#475569]">
+      Dazzling Shipping ERP · <%= row.requestRef %> · <%= reviewItems.length %> item<%= reviewItems.length === 1 ? '' : 's' %> on this request
+    </div>
+  </div>
+</main>
+
+<script>
+  (function () {
+    'use strict';
+    var root = document.querySelector('[data-acceptance-root]');
+    if (!root) return;
+
+    var config = JSON.parse(document.querySelector('[data-acceptance-config]').textContent);
+    var form = root.querySelector('[data-acceptance-form]');
+    if (!form) return;
+
+    var selector = form.querySelector('#itemSelector');
+    var classification = form.querySelector('#itemClassification');
+    var decision = form.querySelector('#reviewDecision');
+    var note = form.querySelector('#reviewNote');
+    var saveBtn = root.querySelector('[data-save-acceptance]');
+    var errorBox = form.querySelector('[data-acceptance-error]');
+    var savedBox = form.querySelector('[data-acceptance-saved]');
+    var statusBadge = form.querySelector('[data-current-status-badge]');
+    var decisionHint = form.querySelector('[data-decision-hint]');
+    var progress = root.querySelector('[data-progress]');
+    var fieldsHost = form.querySelector('[data-item-fields]');
+    var linksHost = form.querySelector('[data-item-links]');
+    var documentsHost = form.querySelector('[data-item-documents]');
+
+    var current = config.initialIndex;
+    // Unsaved edits, kept per item so switching away and back does not lose them.
+    var edits = {};
+
+    function show(element, message) {
+      element.textContent = message;
+      element.classList.toggle('hidden', !message);
+    }
+    function escapeHtml(value) {
+      return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function cell(label, value, mono) {
+      return '<div>' +
+        '<span class="block text-[10px] text-[#64748b] font-medium uppercase tracking-wider mb-0.5">' + escapeHtml(label) + '</span>' +
+        '<span class="text-xs text-white font-medium' + (mono ? ' font-mono' : '') + '">' + escapeHtml(value) + '</span>' +
+        '</div>';
+    }
+
+    /* The item's submitted details come from the field list the request type
+       declared, so this modal shows the same fields for the same item as the
+       details page it was opened from. */
+    function renderFields(item) {
+      fieldsHost.innerHTML = '';
+
+      item.fields.forEach(function (field) {
+        if (field.label === 'Estimated Dimensions (cm)') {
+          fieldsHost.insertAdjacentHTML('beforeend',
+            cell('Estimated Dimensions (cm)', item.dimensionsKnown ? item.dimensionsText : 'Not provided') +
+            cell(
+              item.volumeLabel + (item.volumeText ? ' (' + item.volumeUnit + ')' : ''),
+              item.volumeText || 'Needs dimensions'
+            )
+          );
+          return;
+        }
+
+        if (field.kind === 'link') {
+          if (field.value) {
+            linksHost.insertAdjacentHTML('beforeend',
+              '<a href="' + escapeHtml(field.value) + '" target="_blank" rel="noopener noreferrer"' +
+              ' class="text-sky-400 hover:text-sky-300 text-xs underline decoration-sky-400/40 hover:decoration-sky-300 transition-colors w-fit">' +
+              escapeHtml(field.label) + '</a>');
+          }
+          return;
+        }
+
+        fieldsHost.insertAdjacentHTML('beforeend', cell(field.label, field.value === null ? '—' : String(field.value), field.kind === 'mono'));
+      });
+
+      (item.files || []).forEach(function (file) {
+        linksHost.insertAdjacentHTML('beforeend',
+          '<a href="' + escapeHtml(file.info.url || '#') + '" target="_blank" rel="noopener noreferrer"' +
+          ' class="text-sky-400 hover:text-sky-300 text-xs underline decoration-sky-400/40 hover:decoration-sky-300 transition-colors">' +
+          escapeHtml(file.info.fileName || file.label) + '</a>');
+      });
+
+      var description = item.fields.filter(function (field) {
+        return field.wide || field.label === 'Product Description';
+      }).map(function (field) { return field.value; }).filter(Boolean)[0];
+      form.querySelector('[data-field="description"]').textContent = description || '—';
+    }
+
+    /* The item's documents and whether they are all verified. */
+    function renderDocuments(item) {
+      var rows = (item.documents || []);
+      if (!rows.length) {
+        documentsHost.innerHTML =
+          '<div class="flex items-center justify-between gap-2 pt-1">' +
+          '<span class="text-[10px] text-[#64748b] font-medium uppercase tracking-wider">Documents on this item</span>' +
+          '<span class="text-[10px] text-[#64748b]">None — nothing outstanding</span></div>';
+        return;
+      }
+
+      var badge = {
+        Verified: 'bg-emerald-950/80 border-emerald-800/60 text-emerald-400',
+        Rejected: 'bg-red-950/80 border-red-800/60 text-red-400',
+        'Needs Correction': 'bg-purple-950/60 border-purple-800/60 text-purple-300',
+        Pending: 'bg-amber-950/80 border-amber-800/60 text-amber-300',
+      };
+
+      var html = '<div class="flex items-center justify-between gap-2 pt-1 mb-1.5">' +
+        '<span class="text-[10px] text-[#64748b] font-medium uppercase tracking-wider">Documents on this item</span>' +
+        '<span class="text-[10px] ' + (item.documentsVerified ? 'text-[#34D399]' : 'text-[#F59E0B]') + '">' +
+        (item.documentsVerified ? 'All verified' : 'Not all verified') + '</span></div>';
+
+      rows.forEach(function (doc) {
+        var label = doc.url
+          ? '<a href="' + escapeHtml(doc.url) + '" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:text-sky-300 underline">' + escapeHtml(doc.label) + '</a>'
+          : '<span class="text-red-400">' + escapeHtml(doc.label) + '</span>';
+        html += '<div class="flex items-center justify-between gap-2 py-1">' +
+          '<span class="text-[11px] text-white min-w-0 truncate">' + label + '</span>' +
+          '<span class="px-2 py-0.5 text-[10px] font-semibold rounded border shrink-0 ' + (badge[doc.status] || badge.Pending) + '">' +
+          (doc.status === 'Pending' ? 'Pending Review' : doc.status) + '</span></div>';
+      });
+
+      documentsHost.innerHTML = html;
+    }
+
+    /* Approved is only offered when it would be accepted: the classification must
+       not be Prohibited and every document on the item must be verified. The
+       option is disabled rather than hidden, so the reviewer can see it exists and
+       why it is unavailable. */
+    function approvedBlockers(item) {
+      var blockers = [];
+      if (classification.value === 'Prohibited') {
+        blockers.push('the classification is Prohibited');
+      }
+      if (!item.documentsVerified) {
+        blockers.push(item.documentsReason || 'a document on this item is not yet verified');
+      }
+      return blockers;
+    }
+
+    function refreshDecision(item) {
+      var approved = decision.querySelector('option[value="Approved"]');
+      var blockers = approvedBlockers(item);
+      approved.disabled = blockers.length > 0;
+
+      // A decision that is no longer allowed is dropped back rather than left in a
+      // state the server would refuse.
+      if (decision.value === 'Approved' && blockers.length) decision.value = item.status === 'Approved' ? 'Rejected' : 'Pending';
+
+      decisionHint.className = 'text-[10px] mt-1 ' + (blockers.length ? 'text-[#FBBF24]' : 'text-[#64748b]');
+      decisionHint.textContent = blockers.length
+        ? 'Approved unavailable: ' + blockers.join('; ') + '.'
+        : decision.value === 'Approved'
+          ? 'Approved is available for this item.'
+          : 'Approved is available for this item.';
+    }
+
+    function renderItem() {
+      var item = config.items[current];
+      var edit = edits[item.id] || {};
+
+      linksHost.innerHTML = '';
+      renderFields(item);
+      renderDocuments(item);
+
+      classification.value = edit.classification || item.classification;
+      decision.value = edit.status || item.status;
+      note.value = edit.note !== undefined ? edit.note : item.note;
+
+      statusBadge.textContent = item.status;
+      statusBadge.className = 'px-2 py-0.5 rounded text-[10px] font-semibold border ' + (
+        item.status === 'Approved' ? 'bg-emerald-950/80 border-emerald-800/60 text-emerald-400'
+        : item.status === 'Rejected' ? 'bg-red-950/80 border-red-800/60 text-red-400'
+        : 'bg-amber-950/80 border-amber-800/60 text-amber-300'
+      );
+
+      refreshDecision(item);
+    }
+
+    function refreshProgress() {
+      // Counts the stored states, with any unsaved decision for the selected item
+      // counted as it would be once saved.
+      var approved = config.items.filter(function (item, index) {
+        if (index !== current) return item.status === 'Approved';
+        var edit = edits[item.id];
+        return edit && edit.status ? edit.status === 'Approved' : item.status === 'Approved';
+      }).length;
+      progress.textContent = approved + ' of ' + config.items.length + ' approved';
+    }
+
+    function stash() {
+      var item = config.items[current];
+      edits[item.id] = { classification: classification.value, status: decision.value, note: note.value };
+    }
+
+    selector.addEventListener('change', function () {
+      stash();
+      current = Number(selector.value);
+      show(errorBox, '');
+      show(savedBox, '');
+      renderItem();
+      refreshProgress();
+    });
+
+    classification.addEventListener('change', function () {
+      var item = config.items[current];
+      refreshDecision(item);
+      edits[item.id] = { classification: classification.value, status: decision.value, note: note.value };
+    });
+    decision.addEventListener('change', function () {
+      var item = config.items[current];
+      edits[item.id] = { classification: classification.value, status: decision.value, note: note.value };
+      refreshProgress();
+    });
+    note.addEventListener('input', function () {
+      var item = config.items[current];
+      edits[item.id] = { classification: classification.value, status: decision.value, note: note.value };
+    });
+
+    saveBtn.addEventListener('click', function () {
+      var item = config.items[current];
+      stash();
+      show(errorBox, '');
+      show(savedBox, '');
+
+      var blockers = approvedBlockers(item);
+      if (decision.value === 'Approved' && blockers.length) {
+        show(errorBox, 'Approved is not available for this item: ' + blockers.join('; ') + '.');
+        return;
+      }
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+
+      fetch(config.endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        // Only the selected item is sent, so the other items on the request keep
+        // whatever decision they already have.
+        body: JSON.stringify({
+          decisions: [{
+            itemId: item.id,
+            status: decision.value,
+            classification: classification.value,
+            note: note.value,
+          }],
+        }),
+      }).then(function (response) {
+        return response.json().catch(function () { return {}; }).then(function (data) {
+          return { ok: response.ok, data: data };
+        });
+      }).then(function (result) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Review';
+
+        if (!result.ok) {
+          show(errorBox, result.data.error || 'Could not save this review.');
+          return;
+        }
+
+        // The stored state, not what was typed, so the badge reflects the record.
+        item.status = decision.value;
+        item.classification = classification.value;
+        item.note = note.value;
+        delete edits[item.id];
+
+        show(savedBox, 'Saved. ' + item.ref + ' is now ' + item.status + '.');
+        renderItem();
+        refreshProgress();
+
+        // The details page's Approve button and item badges read this state, so the
+        // page is refreshed to show what was actually persisted.
+        setTimeout(function () { window.location.reload(); }, 1200);
+      }).catch(function () {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Review';
+        show(errorBox, 'Could not reach the server. Nothing was saved.');
+      });
+    });
+
+    renderItem();
+    refreshProgress();
+    if (window.lucide) lucide.createIcons();
+  })();
+</script>
+</body>
+</html>

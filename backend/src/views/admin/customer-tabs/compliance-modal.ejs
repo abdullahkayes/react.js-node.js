@@ -1,0 +1,330 @@
+<div
+    id="complianceModalContainer"
+    class="hidden fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto transition-all duration-300">
+
+    <div id="complianceModal" class="w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden text-slate-800 font-sans text-xs my-auto border border-slate-100 transition-all duration-300">
+
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-100">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-slate-900 tracking-tight">Update Compliance Profile</h2>
+            <p class="text-[11px] text-slate-500 mt-0.5">Update the customer's KYC and compliance profile.</p>
+          </div>
+        </div>
+
+        <button type="button" onclick="closeComplianceModal()" title="Close" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Form Body -->
+      <form id="complianceProfileForm" class="m-0">
+        <div class="p-6 bg-white space-y-5 max-h-[78vh] overflow-y-auto">
+
+          <!-- Error banner, populated by the save request -->
+          <div id="complianceError" class="hidden bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5 text-[11px] text-red-700 flex items-start gap-2">
+            <i data-lucide="alert-circle" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
+            <span id="complianceErrorText"></span>
+          </div>
+
+          <!-- Section 1: Customer Information -->
+          <div class="space-y-1.5">
+            <h3 class="text-[11px] font-bold text-slate-900">Customer Information</h3>
+            <div class="bg-slate-50/80 border border-slate-200/80 rounded-xl p-3 grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <span class="block text-[10px] text-slate-400 font-medium mb-1">Customer ID</span>
+                <span class="text-xs font-semibold text-slate-700 font-mono" id="custInfoId">#<%= customer.id %></span>
+              </div>
+              <div>
+                <span class="block text-[10px] text-slate-400 font-medium mb-1">Customer Name</span>
+                <span class="text-xs font-semibold text-slate-800 truncate block" id="custInfoName"><%= customer.name %></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Compliance Profile. The dropdowns are rendered from the
+               same catalogue the save endpoint validates against, so staff are
+               never offered a value the server would refuse to store. -->
+          <div class="space-y-3.5">
+            <h3 class="text-[11px] font-bold text-slate-900">Compliance Profile</h3>
+
+            <!-- KYC Status -->
+            <div class="space-y-1">
+              <label for="kycStatusSelect" class="font-semibold text-slate-700 text-[11px]">KYC Status <span class="text-red-500">*</span></label>
+              <div class="relative">
+                <select id="kycStatusSelect" required class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none cursor-pointer pr-8">
+                  <% kyc.kycStatuses.forEach(function (status) { %>
+                    <option value="<%= status %>" <%= compliance.kycStatus === status ? 'selected' : '' %>><%= status %></option>
+                  <% }); %>
+                </select>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none"></i>
+              </div>
+              <p class="text-[10px] text-slate-400">Select the current KYC status for the customer.</p>
+            </div>
+
+            <!-- Risk Tier -->
+            <div class="space-y-1">
+              <label for="riskTierSelect" class="font-semibold text-slate-700 text-[11px]">Risk Tier <span class="text-red-500">*</span></label>
+              <div class="relative">
+                <select id="riskTierSelect" required class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none cursor-pointer pr-8">
+                  <% kyc.riskTiers.forEach(function (tier) { %>
+                    <option value="<%= tier %>" <%= compliance.riskTier === tier ? 'selected' : '' %>><%= tier %></option>
+                  <% }); %>
+                </select>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none"></i>
+              </div>
+              <p class="text-[10px] text-slate-400">Select the risk tier for the customer.</p>
+            </div>
+
+            <!-- Manual Review Required -->
+            <div class="space-y-1">
+              <label for="manualReviewSelect" class="font-semibold text-slate-700 text-[11px]">Manual Review Required <span class="text-red-500">*</span></label>
+              <div class="relative">
+                <select id="manualReviewSelect" required class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none cursor-pointer pr-8">
+                  <% kyc.manualReviewStates.forEach(function (state) { %>
+                    <option value="<%= state %>" <%= compliance.manualReviewRequired === state ? 'selected' : '' %>><%= state %></option>
+                  <% }); %>
+                </select>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none"></i>
+              </div>
+              <p class="text-[10px] text-slate-400">Select whether manual review is required.</p>
+            </div>
+
+            <!-- Internal Review Note -->
+            <div class="space-y-1">
+              <label for="reviewNoteTextarea" class="font-semibold text-slate-700 text-[11px]">Internal Review Note</label>
+              <div class="relative">
+                <textarea id="reviewNoteTextarea" rows="3" maxlength="<%= kyc.reviewNoteMaxLength %>" class="w-full bg-white border border-slate-200 rounded-lg p-3 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none leading-relaxed" placeholder="Enter internal notes regarding this compliance profile update."><%= reviewNoteDefault %></textarea>
+                <span id="noteCharCounter" class="absolute right-3 bottom-2 text-[10px] text-slate-400 font-mono"><%= reviewNoteLength %>/<%= kyc.reviewNoteMaxLength %></span>
+              </div>
+              <p class="text-[10px] text-slate-400">Enter internal notes regarding this compliance profile update.</p>
+            </div>
+          </div>
+
+          <!-- Section 3: Profile Update Summary Card -->
+          <div class="bg-blue-50/50 border border-blue-100 rounded-xl p-3.5 space-y-2.5">
+            <div class="flex items-center gap-2">
+              <div class="p-1 rounded bg-blue-100 text-blue-600 shrink-0">
+                <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-blue-950 text-xs">Profile Update Summary</h4>
+                <p class="text-[10px] text-slate-500">Review the information below before submitting.</p>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-lg border border-slate-200/80 divide-y divide-slate-100 text-[11px]">
+              <div class="px-3 py-1.5 flex items-center justify-between">
+                <span class="text-slate-500 font-medium">KYC Status</span>
+                <span class="text-slate-700 font-semibold" id="sumKycStatus"><%= compliance.kycStatus %></span>
+              </div>
+              <div class="px-3 py-1.5 flex items-center justify-between">
+                <span class="text-slate-500 font-medium">Risk Tier</span>
+                <span class="text-slate-700 font-semibold" id="sumRiskTier"><%= compliance.riskTier %></span>
+              </div>
+              <div class="px-3 py-1.5 flex items-center justify-between">
+                <span class="text-slate-500 font-medium">Manual Review Required</span>
+                <span class="text-slate-700 font-semibold" id="sumManualReview"><%= compliance.manualReviewRequired %></span>
+              </div>
+              <div class="px-3 py-1.5 flex items-center justify-between">
+                <span class="text-slate-500 font-medium shrink-0 mr-4">Internal Review Note</span>
+                <span class="text-slate-600 truncate max-w-[280px]" id="sumReviewNote"><%= reviewNoteDefault.length > 70 ? reviewNoteDefault.slice(0, 70) + '...' : (reviewNoteDefault || '-') %></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 4: Review Information -->
+          <div class="bg-slate-50/60 border border-slate-200/80 rounded-xl p-3.5 space-y-2">
+            <div class="flex items-center gap-2">
+              <div class="p-1 rounded bg-slate-200/70 text-slate-600 shrink-0">
+                <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-slate-900 text-xs">Review Information</h4>
+                <p class="text-[10px] text-slate-500">These details will be updated automatically after you submit this profile update.</p>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-lg border border-slate-200/80 divide-y divide-slate-100 text-[11px] mt-1.5">
+              <div class="px-3 py-1.5 flex items-center justify-between">
+                <span class="text-slate-500 font-medium">Last Reviewed By</span>
+                <span class="text-slate-600 font-mono bg-slate-100/70 px-2 py-0.5 rounded text-[10px]">
+                  <% if (user && user.id) { %>Staff #<%= user.id %><% } else { %><%= user && user.name ? user.name : 'Current User' %><% } %>
+                </span>
+              </div>
+              <div class="px-3 py-1.5 flex items-center justify-between">
+                <span class="text-slate-500 font-medium">Last Reviewed At</span>
+                <span class="text-slate-500 bg-slate-100/70 px-2 py-0.5 rounded text-[10px]">Will be updated after submission</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="px-6 py-3.5 bg-white border-t border-slate-100 flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onclick="closeComplianceModal()"
+            class="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition-colors text-xs">
+            Cancel
+          </button>
+          <button
+            type="submit"
+            data-compliance-save
+            class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors text-xs shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+            <span data-compliance-save-label>Update Compliance Profile</span>
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT LOGIC                           -->
+  <!-- ========================================== -->
+  <script>
+    function openComplianceModal() {
+      const container = document.getElementById('complianceModalContainer');
+      if (!container) return;
+      container.classList.remove('hidden');
+      container.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+
+      // A stale error from a previous attempt would otherwise greet the reviewer.
+      setComplianceError('');
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
+    }
+
+    function closeComplianceModal() {
+      const container = document.getElementById('complianceModalContainer');
+      if (!container) return;
+      container.classList.add('hidden');
+      container.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+
+    function setComplianceError(message) {
+      const banner = document.getElementById('complianceError');
+      const text = document.getElementById('complianceErrorText');
+      if (!banner || !text) return;
+      text.textContent = message || '';
+      banner.classList.toggle('hidden', !message);
+      banner.classList.toggle('flex', Boolean(message));
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
+      initComplianceModal();
+    });
+
+    function initComplianceModal() {
+      const form = document.getElementById('complianceProfileForm');
+      if (!form || form.dataset.complianceReady === 'true') return;
+      // Re-initialise on every visit: the tab is injected as innerHTML, so this
+      // runs again for each fresh copy of the partial.
+      form.dataset.complianceReady = 'true';
+
+      // Input elements
+      const kycSelect = document.getElementById('kycStatusSelect');
+      const riskSelect = document.getElementById('riskTierSelect');
+      const manualSelect = document.getElementById('manualReviewSelect');
+      const noteTextarea = document.getElementById('reviewNoteTextarea');
+      const counter = document.getElementById('noteCharCounter');
+      const maxLength = noteTextarea ? Number(noteTextarea.getAttribute('maxlength')) || 1000 : 1000;
+
+      // Summary display targets
+      const sumKyc = document.getElementById('sumKycStatus');
+      const sumRisk = document.getElementById('sumRiskTier');
+      const sumManual = document.getElementById('sumManualReview');
+      const sumNote = document.getElementById('sumReviewNote');
+
+      // Live reaction handlers
+      kycSelect?.addEventListener('change', () => {
+        sumKyc.textContent = kycSelect.value;
+      });
+
+      riskSelect?.addEventListener('change', () => {
+        sumRisk.textContent = riskSelect.value;
+      });
+
+      manualSelect?.addEventListener('change', () => {
+        sumManual.textContent = manualSelect.value;
+      });
+
+      noteTextarea?.addEventListener('input', () => {
+        const val = noteTextarea.value;
+        counter.textContent = `${val.length}/${maxLength}`;
+        sumNote.textContent = val.trim() ? (val.length > 90 ? val.substring(0, 90) + '...' : val) : '-';
+      });
+
+      // Submit handler. Saves through the API so the database is the source of
+      // truth, then reloads the tab so the summary cards and the Compliance
+      // Review History reflect what was just written.
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        setComplianceError('');
+
+        const saveButton = form.querySelector('[data-compliance-save]');
+        const saveLabel = form.querySelector('[data-compliance-save-label]');
+        if (saveButton) saveButton.disabled = true;
+        const originalLabel = saveLabel ? saveLabel.textContent : '';
+        if (saveLabel) saveLabel.textContent = 'Saving...';
+
+        try {
+          const response = await fetch('/admin/customers/<%= customer.id %>/compliance', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              kycStatus: kycSelect.value,
+              riskTier: riskSelect.value,
+              manualReviewRequired: manualSelect.value,
+              internalReviewNote: noteTextarea.value,
+            }),
+          });
+
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || 'Could not save the compliance profile');
+          }
+
+          closeComplianceModal();
+          // The saved profile is re-read from the database, so the tab is
+          // reloaded rather than patched client-side.
+          if (typeof switchTab === 'function') {
+            switchTab('compliance');
+          } else {
+            window.location.reload();
+          }
+        } catch (error) {
+          setComplianceError(error.message);
+          if (saveButton) saveButton.disabled = false;
+          if (saveLabel) saveLabel.textContent = originalLabel;
+        }
+      });
+    }
+
+    // The tab is injected via innerHTML, so the opener is delegated on the
+    // document and the modal is initialised on demand rather than on DOMContentLoaded.
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('[data-open-compliance]')) {
+        initComplianceModal();
+        openComplianceModal();
+      }
+      // Clicking the backdrop closes the modal, but not a click inside it.
+      if (e.target.id === 'complianceModalContainer') {
+        closeComplianceModal();
+      }
+    });
+  </script>

@@ -1,0 +1,308 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Manage Shipment - Documents Tab
+   *
+   * Everything here reads the documents table. The three cards are counters,
+   * not links, so they stay unclickable. Verification is the only action that
+   * changes a document's state, and it is withheld from the staff member who
+   * uploaded the file: the uploader cannot be the reviewer of their own upload.
+   * ------------------------------------------------------------------------- */
+
+  const DOC_TYPE_LABELS = {
+    invoice: 'Invoice',
+    receipt: 'Receipt',
+    packing_list: 'Packing List',
+    bill_of_lading: 'Bill of Lading',
+    customs_declaration: 'Customs Declaration',
+    insurance_certificate: 'Insurance Certificate',
+    commercial_invoice: 'Commercial Invoice',
+    certificate_of_origin: 'Certificate of Origin',
+    shipping_instructions: 'Shipping Instructions',
+    delivery_proof: 'Proof of Delivery',
+    return_authorization: 'Return Authorization',
+    rto_document: 'RTO Document',
+    insurance_claim: 'Insurance Claim',
+    trade_license: 'Trade License',
+    national_id: 'National ID',
+    other: 'Other',
+  };
+  const docTypeLabel = (key) => DOC_TYPE_LABELS[key] || key || 'Other';
+
+  /* The four statuses a document can carry. Anything else is not a status this
+     tab knows how to act on and is shown as it came. */
+  const orDash = (value) => (
+    value === null || value === undefined || String(value).trim() === '' ? '—' : value
+  );
+
+  const fmtDate = (value) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const fmtDateTime = (value) => {
+    if (!value) return '—';
+    const d = new Date(value);
+    return Number.isNaN(d.getTime())
+      ? '—'
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' +
+        d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  };
+  const fileSize = (bytes) => {
+    const n = Number(bytes);
+    if (!Number.isFinite(n) || n <= 0) return '—';
+    return n >= 1048576 ? (n / 1048576).toFixed(2) + ' MB' : Math.round(n / 1024) + ' KB';
+  };
+
+  const staffId = (typeof user !== 'undefined' && user && user.id !== undefined && user.id !== null)
+    ? user.id
+    : null;
+
+  /* A document row, read as the customer's upload stands in the database.
+     Removed documents are filtered out by the controller before they reach
+     here, so this list is the live set. */
+  const rawDocs = (typeof shipment !== 'undefined' && shipment && Array.isArray(shipment.documents))
+    ? shipment.documents
+    : [];
+
+  /* An item a document is attached to. The document row carries
+     shipmentItemId; a document covering several items is one row per item, so
+     the refs are grouped by document below. */
+  const toPlain = (d) => (d && typeof d.get === 'function') ? d.get({ plain: true }) : d;
+  const itemIdByRow = new Map();
+  (typeof shipment !== 'undefined' && shipment && Array.isArray(shipment.items) ? shipment.items : []).forEach((it) => {
+    itemIdByRow.set(Number(it.id), it);
+  });
+
+  const shipmentRef = (typeof shipment !== 'undefined' && shipment && shipment.shipmentId) ? shipment.shipmentId : '—';
+
+  /* Linked Record: the item refs a document covers, or the shipment when it
+     covers none. Several documents can be linked to one item, and one document
+     can be linked to several. */
+  const rowsByDocument = new Map();
+  rawDocs.map(toPlain).forEach((doc) => {
+    const key = Number(doc.id);
+    if (!rowsByDocument.has(key)) rowsByDocument.set(key, []);
+    rowsByDocument.get(key).push(doc);
+  });
+
+  const documents = Array.from(rowsByDocument.entries()).map(([docId, group]) => {
+    const first = group[0];
+    /* Every distinct shipment item this document is attached to. */
+    const itemRefs = [];
+    group.forEach((row) => {
+      const itemId = row.shipmentItemId === null || row.shipmentItemId === undefined ? null : Number(row.shipmentItemId);
+      if (itemId === null) return;
+      const ref = 'ITM-' + String(itemId).padStart(7, '0');
+      if (!itemRefs.includes(ref)) itemRefs.push(ref);
+    });
+
+    const status = first.verificationStatus || 'Pending';
+    const isTerminal = status === 'Verified' || status === 'Rejected';
+    /* The file is opened straight from the uploads folder; a row whose file is
+       gone is still listed, because the reviewer needs to see it is missing
+       rather than have it silently disappear. */
+    const fileUrl = first.filePath ? String(first.filePath) : '';
+
+    return {
+      id: `DOC-${String(docId).padStart(7, '0')}`,
+      rawId: docId,
+      type: docTypeLabel(first.documentType),
+      fileName: first.fileName || '—',
+      fileUrl,
+      fileSize: fileSize(first.fileSize),
+      mimeType: first.mimeType || '',
+      /* The Shipment ID when the document belongs to the shipment as a whole,
+         otherwise the item IDs it covers. */
+      linkedRecord: itemRefs.length ? itemRefs.join(', ') : shipmentRef,
+      linkedToItems: itemRefs.length > 0,
+      uploadedBy: first.uploadedBy,
+      uploadedAt: first.createdAt,
+      status,
+      isTerminal,
+      /* Verified or Rejected: View. Pending or Needs Correction: Verify,
+         unless the signed-in staff member uploaded it. */
+      canVerify: !isTerminal && !(staffId !== null && first.uploadedBy !== null && Number(first.uploadedBy) === Number(staffId)),
+      /* Removable while the decision is still open, never once Verified. */
+      canRemove: status !== 'Verified',
+      expiryDate: first.expiryDate,
+      description: first.description,
+      reviewNote: first.reviewNote,
+      verifiedBy: first.reviewedBy,
+      verifiedAt: first.reviewedAt,
+    };
+  });
+
+  /* The three counters. */
+  const totalDocs = documents.length;
+  const verifiedCount = documents.filter((d) => d.status === 'Verified').length;
+  const needsCorrectionCount = documents.filter((d) => d.status === 'Needs Correction').length;
+
+  const statusBadge = (status) => {
+    if (status === 'Verified') {
+      return 'inline-block px-2.5 py-0.5 rounded-full bg-[#064e3b] text-[#34d399] font-semibold text-[10px] border border-[#059669]/40';
+    }
+    if (status === 'Needs Correction') {
+      return 'inline-block px-2.5 py-0.5 rounded-full bg-[#78350f] text-[#fbbf24] font-semibold text-[10px] border border-[#d97706]/40';
+    }
+    if (status === 'Pending') {
+      return 'inline-block px-2.5 py-0.5 rounded-full bg-[#78350f]/80 text-[#fbbf24] font-semibold text-[10px] border border-[#d97706]/40';
+    }
+    if (status === 'Rejected') {
+      return 'inline-block px-2.5 py-0.5 rounded-full bg-[#7f1d1d] text-[#f87171] font-semibold text-[10px] border border-[#b91c1c]/40';
+    }
+    return 'inline-block px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold text-[10px] border border-slate-600/40';
+  };
+%>
+
+<div id="shipment-documents-container" class="space-y-4 text-slate-200 font-sans text-[12px] antialiased">
+
+  <!-- Header & Top Action Bar -->
+  <div class="flex items-center justify-between pb-2">
+    <div>
+      <h1 class="text-xl font-bold text-white tracking-tight">Documents</h1>
+      <p class="text-[11px] text-slate-400 mt-0.5">View, upload and verify documents connected to this shipment or its items.</p>
+    </div>
+    <button type="button" data-open-upload-doc class="px-4 py-2 bg-[#f97316] hover:bg-[#ea580c] text-white text-[12px] font-semibold rounded shadow transition-colors shrink-0">
+      Upload Document
+    </button>
+  </div>
+
+  <!-- Top Metric Cards. Unclickable: read-only counters, no link or handler. -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4" aria-readonly="true">
+    <!-- Total Documents -->
+    <div class="bg-[#081225] border border-[#1b2b48] rounded p-3.5 flex flex-col justify-between select-none">
+      <span class="text-[11px] text-slate-300 font-medium">Total Documents</span>
+      <span class="text-2xl font-bold text-white mt-2"><%= totalDocs %></span>
+    </div>
+
+    <!-- Verified -->
+    <div class="bg-[#081225] border border-[#1b2b48] rounded p-3.5 flex flex-col justify-between select-none">
+      <span class="text-[11px] text-slate-300 font-medium">Verified</span>
+      <span class="text-2xl font-bold text-[#22c55e] mt-2"><%= verifiedCount %></span>
+    </div>
+
+    <!-- Needs Correction -->
+    <div class="bg-[#081225] border border-[#1b2b48] rounded p-3.5 flex flex-col justify-between select-none">
+      <span class="text-[11px] text-slate-300 font-medium">Needs Correction</span>
+      <span class="text-2xl font-bold text-[#f59e0b] mt-2"><%= needsCorrectionCount %></span>
+    </div>
+  </div>
+
+  <!-- Main Table Panel -->
+  <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+
+    <div class="flex items-center justify-between pb-2 border-b border-[#1b2b48]/80">
+      <h2 class="text-sm font-bold text-white">Shipment Documents</h2>
+      <span class="text-[10px] text-slate-400">Files open in a secure document viewer.</span>
+    </div>
+
+    <% if (documents.length === 0) { %>
+      <div class="py-10 text-center text-slate-400 text-[11px]">
+        No documents have been uploaded for this shipment yet.
+      </div>
+    <% } else { %>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-[11px]">
+          <thead>
+            <tr class="text-slate-300 border-b border-[#1b2b48] text-[10px] font-semibold">
+              <th class="py-2.5 pr-3">Document ID</th>
+              <th class="py-2.5 px-3">Document Type</th>
+              <th class="py-2.5 px-3">File</th>
+              <th class="py-2.5 px-3">Linked Record</th>
+              <th class="py-2.5 px-3">Uploaded By / At</th>
+              <th class="py-2.5 px-3">Verification</th>
+              <th class="py-2.5 px-3">Verified By / At</th>
+              <th class="py-2.5 pl-3 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[#1b2b48]/60 text-slate-200">
+            <% documents.forEach((doc) => { %>
+              <tr class="hover:bg-[#0f1d35] transition-colors" data-document-row-id="<%= doc.rawId %>">
+                <td class="py-3 pr-3 font-mono font-medium text-slate-300 align-middle"><%= doc.id %></td>
+
+                <td class="py-3 px-3 text-slate-200 font-medium align-middle"><%= doc.type %></td>
+
+                <td class="py-3 px-3 align-middle">
+                  <% if (doc.fileUrl) { %>
+                    <a href="<%= doc.fileUrl %>" target="_blank" rel="noopener" class="text-[#60a5fa] hover:underline font-medium"><%= doc.fileName %></a>
+                    <div class="text-[10px] text-slate-500 mt-0.5"><%= doc.fileSize %></div>
+                  <% } else { %>
+                    <span class="text-slate-500" title="The stored file is missing from the uploads folder"><%= doc.fileName %></span>
+                  <% } %>
+                </td>
+
+                <td class="py-3 px-3 text-slate-300 align-middle font-mono text-[10.5px]"><%= doc.linkedRecord %></td>
+
+                <td class="py-3 px-3 align-middle">
+                  <div class="text-[#60a5fa]"><%= doc.uploadedBy === null || doc.uploadedBy === undefined ? '—' : 'Staff #' + doc.uploadedBy %></div>
+                  <div class="text-[10px] text-slate-400 mt-0.5"><%= fmtDate(doc.uploadedAt) %></div>
+                </td>
+
+                <td class="py-3 px-3 align-middle">
+                  <span class="<%= statusBadge(doc.status) %>"><%= doc.status %></span>
+                  <% if (doc.reviewNote) { %>
+                    <div class="text-[9.5px] text-slate-500 mt-0.5 max-w-[180px] truncate" title="<%= doc.reviewNote %>"><%= doc.reviewNote %></div>
+                  <% } %>
+                </td>
+
+                <td class="py-3 px-3 align-middle">
+                  <% if (doc.verifiedBy !== null && doc.verifiedBy !== undefined) { %>
+                    <div class="text-[#60a5fa]">Staff #<%= doc.verifiedBy %></div>
+                    <div class="text-[10px] text-slate-400 mt-0.5"><%= fmtDateTime(doc.verifiedAt) %></div>
+                  <% } else { %>
+                    <span class="text-slate-500">—</span>
+                  <% } %>
+                </td>
+
+                <td class="py-3 pl-3 text-right align-middle">
+                  <div class="flex items-center justify-end gap-3 whitespace-nowrap">
+                    <% if (doc.isTerminal) { %>
+                      <!-- Verified or Rejected: open the file. -->
+                      <% if (doc.fileUrl) { %>
+                        <a href="<%= doc.fileUrl %>" target="_blank" rel="noopener" class="text-[#60a5fa] hover:underline font-medium">View</a>
+                      <% } else { %>
+                        <span class="text-slate-500" title="The stored file is missing from the uploads folder">File missing</span>
+                      <% } %>
+                    <% } else if (doc.canVerify) { %>
+                      <!-- Pending or Needs Correction: open the verification modal.
+                           Withheld from the staff member who uploaded it. -->
+                      <a href="#" role="button" data-open-doc
+                         data-doc-id="<%= doc.id %>"
+                         data-raw-doc-id="<%= doc.rawId %>"
+                         data-file-path="<%= doc.fileUrl %>"
+                         data-doc-type="<%= doc.type %>"
+                         data-status="<%= doc.status %>"
+                         class="text-[#60a5fa] hover:underline font-medium">Verify</a>
+                    <% } else { %>
+                      <!-- The uploader cannot verify their own upload. -->
+                      <span class="text-slate-500" title="You uploaded this document, so you cannot verify it.">Awaiting another reviewer</span>
+                    <% } %>
+
+                    <!-- Remove is offered while the decision is still open. -->
+                    <% if (doc.canRemove) { %>
+                      <button type="button" class="text-[#f87171] hover:text-red-300 hover:underline font-medium"
+                              data-open-remove-document
+                              data-document-id="<%= doc.rawId %>"
+                              data-document-label="<%= doc.id %>"
+                              data-document-file="<%= doc.fileName %>">Remove</button>
+                    <% } %>
+                  </div>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+
+  </div>
+
+  <!-- Bottom Helper Note -->
+  <div class="p-3 bg-[#081225] border-l-2 border-[#f97316] text-[10.5px] text-slate-400">
+    Verification actions update the document record and create an Audit Trail entry. A document correction request should also create the appropriate customer notification.
+  </div>
+
+</div>
+
+<%- include('./upload-document-modal') %>
+<%- include('../partials/confirm-remove-document') %>

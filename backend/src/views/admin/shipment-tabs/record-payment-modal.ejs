@@ -1,0 +1,686 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Record Payment Modal - Shipment Payments Tab
+   *
+   * Everything identifying the customer or the recorder is read from
+   * the database or the session rather than typed: the shipment and
+   * customer come from the shipment being managed, and Recorded By is
+   * the signed-in staff account. The one thing staff choose is which
+   * invoice the payment settles, because that is the decision the
+   * modal exists to make.
+   *
+   * Only invoices whose Payment Status is still open to payment -
+   * Pending, Reversed or Failed - are offered. A Completed, Refunded,
+   * Partially Refunded or Under Review invoice cannot take another
+   * payment, so it is never listed.
+   * ------------------------------------------------------------------------- */
+
+  const view = (typeof shipment !== 'undefined' && shipment) ? shipment : null;
+  const staffUser = (typeof user !== 'undefined' && user) ? user : null;
+
+  const shipmentId = (view && view.shipmentId) ? view.shipmentId : '—';
+  const customer = (view && view.customer) ? view.customer : null;
+  const customerId = customer && customer.id ? `CUS-${String(customer.id).padStart(6, '0')}` : '—';
+
+  /* The name column holds whichever name the account registered: a
+     personal name for an Individual account, a business name for an
+     E-commerce, F-Commerce or Commercial one. There is no second name
+     column to read, so the one value is labelled according to the
+     account class rather than two fields being invented. */
+  const BUSINESS_ACCOUNT_TYPES = ['ecommerce_merchant', 'fcommerce_merchant', 'commercial_import'];
+  const accountType = customer && customer.account_type ? String(customer.account_type).trim() : '';
+  const isBusinessAccount = BUSINESS_ACCOUNT_TYPES.includes(accountType);
+  const customerNameLabel = isBusinessAccount ? 'Business Name' : 'Customer Name';
+  const customerName = customer && customer.name ? customer.name : '—';
+  const accountTypeLabel = accountType
+    ? accountType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    : 'Individual';
+
+  /* Recorded By is the signed-in staff account's ID, never entered. */
+  const recordedBy = staffUser && staffUser.id
+    ? `STF-${String(staffUser.id).padStart(6, '0')}`
+    : '—';
+
+  /* Only invoices still open to payment are offered. The parent tab
+     filters on the invoice's current Payment Status, so an invoice a
+     payment already completed, one refunded in whole or part, and one
+     under review are all left out. */
+  const payable = (typeof payableInvoices !== 'undefined' && Array.isArray(payableInvoices))
+    ? payableInvoices
+    : [];
+
+  const money = (value, currency) => `${currency || 'USD'} ${Number(value || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+  const invoicePaymentStatusClass = (value) => {
+    const key = String(value || '').toLowerCase();
+    if (key === 'paid' || key === 'completed') return 'bg-[#064e3b]/80 text-[#34d399] border-[#059669]/40';
+    if (key === 'partially paid' || key === 'partially refunded' || key === 'under review') return 'bg-[#3b2f0b]/80 text-[#fbbf24] border-[#a16207]/40';
+    if (key === 'failed' || key === 'refunded' || key === 'reversed') return 'bg-[#450a0a]/80 text-[#fca5a5] border-[#b91c1c]/40';
+    return 'bg-[#1e3a8a]/80 text-[#93c5fd] border-[#1d4ed8]/40';
+  };
+
+  /* The channels this workflow records. Both lists are the single
+     definition the server validates against, so staff are never
+     offered a method or purpose the recording endpoint would refuse. */
+  const PAYMENT_METHODS = [
+    'bKash',
+    'Nagad',
+    'Bank Transfer',
+    'Card',
+    'Wallet',
+    'Other',
+  ];
+
+  const PAYMENT_PURPOSES = [
+    'Shipment Invoice',
+    'Wallet Top-up',
+    'Refund Payout',
+    'Other',
+  ];
+
+  /* What the proof upload accepts, stated on both sides of the same
+     rule: the upload middleware enforces exactly this. */
+  const ACCEPTED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
+  const MAX_FILE_MB = 10;
+  const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
+%>
+
+<!-- Popup Modal Backdrop (Hidden by default so it never opens automatically) -->
+<div id="recordPaymentModal" class="hidden fixed inset-0 z-50 bg-[#020712]/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+
+  <!-- Modal Card Dialog -->
+  <div class="bg-[#071122] border border-[#182945] rounded-xl shadow-2xl w-full max-w-5xl my-auto overflow-hidden text-slate-200 font-sans text-[11.5px] antialiased">
+
+    <!-- Modal Header -->
+    <div class="px-6 pt-5 pb-4 border-b border-[#132238] flex items-center justify-between">
+      <div>
+        <h2 class="text-xl font-bold text-white tracking-tight">Record Payment</h2>
+        <p class="text-[11px] text-slate-400 mt-0.5">Record a customer payment against an invoice.</p>
+      </div>
+      <button type="button" data-close-payment-modal class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-[#12213a] transition-colors" aria-label="Close">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Modal Form Body -->
+    <form id="recordPaymentForm" class="p-6 space-y-5 max-h-[80vh] overflow-y-auto" novalidate>
+
+      <!-- Section 1: Customer & Shipment Information. Read from the
+           database, never entered. -->
+      <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-4 space-y-3">
+        <h3 class="text-xs font-bold text-white uppercase tracking-wider">Customer &amp; Shipment Information</h3>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[10.5px] text-slate-400 mb-1">Customer ID</label>
+            <input type="text" readonly value="<%= customerId %>" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-300 rounded px-3 py-1.5 text-[11px] font-mono" />
+          </div>
+          <div>
+            <label class="block text-[10.5px] text-slate-400 mb-1"><%= customerNameLabel %></label>
+            <input type="text" readonly value="<%= customerName %>" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-300 rounded px-3 py-1.5 text-[11px]" />
+            <span class="text-[9.5px] text-slate-500 mt-1 block"><%= accountTypeLabel %> account</span>
+          </div>
+          <div>
+            <label class="block text-[10.5px] text-slate-400 mb-1">Shipment ID</label>
+            <input type="text" readonly value="<%= shipmentId %>" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-300 rounded px-3 py-1.5 text-[11px] font-mono" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Invoice Selection -->
+      <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-4 space-y-3">
+        <h3 class="text-xs font-bold text-white uppercase tracking-wider">Invoice Selection</h3>
+
+        <div>
+          <label for="recordPaymentInvoice" class="block text-[10.5px] text-slate-400 mb-1">Invoice <span class="text-[#f97316]">*</span></label>
+          <select id="recordPaymentInvoice" name="invoiceId" required class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-3 py-1.5 text-[11px] focus:outline-none focus:border-[#f97316]">
+            <option value="" disabled selected>Select an invoice</option>
+            <% payable.forEach((inv) => { %>
+              <option value="<%= inv.id %>"><%= inv.invoiceId %> &middot; <%= inv.invoiceType || 'Invoice' %> &middot; Issued <%= inv.issuedAt ? fmtDate(inv.issuedAt) : '—' %> &middot; Due <%= inv.dueDate ? fmtDate(inv.dueDate) : '—' %> &middot; <%= money(inv.total, inv.currency) %> &middot; <%= inv.paymentStatus %></option>
+            <% }); %>
+          </select>
+          <span class="text-[9.5px] text-slate-500 mt-1 block">Only invoices linked to this shipment with a Payment Status of Pending, Reversed or Failed are listed.</span>
+        </div>
+
+        <% if (payable.length === 0) { %>
+          <p class="text-[11px] text-slate-400 bg-[#0b162a] border border-[#1b2b48] rounded px-3 py-2">
+            No invoice on this shipment is open to payment. Only invoices with a Payment Status of Pending, Reversed or Failed can be paid.
+          </p>
+        <% } else { %>
+          <div class="overflow-x-auto pt-1">
+            <table class="w-full text-left border-collapse text-[11px]">
+              <thead>
+                <tr class="border-b border-[#162846] text-slate-400 text-[10px]">
+                  <th class="py-2 pr-2 font-medium">Invoice ID</th>
+                  <th class="py-2 px-2 font-medium">Invoice Type</th>
+                  <th class="py-2 px-2 font-medium">Invoice Date</th>
+                  <th class="py-2 px-2 font-medium">Due Date</th>
+                  <th class="py-2 px-2 font-medium">Invoice Total</th>
+                  <th class="py-2 pl-2 text-right font-medium">Payment Status</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#13223b]/60">
+                <% payable.forEach((inv) => { %>
+                  <tr class="hover:bg-[#0f1d35]/50 transition-colors cursor-pointer" data-invoice-row="<%= inv.id %>">
+                    <td class="py-2.5 pr-2 font-mono font-medium text-[#60a5fa]"><%= inv.invoiceId %></td>
+                    <td class="py-2.5 px-2 text-slate-200"><%= inv.invoiceType || 'Invoice' %></td>
+                    <td class="py-2.5 px-2 text-slate-300"><%= inv.issuedAt ? fmtDate(inv.issuedAt) : '—' %></td>
+                    <td class="py-2.5 px-2 text-slate-300"><%= inv.dueDate ? fmtDate(inv.dueDate) : '—' %></td>
+                    <td class="py-2.5 px-2 font-semibold text-white"><%= money(inv.total, inv.currency) %></td>
+                    <td class="py-2.5 pl-2 text-right">
+                      <span class="px-2.5 py-0.5 rounded border text-[10px] font-medium <%= invoicePaymentStatusClass(inv.paymentStatus) %>"><%= inv.paymentStatus %></span>
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="flex items-center gap-1.5 text-[10.5px] text-slate-400 pt-1">
+            <svg class="w-3.5 h-3.5 text-[#60a5fa] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span>Invoices that are Completed, Refunded, Partially Refunded or Under Review are not listed, because they cannot take another payment. Select a row to fill the payment details.</span>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- Section 3: Payment Details -->
+      <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-4 space-y-3">
+        <h3 class="text-xs font-bold text-white uppercase tracking-wider">Payment Details</h3>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label for="recordPaymentAmount" class="block text-[10.5px] text-slate-400 mb-1">Payment Amount <span class="text-[#f97316]">*</span></label>
+            <input type="text" id="recordPaymentAmount" name="amount" required readonly placeholder="0.00"
+                   class="w-full bg-[#081225] border border-[#1b2b48] text-slate-400 rounded px-3 py-1.5 text-[11px] font-semibold cursor-not-allowed" />
+            <span class="text-[9.5px] text-slate-500 mt-1 block">Filled automatically from the Invoice Total. A payment settles the invoice in full, so the amount cannot differ.</span>
+          </div>
+          <div>
+            <label for="recordPaymentDate" class="block text-[10.5px] text-slate-400 mb-1">Payment Date &amp; Time <span class="text-[#f97316]">*</span></label>
+            <input type="datetime-local" id="recordPaymentDate" name="paidAt" required
+                   class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-3 py-1.5 text-[11px] focus:outline-none focus:border-[#f97316]" />
+          </div>
+          <div>
+            <label for="recordPaymentMethod" class="block text-[10.5px] text-slate-400 mb-1">Payment Method <span class="text-[#f97316]">*</span></label>
+            <select id="recordPaymentMethod" name="method" required class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-3 py-1.5 text-[11px] focus:outline-none focus:border-[#f97316]">
+              <option value="" disabled selected>Select payment method</option>
+              <% PAYMENT_METHODS.forEach((m) => { %>
+                <option value="<%= m %>"><%= m %></option>
+              <% }); %>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <div>
+            <label for="recordPaymentPurpose" class="block text-[10.5px] text-slate-400 mb-1">Payment Purpose <span class="text-[#f97316]">*</span></label>
+            <select id="recordPaymentPurpose" name="purpose" required class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-3 py-1.5 text-[11px] focus:outline-none focus:border-[#f97316]">
+              <option value="" disabled selected>Select payment purpose</option>
+              <% PAYMENT_PURPOSES.forEach((p) => { %>
+                <option value="<%= p %>"><%= p %></option>
+              <% }); %>
+            </select>
+          </div>
+          <div>
+            <label for="recordPaymentRef" class="block text-[10.5px] text-slate-400 mb-1">Payment Reference / Transaction ID</label>
+            <input type="text" id="recordPaymentRef" name="transactionRef" placeholder="Enter reference or transaction ID"
+                   class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-3 py-1.5 text-[11px] placeholder:text-slate-500 focus:outline-none focus:border-[#f97316]" />
+            <span class="text-[9.5px] text-slate-500 mt-1 block">Optional. The transaction or reference number where the payment provider gives one.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 4: Supporting Document. Optional. -->
+      <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-4 space-y-3">
+        <div class="flex items-center gap-2">
+          <h3 class="text-xs font-bold text-white uppercase tracking-wider">Payment Proof / Supporting Document</h3>
+          <span class="text-[10px] text-slate-500 font-medium">Optional</span>
+        </div>
+
+        <p class="text-[11px] text-slate-400">
+          Upload a receipt, transfer confirmation or other proof of payment. The document is stored with the payment record.
+        </p>
+
+        <!-- Drop zone. The file input is hidden behind it: dragging a file
+             onto the zone and pressing Choose File are the same action. -->
+        <div id="recordPaymentDropZone"
+             class="border-2 border-dashed border-[#23385d] rounded-lg bg-[#050b18] px-4 py-5 text-center cursor-pointer hover:border-[#f97316]/60 transition-colors">
+          <svg class="w-6 h-6 mx-auto text-slate-500 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+          </svg>
+          <p class="text-[11px] text-slate-300 font-medium">Drag &amp; drop the payment proof here</p>
+          <p class="text-[10px] text-slate-500 mt-0.5">or</p>
+          <span class="inline-block mt-1 px-3 py-1 bg-[#0e1e38] hover:bg-[#152746] border border-[#23385d] text-slate-200 text-[11px] font-medium rounded transition-colors">
+            Choose File
+          </span>
+          <p class="text-[10px] text-slate-500 mt-1.5">Accepted: PDF, JPG, JPEG, PNG &middot; Maximum <%= MAX_FILE_MB %> MB</p>
+          <input type="file" id="recordPaymentProof" name="proofDocument"
+                 accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                 class="hidden" />
+        </div>
+
+        <!-- The chosen file. One only: choosing another replaces it,
+             because one proof is stored with the payment. -->
+        <div id="recordPaymentFileCard" class="hidden bg-[#08111f] border border-[#16243d] rounded-lg p-2.5 flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded bg-[#12213a] border border-[#20365c] flex items-center justify-center text-[#60a5fa] shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+            </div>
+            <div class="min-w-0">
+              <div id="recordPaymentFileName" class="text-[11px] text-white font-medium truncate">—</div>
+              <div id="recordPaymentFileMeta" class="text-[10px] text-slate-400">—</div>
+            </div>
+          </div>
+          <button type="button" id="recordPaymentFileRemove" class="text-slate-400 hover:text-[#f87171] p-1 rounded hover:bg-[#12213a] transition-colors shrink-0" title="Remove file">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <p id="recordPaymentFileError" class="hidden text-[10.5px] text-[#f87171]"></p>
+      </div>
+
+      <!-- Section 5: Payment Note -->
+      <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-4 space-y-2">
+        <h3 class="text-xs font-bold text-white uppercase tracking-wider">Payment Note</h3>
+        <div>
+          <label for="recordPaymentNote" class="block text-[10.5px] text-slate-400 mb-1">Payment Note (Optional)</label>
+          <textarea id="recordPaymentNote" name="note" rows="2" maxlength="500" placeholder="Enter an internal note related to this payment..."
+                    class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-3 py-1.5 text-[11px] focus:outline-none focus:border-[#f97316] placeholder:text-slate-500"></textarea>
+          <div class="text-right text-[9.5px] text-slate-500 mt-0.5"><span id="recordPaymentNoteCount">0</span> / 500</div>
+        </div>
+      </div>
+
+      <!-- Section 6: Payment Summary. Live read-back of what will be
+           submitted, not a second set of inputs. -->
+      <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-4 space-y-2">
+        <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-2">Payment Summary</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 text-[11px]">
+          <div>
+            <span class="text-slate-400 block text-[10px]">Invoice Total</span>
+            <span id="summaryInvoiceTotal" class="font-bold text-white mt-0.5 block">—</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block text-[10px]">Payment Amount</span>
+            <span id="summaryPaymentAmount" class="font-bold text-white mt-0.5 block">—</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block text-[10px]">Payment Method</span>
+            <span id="summaryPaymentMethod" class="text-slate-300 mt-0.5 block">—</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block text-[10px]">Payment Purpose</span>
+            <span id="summaryPaymentPurpose" class="text-slate-300 mt-0.5 block">—</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block text-[10px]">Recorded By</span>
+            <span class="font-mono text-[#60a5fa] mt-0.5 block" title="Signed-in staff account"><%= recordedBy %></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Server-side refusal, reported in place rather than as an alert. -->
+      <div id="recordPaymentError" class="hidden bg-[#450a0a] border border-[#b91c1c] rounded-lg px-3 py-2 text-[11px] text-[#fca5a5]"></div>
+
+    </form>
+
+    <!-- Modal Footer Actions -->
+    <div class="px-6 py-4 bg-[#040914] border-t border-[#132238] flex items-center justify-end gap-3">
+      <button type="button" data-close-payment-modal class="px-4 py-1.5 bg-[#0e1f3b] hover:bg-[#152a4e] border border-[#22406d] text-slate-300 text-[11px] font-medium rounded-md transition-colors">
+        Cancel
+      </button>
+      <button type="submit" form="recordPaymentForm" id="recordPaymentSubmit"
+              class="px-4 py-1.5 bg-[#f97316] hover:bg-[#ea580c] text-white text-[11px] font-semibold rounded-md shadow transition-colors flex items-center gap-2">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+        </svg>
+        <span id="recordPaymentSubmitLabel">Record Payment</span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    const modal = document.getElementById('recordPaymentModal');
+    const form = document.getElementById('recordPaymentForm');
+    if (!modal) return;
+
+    const invoiceSelect = document.getElementById('recordPaymentInvoice');
+    const amountInput = document.getElementById('recordPaymentAmount');
+    const dateInput = document.getElementById('recordPaymentDate');
+    const methodSelect = document.getElementById('recordPaymentMethod');
+    const purposeSelect = document.getElementById('recordPaymentPurpose');
+    const refInput = document.getElementById('recordPaymentRef');
+    const noteInput = document.getElementById('recordPaymentNote');
+    const noteCount = document.getElementById('recordPaymentNoteCount');
+    const errorBox = document.getElementById('recordPaymentError');
+    const submit = document.getElementById('recordPaymentSubmit');
+    const submitLabel = document.getElementById('recordPaymentSubmitLabel');
+
+    /* Proof upload. */
+    const dropZone = document.getElementById('recordPaymentDropZone');
+    const fileInput = document.getElementById('recordPaymentProof');
+    const fileCard = document.getElementById('recordPaymentFileCard');
+    const fileName = document.getElementById('recordPaymentFileName');
+    const fileMeta = document.getElementById('recordPaymentFileMeta');
+    const fileRemove = document.getElementById('recordPaymentFileRemove');
+    const fileError = document.getElementById('recordPaymentFileError');
+
+    /* The invoices this shipment still has open to payment, already
+       sent with the page. Selecting one fills the amount with its
+       total, because the amount must equal the invoice total and is
+       never typed by hand. */
+    const INVOICES = <%- JSON.stringify(
+      (typeof payableInvoices !== "undefined" ? payableInvoices : []).map((inv) => ({
+        id: inv.id,
+        invoiceId: inv.invoiceId,
+        invoiceType: inv.invoiceType || 'Invoice',
+        total: Number(inv.total || 0),
+        currency: inv.currency || 'USD',
+        paymentStatus: inv.paymentStatus,
+      }))
+    ) %>;
+
+    const shipmentRef = <%- JSON.stringify((typeof shipment !== 'undefined' && shipment && shipment.shipmentId) ? shipment.shipmentId : '') %>;
+    const fmt = (value, currency) => `${currency || 'USD'} ${Number(value || 0).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+
+    const setError = (message) => {
+      if (!errorBox) return;
+      errorBox.textContent = message || '';
+      errorBox.classList.toggle('hidden', !message);
+    };
+
+    const selectedInvoice = () => INVOICES.find((i) => String(i.id) === String(invoiceSelect?.value || ''));
+
+    /* The summary follows the fields: it is a read-back of what will be
+       sent, not a second set of inputs. */
+    const refreshSummary = () => {
+      const invoice = selectedInvoice();
+      const summaryInvoiceTotal = document.getElementById('summaryInvoiceTotal');
+      const summaryPaymentAmount = document.getElementById('summaryPaymentAmount');
+      const summaryPaymentMethod = document.getElementById('summaryPaymentMethod');
+      const summaryPaymentPurpose = document.getElementById('summaryPaymentPurpose');
+
+      if (summaryInvoiceTotal) summaryInvoiceTotal.textContent = invoice ? fmt(invoice.total, invoice.currency) : '—';
+
+      const typed = parseFloat(String(amountInput?.value || '').replace(/,/g, ''));
+      if (summaryPaymentAmount) {
+        summaryPaymentAmount.textContent = isNaN(typed) ? '—' : fmt(typed, invoice?.currency);
+      }
+
+      if (summaryPaymentMethod) {
+        summaryPaymentMethod.textContent = methodSelect?.value || '—';
+      }
+      if (summaryPaymentPurpose) {
+        summaryPaymentPurpose.textContent = purposeSelect?.value || '—';
+      }
+    };
+
+    /* Selecting an invoice fills the amount from its total and marks the
+       row. The amount stays readonly: a payment settles the invoice in
+       full, so a different amount is not recordable. */
+    const selectInvoice = (id) => {
+      if (invoiceSelect) invoiceSelect.value = String(id || '');
+      const invoice = selectedInvoice();
+      if (invoice && amountInput) {
+        amountInput.value = invoice.total.toFixed(2);
+      }
+      Array.from(modal.querySelectorAll('[data-invoice-row]')).forEach((row) => {
+        row.classList.toggle('bg-[#0f1d35]/70', String(row.getAttribute('data-invoice-row')) === String(id));
+      });
+      refreshSummary();
+    };
+
+    invoiceSelect?.addEventListener('change', () => selectInvoice(invoiceSelect.value));
+
+    modal.querySelectorAll('[data-invoice-row]').forEach((row) => {
+      row.addEventListener('click', () => selectInvoice(row.getAttribute('data-invoice-row')));
+    });
+
+    [methodSelect, purposeSelect].forEach((field) => {
+      field?.addEventListener('input', refreshSummary);
+      field?.addEventListener('change', refreshSummary);
+    });
+
+    noteInput?.addEventListener('input', () => {
+      if (noteCount) noteCount.textContent = String(noteInput.value.length);
+    });
+
+    /* ---- Proof upload ----------------------------------------------- */
+
+    /* The one proof the form holds. Replaced, never accumulated. */
+    let chosenProof = null;
+
+    const humanSize = (bytes) => {
+      if (bytes >= 1048576) return (bytes / 1048576).toFixed(2) + ' MB';
+      return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+    };
+
+    const setFileError = (message) => {
+      if (!fileError) return;
+      fileError.textContent = message || '';
+      fileError.classList.toggle('hidden', !message);
+    };
+
+    const showProof = (file) => {
+      if (!fileCard || !fileName || !fileMeta) return;
+      fileName.textContent = file.name;
+      fileMeta.textContent = `${humanSize(file.size)} · ${(file.name.split('.').pop() || '').toUpperCase()}`;
+      fileCard.classList.remove('hidden');
+    };
+
+    const clearProof = () => {
+      chosenProof = null;
+      if (fileInput) fileInput.value = '';
+      if (fileCard) fileCard.classList.add('hidden');
+      setFileError('');
+    };
+
+    /* Validates the extension and the size here as well as on the
+       server, so an obviously wrong file never costs a round trip.
+       The server re-checks both because the stored record is the
+       source of truth. */
+    const acceptProof = (file) => {
+      if (!file) return;
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      if (!['pdf', 'jpg', 'jpeg', 'png'].includes(ext)) {
+        setFileError(`Only PDF, JPG, JPEG and PNG files can be uploaded. "${file.name}" is not one of those.`);
+        clearProof();
+        return;
+      }
+      if (file.size > <%= MAX_FILE_BYTES %>) {
+        setFileError(`${file.name} is ${humanSize(file.size)}, which is over the ${MAX_FILE_MB} MB limit.`);
+        clearProof();
+        return;
+      }
+      setFileError('');
+      chosenProof = file;
+      showProof(file);
+    };
+
+    if (dropZone) {
+      dropZone.addEventListener('click', (e) => {
+        // The remove button inside the card sits above the zone in the
+        // DOM, so guard against it bubbling up and reopening the chooser.
+        if (e.target.closest('#recordPaymentFileRemove')) return;
+        fileInput?.click();
+      });
+      ['dragenter', 'dragover'].forEach((type) => {
+        dropZone.addEventListener(type, (e) => {
+          e.preventDefault();
+          dropZone.classList.add('border-[#f97316]', 'bg-[#0b1426]');
+        });
+      });
+      ['dragleave', 'drop'].forEach((type) => {
+        dropZone.addEventListener(type, (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('border-[#f97316]', 'bg-[#0b1426]');
+        });
+      });
+      dropZone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer && e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+        if (!files.length) return;
+        // One proof per payment: the first is taken and the rest ignored.
+        acceptProof(files[0]);
+      });
+    }
+
+    fileInput?.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files.length) acceptProof(fileInput.files[0]);
+    });
+
+    fileRemove?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearProof();
+    });
+
+    /* Defaults: now, because the payment is being recorded now unless staff
+       say otherwise. */
+    const setNow = () => {
+      if (!dateInput) return;
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      dateInput.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    };
+
+    window.openRecordPaymentModal = function () {
+      setError('');
+      if (form) form.reset();
+      clearProof();
+      setNow();
+      Array.from(modal.querySelectorAll('[data-invoice-row]')).forEach((row) => row.classList.remove('bg-[#0f1d35]/70'));
+      if (invoiceSelect && INVOICES.length === 1) {
+        // One invoice open to payment: pre-selected, because there is nothing to choose.
+        selectInvoice(INVOICES[0].id);
+      } else {
+        refreshSummary();
+      }
+      modal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    };
+
+    window.closeRecordPaymentModal = function () {
+      // Cancel discards the form: nothing staged here is saved.
+      setError('');
+      if (form) form.reset();
+      clearProof();
+      modal.classList.add('hidden');
+      document.body.style.overflow = '';
+      if (submit) submit.disabled = false;
+      if (submitLabel) submitLabel.textContent = 'Record Payment';
+    };
+
+    document.querySelectorAll('[data-open-payment-modal], #recordPaymentBtn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.openRecordPaymentModal();
+      });
+    });
+
+    modal.querySelectorAll('[data-close-payment-modal]').forEach((btn) => {
+      btn.addEventListener('click', window.closeRecordPaymentModal);
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) window.closeRecordPaymentModal();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) window.closeRecordPaymentModal();
+    });
+
+    /* ---- Submit ------------------------------------------------------- */
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      setError('');
+
+      const invoice = selectedInvoice();
+      if (!invoice) {
+        setError('Select the invoice this payment settles.');
+        return;
+      }
+
+      const typed = parseFloat(String(amountInput?.value || '').replace(/,/g, ''));
+      if (isNaN(typed) || typed <= 0) {
+        setError('Payment Amount must be greater than zero.');
+        return;
+      }
+
+      /* The amount is filled from the invoice total and cannot be edited,
+         so a mismatch means something is wrong with what was sent. It is
+         still checked, because a payment that does not settle the invoice
+         in full must never be recorded. */
+      if (Math.abs(typed - invoice.total) > 0.005) {
+        setError(`Payment Amount must equal the Invoice Total of ${fmt(invoice.total, invoice.currency)}.`);
+        return;
+      }
+
+      if (!dateInput?.value) {
+        setError('Payment Date & Time is required.');
+        return;
+      }
+
+      if (!methodSelect?.value) {
+        setError('Payment Method is required.');
+        return;
+      }
+
+      if (!purposeSelect?.value) {
+        setError('Payment Purpose is required.');
+        return;
+      }
+
+      const payload = new FormData();
+      payload.append('shipmentRef', shipmentRef);
+      payload.append('invoiceId', invoice.id);
+      payload.append('amount', typed.toFixed(2));
+      payload.append('paidAt', dateInput.value);
+      payload.append('method', methodSelect.value);
+      payload.append('purpose', purposeSelect.value);
+      payload.append('transactionRef', refInput?.value || '');
+      payload.append('note', noteInput?.value || '');
+      if (chosenProof) payload.append('proofDocument', chosenProof);
+
+      if (submit) submit.disabled = true;
+      if (submitLabel) submitLabel.textContent = 'Recording…';
+
+      try {
+        const res = await fetch(`/admin/shipments/${encodeURIComponent(shipmentRef)}/payments`, {
+          method: 'POST',
+          body: payload,
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || !body.payment) {
+          throw new Error(body.message || body.error || `Recording failed (${res.status})`);
+        }
+
+        // The tab is re-read from the database rather than patched client-side,
+        // so the new payment record, the summary cards and the invoice
+        // dropdown all come from what was actually stored. The settled
+        // invoice is Completed now, so it drops out of the dropdown.
+        if (typeof window.onPaymentRecorded === 'function') {
+          window.onPaymentRecorded(body);
+        } else {
+          window.location.reload();
+        }
+        window.closeRecordPaymentModal();
+      } catch (err) {
+        setError(err.message || 'The payment could not be recorded.');
+        if (submit) submit.disabled = false;
+        if (submitLabel) submitLabel.textContent = 'Record Payment';
+      }
+    });
+  })();
+</script>

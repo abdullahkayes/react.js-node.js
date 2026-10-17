@@ -1,0 +1,102 @@
+<%
+  /* Shipment detail.
+
+    The shell used to be a light-theme page with a hand-written four-link sidebar
+    and no top bar. It now uses the shared partials, so it carries the same
+    sidebar, top bar, icon set and fonts as every other admin page and can no
+    longer drift from them.
+  */
+%>
+<%- include('partials/head', { pageTitle: `${shipment.trackingNumber} - Shipment Details - Dazzling Shipping`, active: 'shipments' }) %>
+
+<%- include('partials/header', {
+  title: 'Shipment Details',
+  subtitle: `Tracking ${shipment.trackingNumber}`,
+  user: typeof user !== 'undefined' ? user : {},
+}) %>
+
+<main class="flex-1 p-6 space-y-5 overflow-y-auto">
+  <a href="/admin/shipments" class="inline-block text-[#ff5c00] hover:text-[#e05200] text-xs font-medium hover:underline">&larr; Back to Shipments</a>
+
+  <!-- Summary -->
+  <div class="bg-[#111726] border border-[#1a2333] rounded-xl p-5">
+    <div class="flex justify-between items-start gap-4">
+      <div>
+        <h2 class="text-2xl font-bold text-white tracking-wide font-mono"><%= shipment.trackingNumber %></h2>
+        <p class="text-[11px] text-gray-500">Tracking Number</p>
+      </div>
+      <span class="px-3 py-1 bg-[#162032] border border-[#233149] rounded-full text-xs font-medium text-gray-300"><%= String(shipment.status || '').replace(/_/g, ' ') %></span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6 text-xs">
+      <div>
+        <h3 class="text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Sender</h3>
+        <p class="font-semibold text-gray-100"><%= shipment.sender?.fullName || '—' %></p>
+        <p class="text-gray-400"><%= shipment.sender?.addressLine1 %></p>
+        <p class="text-gray-400"><%= shipment.sender?.city ? shipment.sender.city + ', ' : '' %><%= shipment.sender?.country %></p>
+        <p class="text-gray-400">Phone: <%= shipment.sender?.phone %></p>
+      </div>
+      <div>
+        <h3 class="text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Receiver</h3>
+        <p class="font-semibold text-gray-100"><%= shipment.receiver?.fullName || '—' %></p>
+        <p class="text-gray-400"><%= shipment.receiver?.addressLine1 %></p>
+        <p class="text-gray-400"><%= shipment.receiver?.city ? shipment.receiver.city + ', ' : '' %><%= shipment.receiver?.country %></p>
+        <p class="text-gray-400">Phone: <%= shipment.receiver?.phone %></p>
+      </div>
+      <div>
+        <h3 class="text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1">Details</h3>
+        <p class="text-gray-300"><span class="text-gray-500">Service:</span> <%= shipment.serviceType %></p>
+        <p class="text-gray-300"><span class="text-gray-500">Weight:</span> <%= shipment.weightKg %> kg</p>
+        <p class="text-gray-300"><span class="text-gray-500">Price:</span> <%= shipment.price %> <%= shipment.currency %></p>
+        <p class="text-gray-300"><span class="text-gray-500">Payment:</span> <%= shipment.paymentStatus %></p>
+        <p class="text-gray-300"><span class="text-gray-500">Created:</span> <%= new Date(shipment.createdAt).toLocaleString() %></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Update status -->
+  <div class="bg-[#111726] border border-[#1a2333] rounded-xl p-5">
+    <h3 class="text-sm font-bold text-white mb-4">Update Status</h3>
+    <form method="POST" action="/admin/shipments/<%= shipment.id %>/status" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <select name="status" class="bg-[#0e1420] border border-[#1a2333] focus:border-orange-500 rounded-lg px-3 py-2 text-xs text-gray-200 outline-none">
+        <option value="pending">Pending</option>
+        <option value="picked_up">Picked Up</option>
+        <option value="in_transit">In Transit</option>
+        <option value="customs">Customs</option>
+        <option value="out_for_delivery">Out for Delivery</option>
+        <option value="delivered">Delivered</option>
+        <option value="cancelled">Cancelled</option>
+        <option value="returned">Returned</option>
+      </select>
+      <input type="text" name="location" placeholder="Location" class="bg-[#0e1420] border border-[#1a2333] focus:border-orange-500 rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-500 outline-none" />
+      <input type="text" name="note" placeholder="Note" class="bg-[#0e1420] border border-[#1a2333] focus:border-orange-500 rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-500 outline-none" />
+      <div class="md:col-span-3">
+        <button type="submit" class="px-4 py-2 bg-[#ff5c00] hover:bg-[#e05200] text-white text-xs font-medium rounded-lg transition-colors">Update Status</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Tracking timeline -->
+  <div class="bg-[#111726] border border-[#1a2333] rounded-xl p-5">
+    <h3 class="text-sm font-bold text-white mb-4">Tracking Events</h3>
+    <div class="space-y-3">
+      <% if (!(shipment.trackingEvents || []).length) { %>
+        <p class="text-xs text-gray-500">No tracking events recorded yet.</p>
+      <% } %>
+      <% (shipment.trackingEvents || []).forEach(e => { %>
+        <div class="border-l-2 border-[#ff5c00] pl-4 py-2">
+          <span class="font-medium text-gray-100 text-xs"><%= String(e.status || '').replace(/_/g, ' ') %></span>
+          <p class="text-xs text-gray-400"><%= e.location %></p>
+          <p class="text-[11px] text-gray-500"><%= e.note %></p>
+          <p class="text-[10px] text-gray-600"><%= new Date(e.createdAt).toLocaleString() %></p>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+</main>
+
+<script>
+  if (window.lucide) lucide.createIcons();
+</script>
+</body>
+</html>

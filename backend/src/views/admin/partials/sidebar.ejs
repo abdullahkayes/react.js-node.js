@@ -1,0 +1,85 @@
+<aside class="w-64 bg-[#080b13] border-r border-[#1a2333] flex flex-col justify-between shrink-0 hidden lg:flex">
+  <div>
+    <!-- Logo Header -->
+    <div class="p-5 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
+        <i data-lucide="compass" class="w-6 h-6 animate-spin-slow"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-white text-base leading-tight">Dazzling</h1>
+        <p class="text-xs text-gray-400 font-medium">Shipping</p>
+      </div>
+    </div>
+
+    <!-- Navigation Links -->
+    <nav class="px-3 py-2 space-y-1 text-xs font-medium">
+      <a href="/admin" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'dashboard' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+        <span>Dashboard</span>
+      </a>
+      <a href="/admin/customers" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'customers' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="users" class="w-4 h-4"></i>
+        <span>Customers &amp; Accounts</span>
+      </a>
+      <a href="/admin/bookings" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'bookings' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="clipboard-list" class="w-4 h-4"></i>
+        <span>Requests &amp; Bookings</span>
+      </a>
+      <a href="/admin/assisted-purchase" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'assisted-purchase' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+        <span>Assisted Purchase</span>
+      </a>
+      <a href="/admin/shipments" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'shipments' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="package" class="w-4 h-4"></i>
+        <span>Shipments</span>
+      </a>
+      <a href="/admin/warehouse" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'warehouse' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="warehouse" class="w-4 h-4"></i>
+        <span>Warehouse &amp; Hub</span>
+      </a>
+      <a href="/admin/freight" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'freight' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="truck" class="w-4 h-4"></i>
+        <span>Freight &amp; Carriers</span>
+      </a>
+      <a href="/admin/customs" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'customs' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="shield-check" class="w-4 h-4"></i>
+        <span>Customs &amp; Compliance</span>
+      </a>
+      <a href="/admin/finance" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'finance' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="wallet" class="w-4 h-4"></i>
+        <span>Finance &amp; Wallet</span>
+      </a>
+      <a href="/admin/insurance" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'insurance' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="file-text" class="w-4 h-4"></i>
+        <span>Insurance &amp; Claims</span>
+      </a>
+      <a href="/admin/returns" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'returns' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+        <span>Returns &amp; RTO</span>
+      </a>
+      <a href="/admin/support" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'support' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="help-circle" class="w-4 h-4"></i>
+        <span>Support &amp; Cases</span>
+      </a>
+      <a href="/admin/reports" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'reports' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+        <span>Reports &amp; Audit</span>
+      </a>
+      <a href="/admin/staff" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'staff' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="user-cog" class="w-4 h-4"></i>
+        <span>Staff &amp; Roles</span>
+      </a>
+      <a href="/admin/settings" class="flex items-center gap-3 px-3 py-2.5 rounded-lg <%= active === 'settings' ? 'bg-gradient-to-r from-[#ff5c00] to-[#ff7b00] text-white font-semibold shadow-md shadow-orange-500/20 transition-all' : 'text-gray-400 hover:text-gray-100 hover:bg-[#111726] transition-colors' %>">
+        <i data-lucide="settings" class="w-4 h-4"></i>
+        <span>Settings</span>
+      </a>
+    </nav>
+  </div>
+
+  <!-- Collapse Action Button -->
+  <div class="p-3 border-t border-[#1a2333]">
+    <button class="w-full flex items-center justify-center p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#111726] transition-colors">
+      <i data-lucide="chevrons-left" class="w-5 h-5"></i>
+    </button>
+  </div>
+</aside>

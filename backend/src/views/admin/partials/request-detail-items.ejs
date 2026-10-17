@@ -1,0 +1,115 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Shipment Items: one section per item on the request.
+
+   * The fields shown are declared per request type in the request-queue config,
+   * so this partial renders a self-purchase item, an assisted-purchase item and
+   * an export-booking item without knowing which one it is looking at.
+   * ------------------------------------------------------------------------- */
+%>
+<div class="bg-[#0D1527] border border-[#1E293B] rounded-md p-4">
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-sm font-semibold text-white"><%= type.itemsHeading %></h2>
+    <span class="text-[11px] text-[#64748B]">
+      <%= acceptance.total %> item<%= acceptance.total === 1 ? '' : 's' %> — submitted details
+    </span>
+  </div>
+
+  <% if (!itemSections.length) { %>
+    <div class="bg-[#080E1A] border border-[#1E293B] rounded-md p-4 text-center">
+      <div class="text-xs text-[#64748B]">No items were submitted on this request.</div>
+    </div>
+  <% } else { %>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" data-item-list>
+      <% itemSections.forEach((item) => { %>
+        <div class="bg-[#080E1A] border border-[#1E293B] rounded-md p-3.5 space-y-3 flex flex-col justify-between"
+             data-request-item data-item-id="<%= item.id %>">
+          <div>
+            <div class="flex items-center gap-2 mb-3">
+              <span class="w-5 h-5 rounded-full bg-[#EA580C] text-white text-[11px] font-bold flex items-center justify-center shrink-0"><%= item.index %></span>
+              <div>
+                <div class="text-xs font-bold text-white"><%= orDash(item.itemType) %></div>
+                <div class="text-[10px] text-[#64748B]"><%= item.ref %></div>
+              </div>
+            </div>
+
+            <div class="space-y-2.5 text-xs">
+              <% item.fields.forEach((field) => { %>
+                <% if (field.wide) { %>
+                  <div>
+                    <div class="text-[#64748B] text-[10px]"><%= field.label %></div>
+                    <% if (field.kind === 'link' && field.value) { %>
+                      <a href="<%= field.value %>" target="_blank" rel="noopener noreferrer" class="text-[#38BDF8] hover:underline text-xs block truncate">Submitted product link</a>
+                    <% } else { %>
+                      <div class="text-white font-medium <%= field.kind === 'mono' ? 'font-mono' : '' %>"><%= field.value === null ? '—' : field.value %></div>
+                    <% } %>
+                  </div>
+                <% } else { %>
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <div class="text-[#64748B] text-[10px]"><%= field.label %></div>
+                      <% if (field.kind === 'link') { %>
+                        <% if (field.value) { %>
+                          <a href="<%= field.value %>" target="_blank" rel="noopener noreferrer" class="text-[#38BDF8] hover:underline text-xs block truncate">Link</a>
+                        <% } else { %>
+                          <div class="text-[#64748B] text-xs">—</div>
+                        <% } %>
+                      <% } else { %>
+                        <div class="text-white font-medium <%= field.kind === 'mono' ? 'font-mono' : '' %>">
+                          <% if (field.value === null) { %>
+                            <span class="text-[#64748B]"><%= field.emptyText || '—' %></span>
+                          <% } else { %><%= field.value %><% } %>
+                        </div>
+                      <% } %>
+                    </div>
+
+                    <%# The chargeable volume is shown beside the dimensions it was
+                        derived from. Its label follows the freight mode, so an
+                        air-freight request never presents a cubic-metre figure as
+                        its chargeable weight. %>
+                    <% if (field.kind === 'text' && field.label === 'Estimated Dimensions (cm)' && item.volume.available) { %>
+                      <div>
+                        <div class="text-[#64748B] text-[10px]"><%= item.volume.label %> (<%= item.volume.unit %>)</div>
+                        <div class="text-white font-medium"><%= item.volumeText %></div>
+                      </div>
+                    <% } else if (field.kind === 'text' && field.label === 'Estimated Dimensions (cm)') { %>
+                      <div>
+                        <div class="text-[#64748B] text-[10px]"><%= chargeableVolume.label %><% if (chargeableVolume.unit) { %> (<%= chargeableVolume.unit %>)<% } %></div>
+                        <div class="text-[#64748B] font-medium">Needs dimensions</div>
+                      </div>
+                    <% } else { %>
+                      <div aria-hidden="true"></div>
+                    <% } %>
+                  </div>
+                <% } %>
+              <% }) %>
+
+              <%# Uploads belonging to this item, named by the type's own config. %>
+              <% item.files.forEach((file) => { %>
+                <div>
+                  <div class="text-[#64748B] text-[10px]"><%= file.label %></div>
+                  <% if (file.info.url) { %>
+                    <a href="<%= file.info.url %>" target="_blank" rel="noopener noreferrer" class="text-[#38BDF8] hover:underline text-xs"><%= file.info.fileName %></a>
+                  <% } else { %>
+                    <span class="text-[#F87171] text-xs"><%= file.info.fileName %> — file is missing</span>
+                  <% } %>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+
+          <!-- Acceptance review: the item's current state, and the way to change it -->
+          <div class="pt-3 border-t border-[#1E293B] flex items-center justify-between gap-2 mt-3">
+            <div class="flex items-center gap-1.5">
+              <span class="text-[11px] text-[#64748B]">Acceptance review</span>
+              <span class="px-2 py-0.5 text-[10px] font-semibold rounded border <%= acceptanceBadge[item.acceptanceStatus] || acceptanceBadge.Pending %>"
+                    data-item-acceptance-badge><%= item.acceptanceStatus %></span>
+            </div>
+            <a href="<%= acceptanceReviewHref %>" data-overlay-open="review-acceptance"
+               class="text-[11px] text-[#38BDF8] hover:underline">Review acceptance</a>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+</div>

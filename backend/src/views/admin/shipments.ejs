@@ -1,0 +1,358 @@
+<%
+  /*
+    The document shell comes from the shared partials, so this page carries the same
+    sidebar, top bar, icon set and fonts as every other admin page. The page's own
+    design below that point is unchanged.
+
+    Its bespoke scrollbar rules are passed to the head rather than emitted here, so
+    the style block stays in the document head where it belongs.
+  */
+  const SCROLLBAR_CSS = `
+    ::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #080f1e;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+  `;
+
+  /* Row helpers. The table is built from the shipments the controller loaded, so
+     every value on it comes from a record; these format those values and are
+     declared once here rather than repeated per cell. */
+  const orDash = (value) => (value === null || value === undefined || String(value).trim() === '' ? '—' : value);
+
+  const fmtDate = (value) => (value
+    ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '—');
+  const fmtTime = (value) => (value
+    ? new Date(value).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    : '—');
+
+  /* The accent each shipment status wears. Grouped by what the status means rather
+     than listing all 24 values, so a status added to the model still gets a badge
+     and falls back to the neutral one instead of rendering unstyled. */
+  const statusTone = (status) => {
+    const s = String(status || '');
+    if (/^(Delivered|Released from Customs)$/.test(s)) return 'bg-emerald-950/90 text-emerald-400 border-emerald-600/50';
+    if (/(Hold|Customs Clearance)/.test(s)) return 'bg-amber-950/90 text-amber-400 border-amber-600/50';
+    if (/^(Cancelled|Disposed|Seized|Failed Delivery)$/.test(s)) return 'bg-rose-950/90 text-rose-400 border-rose-600/50';
+    if (/^(Out for Delivery|Sorting at Hub|Ready for Dispatch)$/.test(s)) return 'bg-violet-950/90 text-violet-400 border-violet-600/50';
+    return 'bg-blue-950/80 text-blue-400 border-blue-600/40';
+  };
+
+  /* What a shipment is waiting on, derived from its status so the column cannot
+     disagree with the badge beside it. A shipment that is moving needs no action. */
+  const requiredAction = (shipment) => {
+    const s = String(shipment.status || '');
+    if (/^(Cancelled|Disposed|Seized|Failed Delivery)$/.test(s)) return 'Review exception';
+    if (/(Hold|Customs Clearance)/.test(s)) return 'Action required';
+    if (/^Awaiting Carrier Tracking$/.test(s)) return 'Assign carrier';
+    if (/^(Out for Delivery|Ready for Dispatch|Received)/.test(s)) return 'Confirm handover';
+    return '—';
+  };
+%>
+<%- include('partials/head', { pageTitle: 'Shipments - Dazzling Shipping', active: 'shipments', extraStyles: SCROLLBAR_CSS }) %>
+
+<%- include('partials/header', {
+  title: 'Shipments',
+  subtitle: 'Track, filter and review every shipment in the network',
+  user: typeof user !== 'undefined' ? user : {},
+}) %>
+
+  <!-- MAIN CONTAINER
+       The width cap and centring live on an inner wrapper rather than on the
+       <main> itself. Inside the shared shell <main> is a flex item, and an auto
+       margin on a flex item cancels its default stretch, so it would size to its
+       content instead of to the column - which made the page wider than the
+       viewport and was then clipped by the body's overflow-x-hidden. As a plain
+       block the wrapper centres and caps exactly as it did when this page was
+       standalone. -->
+  <main class="flex-1 overflow-y-auto overflow-x-hidden bg-[#050a14]">
+    <div class="mx-auto w-full max-w-[1700px] p-4 md:p-6 space-y-6">
+
+    <!-- METRIC STATS CARDS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      
+      <!-- Total Shipments -->
+      <div class="bg-[#091122] border border-[#16233b] rounded-lg p-4 flex items-center gap-4 hover:border-slate-700 transition-all cursor-pointer">
+        <div class="w-12 h-12 rounded-lg bg-[#0e1b34] border border-[#1d2f52] flex items-center justify-center text-blue-400 shrink-0">
+          <i data-lucide="grid" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-[11px] font-medium text-slate-400">Total Shipments</div>
+          <div class="text-2xl font-bold text-white mt-0.5">2,845</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">All submitted shipment records</div>
+        </div>
+      </div>
+
+      <!-- Active Shipments -->
+      <div class="bg-[#091122] border border-[#16233b] rounded-lg p-4 flex items-center gap-4 hover:border-slate-700 transition-all cursor-pointer">
+        <div class="w-12 h-12 rounded-lg bg-[#0a2324] border border-[#0f4039] flex items-center justify-center text-emerald-400 shrink-0">
+          <i data-lucide="arrow-up-right" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-[11px] font-medium text-slate-400">Active Shipments</div>
+          <div class="text-2xl font-bold text-white mt-0.5">318</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">All non-terminal shipment stages</div>
+        </div>
+      </div>
+
+      <!-- Awaiting Review -->
+      <div class="bg-[#091122] border border-[#16233b] rounded-lg p-4 flex items-center gap-4 hover:border-slate-700 transition-all cursor-pointer">
+        <div class="w-12 h-12 rounded-lg bg-[#241e12] border border-[#483718] flex items-center justify-center text-amber-400 shrink-0">
+          <i data-lucide="search" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-[11px] font-medium text-slate-400">Awaiting Review</div>
+          <div class="text-2xl font-bold text-white mt-0.5">24</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Submitted or under review</div>
+        </div>
+      </div>
+
+      <!-- Action Required (Highlighted) -->
+      <div class="bg-[#091122] border-2 border-amber-600/70 rounded-lg p-4 flex items-center gap-4 hover:border-amber-500 transition-all cursor-pointer">
+        <div class="w-12 h-12 rounded-lg bg-[#2b1810] border border-[#592b15] flex items-center justify-center text-amber-500 shrink-0">
+          <i data-lucide="alert-circle" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="text-[11px] font-medium text-slate-400">Action Required</div>
+          <div class="text-2xl font-bold text-white mt-0.5">17</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Click to filter records needing action</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- MAIN SHIPMENTS SECTION -->
+    <div class="bg-[#080f1e] border border-[#16233b] rounded-lg p-5 space-y-4">
+      
+      <!-- Section Header & Sorting -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <h2 class="text-base font-bold text-white">All Shipments</h2>
+        <span class="text-[11px] text-slate-400">Latest updated first</span>
+      </div>
+
+      <!-- FILTERS BAR -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2">
+        
+        <select class="bg-[#0d1626] border border-[#1b2a45] rounded px-2.5 py-1.5 min-w-0 text-[11px] text-slate-300 focus:outline-none focus:border-amber-500">
+          <option value="">Shipment Status</option>
+          <% shipmentStatuses.forEach(s => { %>
+            <option value="<%= s %>" <%= status === s ? 'selected' : '' %>><%= s %></option>
+          <% }) %>
+        </select>
+
+        <select class="bg-[#0d1626] border border-[#1b2a45] rounded px-2.5 py-1.5 min-w-0 text-[11px] text-slate-300 focus:outline-none focus:border-amber-500">
+          <option value="">Service Mode</option>
+          <% serviceModes.forEach(m => { %>
+            <option value="<%= m %>" <%= serviceMode === m ? 'selected' : '' %>><%= m %></option>
+          <% }) %>
+        </select>
+
+        <select class="bg-[#0d1626] border border-[#1b2a45] rounded px-2.5 py-1.5 min-w-0 text-[11px] text-slate-300 focus:outline-none focus:border-amber-500">
+          <option value="">Freight Mode</option>
+          <% freightModes.forEach(f => { %>
+            <option value="<%= f.toLowerCase() %>" <%= freightMode === f.toLowerCase() ? 'selected' : '' %>><%= f %></option>
+          <% }) %>
+        </select>
+
+        <select class="bg-[#0d1626] border border-[#1b2a45] rounded px-2.5 py-1.5 min-w-0 text-[11px] text-slate-300 focus:outline-none focus:border-amber-500">
+          <option value="">Purchase Type</option>
+          <% purchaseTypes.forEach(p => { %>
+            <option value="<%= p %>" <%= purchaseType === p ? 'selected' : '' %>><%= p %></option>
+          <% }) %>
+        </select>
+
+        <select class="bg-[#0d1626] border border-[#1b2a45] rounded px-2.5 py-1.5 min-w-0 text-[11px] text-slate-300 focus:outline-none focus:border-amber-500">
+          <option value="">Customer Type</option>
+          <% customerTypes.forEach(c => { %>
+            <option value="<%= c %>" <%= customerType === c ? 'selected' : '' %>><%= c %></option>
+          <% }) %>
+        </select>
+
+        <select class="bg-[#0d1626] border border-[#1b2a45] rounded px-2.5 py-1.5 min-w-0 text-[11px] text-slate-300 focus:outline-none focus:border-amber-500">
+          <option value="">Item Type</option>
+          <% itemTypes.forEach(i => { %>
+            <option value="<%= i %>" <%= itemType === i ? 'selected' : '' %>><%= i %></option>
+          <% }) %>
+        </select>
+
+        <select class="bg-[#0d1626] border border-[#1b2a45] rounded px-2.5 py-1.5 min-w-0 text-[11px] text-slate-300 focus:outline-none focus:border-amber-500">
+          <option value="all">Date Range</option>
+          <% dateRangeOptions.forEach(d => { %>
+            <option value="<%= d %>" <%= dateRange === d ? 'selected' : '' %>><%= d.charAt(0).toUpperCase() + d.slice(1) %></option>
+          <% }) %>
+        </select>
+
+        <button class="bg-[#0d1626] border border-[#1b2a45] rounded px-2.5 py-1.5 min-w-0 text-[11px] text-slate-300 hover:bg-[#15233b] transition-colors text-center">
+          Clear Filters
+        </button>
+
+      </div>
+
+      <!-- TABLE CONTAINER -->
+      <!-- Horizontal scrollbar for the table, placed above it.
+           A browser only ever paints a scrollbar at the bottom of a scroll
+           container, so this is a proxy bar whose scroll position is mirrored to
+           the table. The table's own bar is hidden by the .shipments-table-scroll
+           rules below, leaving one bar, at the top. The table stays scrollable by
+           wheel and trackpad either way. -->
+      <div class="overflow-x-auto" data-table-scrollbar-top>
+        <div data-table-scrollbar-spacer style="min-width: 1200px; height: 1px;"></div>
+      </div>
+
+      <div class="overflow-x-auto relative shipments-table-scroll" data-table-scroll>
+        <table class="w-full text-left border-collapse text-xs min-w-[1200px]">
+          <thead>
+            <tr class="text-slate-400 border-b border-[#16233b] bg-[#091122]/50 font-medium text-[11px]">
+              <th class="py-3 px-3">Shipment ID <span class="inline-block text-[9px]">↕</span></th>
+              <th class="py-3 px-3">Customer</th>
+              <th class="py-3 px-3">Service Mode</th>
+              <th class="py-3 px-3">Purchase Type</th>
+              <th class="py-3 px-3">Freight Mode</th>
+              <th class="py-3 px-3">Items</th>
+              <th class="py-3 px-3">Chargeable Weight</th>
+              <th class="py-3 px-3">Declared Value</th>
+              <th class="py-3 px-3">Shipment Status</th>
+              <th class="py-3 px-3">Required Action</th>
+              <th class="py-3 px-3">Last Updated <span class="inline-block text-[9px]">↕</span></th>
+              <th class="py-3 px-3 text-right">Action</th>
+            </tr>
+          </thead>
+<tbody class="divide-y divide-[#16233b]/70 text-slate-300" data-shipment-rows>
+
+              <% if (!shipments.length) { %>
+                <tr>
+                  <td colspan="12" class="py-10 text-center text-slate-500 text-[11px]">
+                    <% if (search || status) { %>
+                      No shipments match these filters.
+                    <% } else { %>
+                      No shipments have been created yet.
+                    <% } %>
+                  </td>
+                </tr>
+              <% } %>
+
+              <%# One row per shipment. Every value comes from the row the controller
+                  loaded; the hover card and the Manage Shipment link are fed from
+                  the same row, so the card and the page it opens always agree. %>
+              <% shipments.forEach((shipment) => { %>
+                <tr class="<%= shipment.status === 'On Hold' || shipment.status === 'On Customs Hold' ? "bg-[#0b162a]/60" : "hover:bg-[#0d172a]" %> transition-colors relative hover:z-30 focus-within:z-30">
+                  <td class="py-3 px-3 font-mono font-medium text-slate-200">
+                    <a href="/admin/shipments/<%= shipment.id %>" class="hover:text-blue-400 hover:underline"><%= shipment.shipmentId %></a>
+                  </td>
+
+                  <td class="py-3 px-3 relative group">
+                    <div tabindex="0" class="font-semibold text-white rounded cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-[#38bdf8] truncate"><%= orDash(shipment.customerName) %></div>
+                    <div class="text-[10px] text-blue-400 font-mono"><%= orDash(shipment.customerCode) %></div>
+
+                    <%- include('partials/shipments-row-customer-card', {
+                      name: shipment.customerName,
+                      code: shipment.customerCode,
+                      status: shipment.customer ? shipment.customer.accountStatus : null,
+                      customerType: shipment.customer ? shipment.customer.account_type : null,
+                      customerLogin: shipment.customer ? shipment.customer.email : null,
+                      email: shipment.customer ? shipment.customer.email : null,
+                      phone: shipment.customer ? shipment.customer.phone : null,
+                    }) %>
+                  </td>
+
+                  <td class="py-3 px-3"><%= orDash(shipment.serviceMode) %></td>
+                  <td class="py-3 px-3"><%= orDash(shipment.purchaseType) %></td>
+                  <td class="py-3 px-3"><%= shipment.freightMode ? shipment.freightMode === 'air' ? 'Air' : 'Sea' : '—' %></td>
+                  <td class="py-3 px-3 font-mono"><%= shipment.itemsCount %></td>
+                  <td class="py-3 px-3 font-mono"><%= shipment.weightKg ? Number(shipment.weightKg).toFixed(1) + ' kg' : '—' %></td>
+                  <td class="py-3 px-3 font-mono"><%= shipment.declaredValue ? 'USD ' + Number(shipment.declaredValue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—' %></td>
+                  <td class="py-3 px-3">
+                    <span class="px-2.5 py-1 rounded-full text-[10px] font-medium border <%= statusTone(shipment.status) %>"><%= shipment.status %></span>
+                  </td>
+                  <td class="py-3 px-3 text-slate-500"><%= requiredAction(shipment) %></td>
+                  <td class="py-3 px-3 text-[11px]">
+                    <div><%= fmtDate(shipment.updatedAt) %></div>
+                    <div class="text-[10px] text-slate-500"><%= fmtTime(shipment.updatedAt) %></div>
+                  </td>
+                  <td class="py-3 px-3 text-right">
+                    <a href="<%= shipment.manageHref %>" class="inline-block bg-[#111e36] border border-[#1f3254] hover:bg-[#1a2d52] text-slate-200 text-[11px] px-2.5 py-1 rounded transition-colors">Manage Shipment</a>
+                  </td>
+                </tr>
+              <% }) %>
+
+            </tbody>
+        </table>
+      </div>
+
+      <!-- PAGINATION FOOTER -->
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-[#16233b] pt-4">
+        <div class="text-xs text-slate-400">
+          Showing <span class="font-semibold text-slate-200">1-20</span> of <span class="font-semibold text-slate-200">2,845</span> shipments
+        </div>
+
+        <div class="flex items-center gap-1.5 text-xs">
+          <button class="p-1.5 rounded bg-[#0d1626] border border-[#1b2a45] text-slate-400 hover:text-white transition-colors">
+            <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+          </button>
+          
+          <button class="px-3 py-1 rounded bg-amber-500 text-black font-bold">1</button>
+          <button class="px-3 py-1 rounded bg-[#0d1626] border border-[#1b2a45] text-slate-300 hover:bg-[#15233b] transition-colors">2</button>
+          <button class="px-3 py-1 rounded bg-[#0d1626] border border-[#1b2a45] text-slate-300 hover:bg-[#15233b] transition-colors">3</button>
+          <span class="px-1 text-slate-500">...</span>
+          <button class="px-2.5 py-1 rounded bg-[#0d1626] border border-[#1b2a45] text-slate-300 hover:bg-[#15233b] transition-colors">143</button>
+
+          <button class="p-1.5 rounded bg-[#0d1626] border border-[#1b2a45] text-slate-400 hover:text-white transition-colors">
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  </main>
+
+  <!-- Initialize Lucide Icons -->
+<style>
+    /* Hide the table's own horizontal bar, because the proxy above the table is
+       the visible one. The container still scrolls - only its bar is removed. */
+    .shipments-table-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+    .shipments-table-scroll::-webkit-scrollbar { height: 0; width: 0; }
+  </style>
+
+<script>
+  /* Mirror the table's horizontal scroll onto the proxy bar above it, and the bar
+     back onto the table. The spacer is sized from the table's real scroll width so
+     the two have the same range, and is re-measured when the table reflows. */
+  (function () {
+    var bar = document.querySelector('[data-table-scrollbar-top]');
+    var spacer = document.querySelector('[data-table-scrollbar-spacer]');
+    var table = document.querySelector('[data-table-scroll]');
+    if (!bar || !spacer || !table) return;
+
+    var syncing = false;
+    function mirror(from, to) {
+      syncing = true;
+      to.scrollLeft = from.scrollLeft;
+      syncing = false;
+    }
+
+    table.addEventListener('scroll', function () { if (!syncing) mirror(table, bar); });
+    bar.addEventListener('scroll', function () { if (!syncing) mirror(bar, table); });
+
+    function measure() {
+      spacer.style.width = table.scrollWidth + 'px';
+    }
+
+    measure();
+    window.addEventListener('resize', measure);
+    if (window.ResizeObserver) new ResizeObserver(measure).observe(table);
+    if (window.lucide) lucide.createIcons();
+  })();
+</script>
+</body>
+</html>

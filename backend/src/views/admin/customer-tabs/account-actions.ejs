@@ -1,0 +1,443 @@
+<%
+  // Every figure on this tab is read from the `account_actions` table by the
+  // controller. The summary cards, the Active Account Status Case and the
+  // Account Action History are all views of the same rows, so a card can never
+  // disagree with the table beneath it.
+  const countLabel = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
+  const CASE_STATUS_STYLE = {
+    'Resolved': 'bg-[#022c19] text-[#22c55e] border-[#15803d]',
+    'Open': 'bg-amber-500/10 text-amber-400 border-amber-500/40',
+  };
+  const caseStatusStyle = (s) => CASE_STATUS_STYLE[s] || 'bg-slate-500/10 text-slate-400 border-slate-500/40';
+
+  const fmtDateTimeSafe = (d) => d ? new Date(d).toLocaleString('en-GB', {
+    year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true,
+  }) : 'N/A';
+%>
+<div class="space-y-5 bg-[#030814] text-slate-200 p-6 rounded-xl border border-[#0d182e] font-sans antialiased">
+
+  <!-- Header Section -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <h2 class="text-xl font-semibold text-white tracking-tight">Account Actions</h2>
+      <p class="text-xs text-slate-400 mt-1">Review account-status cases, formal notices, correction deadlines and resolutions.</p>
+    </div>
+    <button data-open-account-action class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-orange-600 hover:bg-orange-500 text-white text-xs font-medium transition cursor-pointer shadow-xs">
+      <span data-open-account-action-label><%= editingAccountAction ? 'Edit Open Case' : 'Start Account Action' %></span>
+    </button>
+  </div>
+
+  <!-- Top 4 Summary Cards. Informational only, so they are not buttons and
+       carry no pressed/selected state. -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+    <!-- Current Account Status -->
+    <div class="bg-[#050e21] border border-[#0e1d38] rounded-lg p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full border border-orange-500/50 bg-orange-500/10 flex items-center justify-center text-orange-500 shrink-0">
+        <i data-lucide="user" class="w-5 h-5"></i>
+      </div>
+      <div class="min-w-0">
+        <p class="text-[11px] text-slate-400 font-normal">Current Account Status</p>
+        <p class="text-sm font-semibold text-white mt-0.5 truncate"><%= customer.accountStatus || 'Active' %></p>
+      </div>
+    </div>
+
+    <!-- Open Cases -->
+    <div class="bg-[#050e21] border border-[#0e1d38] rounded-lg p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full border border-orange-500/50 bg-orange-500/10 flex items-center justify-center text-orange-500 shrink-0">
+        <i data-lucide="folder" class="w-5 h-5"></i>
+      </div>
+      <div class="min-w-0">
+        <p class="text-[11px] text-slate-400 font-normal">Open Cases</p>
+        <p class="text-base font-semibold text-white mt-0.5"><%= accountActionStats.openCases %></p>
+      </div>
+    </div>
+
+    <!-- Correction Deadline. Only an open Warning case carries one, because the
+         window is the seven days the customer has to correct the warning. -->
+    <div class="bg-[#050e21] border border-[#0e1d38] rounded-lg p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full border border-orange-500/50 bg-orange-500/10 flex items-center justify-center text-orange-500 shrink-0">
+        <i data-lucide="calendar" class="w-5 h-5"></i>
+      </div>
+      <div class="min-w-0">
+        <p class="text-[11px] text-slate-400 font-normal">Correction Deadline</p>
+        <% if (accountActionStats.correctionDeadline) { %>
+          <p class="text-sm font-semibold text-amber-400 mt-0.5"><%= fmtDate(accountActionStats.correctionDeadline) %></p>
+          <p class="text-[10px] text-slate-400 leading-none mt-0.5"><%= accountActionOptions.correctionWindowDays %> days from notice</p>
+        <% } else { %>
+          <p class="text-sm font-semibold text-slate-400 mt-0.5">None</p>
+          <p class="text-[10px] text-slate-400 leading-none mt-0.5">No open warning case</p>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Last Account Action. The date is the latest case update, so a case that
+         was just opened or just resolved both show here. -->
+    <div class="bg-[#050e21] border border-[#0e1d38] rounded-lg p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full border border-orange-500/50 bg-orange-500/10 flex items-center justify-center text-orange-500 shrink-0">
+        <i data-lucide="clock" class="w-5 h-5"></i>
+      </div>
+      <div class="min-w-0">
+        <p class="text-[11px] text-slate-400 font-normal">Last Account Action</p>
+        <% if (accountActionStats.lastActionDate) { %>
+          <p class="text-sm font-semibold text-white mt-0.5"><%= fmtDate(accountActionStats.lastActionDate) %></p>
+          <p class="text-[10px] text-slate-400 leading-none mt-0.5 truncate"><%= accountActionStats.lastActionStatus %></p>
+        <% } else { %>
+          <p class="text-sm font-semibold text-slate-400 mt-0.5">None</p>
+          <p class="text-[10px] text-slate-400 leading-none mt-0.5">No case recorded</p>
+        <% } %>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Active Account Status Case. An account carries at most one open case, so
+       this shows that single case. -->
+  <div class="border border-[#0e1d38] rounded-lg p-4 space-y-3 bg-[#050e21]">
+    <div class="flex items-center justify-between gap-3">
+      <h3 class="text-white font-semibold text-xs">Active Account Status Case</h3>
+      <% if (activeAccountAction) { %>
+        <span class="text-sky-400 font-mono text-[11px]"><%= activeAccountAction.caseId %></span>
+      <% } %>
+    </div>
+
+    <% if (activeAccountAction) { %>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="text-slate-400 border-b border-[#0e1d38]">
+              <th class="pb-2.5 font-normal">Case ID</th>
+              <th class="pb-2.5 font-normal">Case Type</th>
+              <th class="pb-2.5 font-normal">Case Status</th>
+              <th class="pb-2.5 font-normal">Reason Category</th>
+              <th class="pb-2.5 font-normal">Status Change</th>
+              <th class="pb-2.5 font-normal">Effective At</th>
+              <th class="pb-2.5 font-normal">Decided By</th>
+              <th class="pb-2.5 font-normal">Related Record</th>
+              <th class="pb-2.5 font-normal">Notice ID</th>
+              <th class="pb-2.5 font-normal">Correction Deadline</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="hover:bg-[#08152e]/50 transition-colors">
+              <td class="py-2.5 text-sky-400 font-mono text-[11px]"><%= activeAccountAction.caseId %></td>
+              <td class="py-2.5 text-slate-200"><%= activeAccountAction.caseType %></td>
+              <td class="py-2.5">
+                <span class="inline-block px-2 py-0.5 rounded text-[10px] font-medium border <%= caseStatusStyle(activeAccountAction.caseStatus) %>">
+                  <%= activeAccountAction.caseStatus %>
+                </span>
+              </td>
+              <td class="py-2.5 text-slate-300">
+                <!-- The recorded Reason Details open in a pop-up on hover, so the
+                     reason is available without leaving the table. -->
+                <span class="cursor-help border-b border-dotted border-slate-500 inline-flex items-center gap-1"
+                      data-reason-details="<%= activeAccountAction.reasonDetails %>"
+                      title="Reason Details: <%= activeAccountAction.reasonDetails %>">
+                  <%= activeAccountAction.reasonCategory %>
+                  <i data-lucide="help-circle" class="w-3 h-3 text-slate-500"></i>
+                </span>
+              </td>
+              <td class="py-2.5 text-slate-300 font-mono text-[11px]"><%= activeAccountAction.previousStatus %> &rarr; <%= activeAccountAction.newStatus %></td>
+              <td class="py-2.5 text-slate-300 whitespace-nowrap"><%= fmtDateTimeSafe(activeAccountAction.effectiveAt) %></td>
+              <td class="py-2.5 text-sky-400 font-mono text-[11px]"><%= activeAccountAction.decidedByLabel %></td>
+              <td class="py-2.5 text-sky-400 font-mono text-[11px]"><%= activeAccountAction.relatedRecord || 'N/A' %></td>
+              <td class="py-2.5 text-sky-400 font-mono text-[11px]"><%= activeAccountAction.noticeId || 'N/A' %></td>
+              <td class="py-2.5 whitespace-nowrap">
+                <% if (activeAccountAction.caseType === 'Warning') { %>
+                  <span class="<%= activeAccountAction.correctionDeadline ? 'text-amber-400' : 'text-slate-500' %> font-medium text-[11px]">
+                    <%= activeAccountAction.correctionDeadline ? fmtDate(activeAccountAction.correctionDeadline) : 'Pending notice' %>
+                  </span>
+                <% } else { %>
+                  <span class="text-slate-600 text-[11px]">Not applicable</span>
+                <% } %>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <div class="py-6 flex flex-col items-center justify-center text-center space-y-2">
+        <div class="w-8 h-8 rounded-full border border-emerald-500/60 bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+          <i data-lucide="check" class="w-4 h-4"></i>
+        </div>
+        <p class="text-xs text-slate-300">No active warning, restriction, suspension, termination, closure or dormancy case.</p>
+      </div>
+    <% } %>
+  </div>
+
+  <!-- Account Action History. Every case ever raised, resolved ones included. -->
+  <div class="border border-[#0e1d38] rounded-lg p-4 space-y-3 bg-[#050e21]">
+
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <h3 class="text-white font-semibold text-xs">Account Action History</h3>
+
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+          <input type="text" data-action-search placeholder="Search by Case ID or related record" class="pl-8 pr-3 py-1 bg-[#030814] border border-[#0e1d38] rounded text-[11px] text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-sky-500 w-56 sm:w-64" />
+        </div>
+        <div class="flex items-center gap-1 bg-[#030814] border border-[#0e1d38] rounded px-2 py-1 text-[11px] text-slate-300">
+          <span class="text-slate-400">Case Type:</span>
+          <select data-action-filter class="bg-transparent text-slate-200 focus:outline-none text-[11px]">
+            <option value="">All</option>
+            <% accountActionOptions.caseTypes.forEach(function (type) { %>
+              <option value="<%= type %>"><%= type %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="flex items-center gap-1 bg-[#030814] border border-[#0e1d38] rounded px-2 py-1 text-[11px] text-slate-300">
+          <span class="text-slate-400">Status:</span>
+          <select data-action-status-filter class="bg-transparent text-slate-200 focus:outline-none text-[11px]">
+            <option value="">All</option>
+            <% accountActionOptions.caseStatuses.forEach(function (s) { %>
+              <option value="<%= s %>"><%= s %></option>
+            <% }); %>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#0e1d38]">
+            <th class="pb-2.5 font-normal">Case ID</th>
+            <th class="pb-2.5 font-normal">Case Type</th>
+            <th class="pb-2.5 font-normal">Reason Category</th>
+            <th class="pb-2.5 font-normal">Status Change</th>
+            <th class="pb-2.5 font-normal">Case Status</th>
+            <th class="pb-2.5 font-normal">Effective At</th>
+            <th class="pb-2.5 font-normal">Decided By</th>
+            <th class="pb-2.5 font-normal">Related Record</th>
+            <th class="pb-2.5 font-normal">Notice ID</th>
+            <th class="pb-2.5 font-normal">Correction Deadline</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#0e1d38]/60">
+          <% if (accountActions.length > 0) { %>
+            <% accountActions.forEach(a => { %>
+              <tr class="hover:bg-[#08152e]/50 transition-colors" data-action-row
+                  data-type="<%= a.caseType %>"
+                  data-status="<%= a.caseStatus %>"
+                  data-search="<%= [a.caseId, a.reasonCategory, a.reasonDetails, a.relatedRecord, a.caseStatus, a.noticeId, a.decidedByLabel].filter(Boolean).join(' ').toLowerCase() %>">
+                <td class="py-2.5 text-sky-400 font-mono text-[11px]"><%= a.caseId %></td>
+                <td class="py-2.5 text-slate-200"><%= a.caseType %></td>
+                <td class="py-2.5 text-slate-300">
+                  <span class="cursor-help border-b border-dotted border-slate-500 inline-flex items-center gap-1"
+                        data-reason-details="<%= a.reasonDetails %>">
+                    <%= a.reasonCategory %>
+                    <i data-lucide="help-circle" class="w-3 h-3 text-slate-500"></i>
+                  </span>
+                </td>
+                <td class="py-2.5 text-slate-300 font-mono text-[11px]"><%= a.previousStatus || 'N/A' %> &rarr; <%= a.newStatus || 'N/A' %></td>
+                <td class="py-2.5">
+                  <span class="inline-block px-2 py-0.5 rounded text-[10px] font-medium border <%= caseStatusStyle(a.caseStatus) %>">
+                    <%= a.caseStatus %>
+                  </span>
+                </td>
+                <td class="py-2.5 text-slate-300 whitespace-nowrap"><%= fmtDateTimeSafe(a.effectiveAt) %></td>
+                <td class="py-2.5 text-sky-400 font-mono text-[11px]"><%= a.decidedByLabel %></td>
+                <td class="py-2.5 text-sky-400 font-mono text-[11px]"><%= a.relatedRecord || 'N/A' %></td>
+                <td class="py-2.5 text-sky-400 font-mono text-[11px]"><%= a.noticeId || 'N/A' %></td>
+                <td class="py-2.5 whitespace-nowrap">
+                  <% if (a.caseType === 'Warning') { %>
+                    <span class="<%= a.correctionDeadline ? 'text-amber-400' : 'text-slate-500' %> text-[11px]">
+                      <%= a.correctionDeadline ? fmtDate(a.correctionDeadline) : 'None' %>
+                    </span>
+                  <% } else { %>
+                    <span class="text-slate-600 text-[11px]">Not applicable</span>
+                  <% } %>
+                </td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="10" class="py-6 text-center text-slate-500">No account-status case has been recorded for this customer.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex items-center justify-between pt-2 border-t border-[#0e1d38]/60 text-xs">
+      <span class="text-slate-400 text-[11px]" data-action-count>Showing <%= countLabel(accountActions.length, 'case') %></span>
+      <div class="flex items-center gap-1">
+        <button class="px-2.5 py-1 rounded bg-[#030814] border border-[#0e1d38] text-slate-500 text-[11px] disabled:opacity-50 cursor-not-allowed" disabled>Previous</button>
+        <button class="px-2.5 py-1 rounded border border-amber-500/60 bg-amber-500/10 text-amber-400 text-[11px] font-semibold">1</button>
+        <button class="px-2.5 py-1 rounded bg-[#030814] border border-[#0e1d38] text-slate-500 text-[11px] disabled:opacity-50 cursor-not-allowed" disabled>Next</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Latest Case Notice & Resolution -->
+  <div class="border border-[#0e1d38] rounded-lg p-4 space-y-3 bg-[#050e21]">
+    <% if (latestAccountAction) { %>
+      <div class="flex items-center gap-2">
+        <h3 class="text-white font-semibold text-xs">Latest Case Notice &amp; Resolution</h3>
+        <span class="text-sky-400 font-mono text-[11px]"><%= latestAccountAction.caseId %></span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-1 border-t border-[#0e1d38]/60">
+        <!-- Notice Section -->
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2">
+            <span class="text-slate-400 w-32 shrink-0">Notice ID:</span>
+            <span class="text-sky-400 font-mono text-[11px]"><%= latestAccountAction.noticeId || 'N/A' %></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-slate-400 w-32 shrink-0">Notice Type:</span>
+            <span class="text-slate-300"><%= latestAccountAction.noticeType || 'N/A' %></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-slate-400 w-32 shrink-0">Notice Sent At:</span>
+            <span class="text-slate-300"><%= fmtDateTimeSafe(latestAccountAction.noticeSentAt) %></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-slate-400 w-32 shrink-0">Channels:</span>
+            <span class="text-slate-300"><%= (latestAccountAction.noticeChannels || []).join(', ') || 'N/A' %></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-slate-400 w-32 shrink-0">Correction Deadline:</span>
+            <span class="<%= latestAccountAction.correctionDeadline ? 'text-amber-400' : 'text-slate-300' %>"><%= latestAccountAction.correctionDeadline ? fmtDate(latestAccountAction.correctionDeadline) : 'None' %></span>
+          </div>
+        </div>
+        <!-- Resolution Section -->
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2">
+            <span class="text-slate-400 w-28 shrink-0">Case Status:</span>
+            <span class="inline-block px-2 py-0.5 rounded text-[10px] font-medium border <%= caseStatusStyle(latestAccountAction.caseStatus) %>"><%= latestAccountAction.caseStatus %></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-slate-400 w-28 shrink-0">Resolved At:</span>
+            <span class="text-slate-300"><%= latestAccountAction.resolvedAt ? fmtDateTimeSafe(latestAccountAction.resolvedAt) : 'Not resolved' %></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-slate-400 w-28 shrink-0">Approved By:</span>
+            <span class="text-slate-300"><%= latestAccountAction.approvedByLabel || 'N/A' %></span>
+          </div>
+          <div class="flex items-start gap-2">
+            <span class="text-slate-400 w-28 shrink-0">Resolution Note:</span>
+            <span class="text-slate-300 leading-relaxed"><%= latestAccountAction.resolutionNote || 'No resolution note recorded.' %></span>
+          </div>
+        </div>
+      </div>
+    <% } else { %>
+      <h3 class="text-white font-semibold text-xs">Latest Case Notice &amp; Resolution</h3>
+      <p class="text-xs text-slate-500">No formal case notice has been issued to this customer.</p>
+    <% } %>
+  </div>
+
+  <!-- Bottom Account Action Rules Info Footer -->
+  <div class="flex items-start gap-2 text-[11px] text-slate-400 pt-1">
+    <i data-lucide="info" class="w-4 h-4 text-slate-400 shrink-0 mt-0.5"></i>
+    <p class="leading-relaxed">
+      <strong class="text-slate-300">Account-action rules:</strong> Restriction blocks account login but does not stop ongoing lawful shipments. Financial liabilities remain payable during restriction or suspension. Termination is final; closure and dormancy follow their approved procedures.
+    </p>
+  </div>
+
+</div>
+
+<!-- Reason Details pop-up, positioned next to the cell being hovered. -->
+<div id="reasonDetailsPopover"
+     class="hidden fixed z-[10000] max-w-sm bg-[#0b1628] border border-[#1e3a5f] rounded-lg shadow-2xl px-3 py-2.5 text-[11px] text-slate-200 pointer-events-none">
+  <p class="text-[10px] font-bold text-sky-400 uppercase tracking-wide mb-1">Reason Details</p>
+  <p id="reasonDetailsPopoverText" class="leading-relaxed whitespace-pre-line"></p>
+</div>
+
+<script>
+  // Case history filters and the Reason Details pop-up, delegated because the tab
+  // arrives via innerHTML and this script re-runs on every visit.
+  (function () {
+    function applyActionFilters() {
+      const term = (document.querySelector('[data-action-search]')?.value || '').trim().toLowerCase();
+      const type = document.querySelector('[data-action-filter]')?.value || '';
+      const status = document.querySelector('[data-action-status-filter]')?.value || '';
+      const rows = Array.from(document.querySelectorAll('[data-action-row]'));
+      let visible = 0;
+      rows.forEach((row) => {
+        const okType = !type || row.getAttribute('data-type') === type;
+        const okStatus = !status || row.getAttribute('data-status') === status;
+        const okSearch = !term || (row.getAttribute('data-search') || '').includes(term);
+        const show = okType && okStatus && okSearch;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      const counter = document.querySelector('[data-action-count]');
+      if (counter) {
+        const total = rows.length;
+        counter.textContent = (type || status || term) && visible !== total
+          ? 'Showing ' + visible + ' of ' + total + ' cases'
+          : 'Showing ' + total + (total === 1 ? ' case' : ' cases');
+      }
+    }
+
+    document.addEventListener('input', function (e) {
+      if (e.target.matches('[data-action-search]')) applyActionFilters();
+    });
+    document.addEventListener('change', function (e) {
+      if (e.target.matches('[data-action-filter]') || e.target.matches('[data-action-status-filter]')) {
+        applyActionFilters();
+      }
+    });
+
+    // Hovering a Reason Category opens the pop-up with the details the staff
+    // member recorded when the action was taken. The trigger is remembered so a
+    // scroll can move the pop-up with its cell instead of dismissing it.
+    let activeReasonTrigger = null;
+
+    function showReasonPopover(trigger) {
+      const popover = document.getElementById('reasonDetailsPopover');
+      const text = document.getElementById('reasonDetailsPopoverText');
+      if (!popover || !text) return;
+      const details = trigger.getAttribute('data-reason-details');
+      if (!details) return;
+      activeReasonTrigger = trigger;
+      text.textContent = details;
+      popover.classList.remove('hidden');
+
+      const rect = trigger.getBoundingClientRect();
+      // Measure after showing so the pop-up is placed with its real size, and
+      // flip it above the cell when there is no room below.
+      const popRect = popover.getBoundingClientRect();
+      let top = rect.bottom + 8;
+      if (top + popRect.height > window.innerHeight - 8) {
+        top = Math.max(8, rect.top - popRect.height - 8);
+      }
+      let left = rect.left;
+      if (left + popRect.width > window.innerWidth - 8) {
+        left = Math.max(8, window.innerWidth - popRect.width - 8);
+      }
+      popover.style.top = top + 'px';
+      popover.style.left = left + 'px';
+    }
+
+    function hideReasonPopover() {
+      const popover = document.getElementById('reasonDetailsPopover');
+      activeReasonTrigger = null;
+      if (popover) popover.classList.add('hidden');
+    }
+
+    document.addEventListener('mouseover', function (e) {
+      const trigger = e.target.closest('[data-reason-details]');
+      if (trigger) showReasonPopover(trigger);
+    });
+    document.addEventListener('mouseout', function (e) {
+      if (e.target.closest('[data-reason-details]')) hideReasonPopover();
+    });
+
+    // Keep an open pop-up anchored to its cell while the page scrolls, and close
+    // it if the cell it belongs to has been filtered out of the table.
+    document.addEventListener('scroll', function () {
+      if (!activeReasonTrigger) return;
+      if (!activeReasonTrigger.isConnected || activeReasonTrigger.offsetParent === null) {
+        hideReasonPopover();
+        return;
+      }
+      showReasonPopover(activeReasonTrigger);
+    }, true);
+  })();
+</script>
+
+<!-- Account Action popup -->
+<%- include('./account-action-modal') %>

@@ -1,0 +1,76 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Request Processing: the decisions staff make on this request.
+   *
+   * Sits in the right column, apart from the read-only sections, because these
+   * are the only controls on the page. It reads the same `acceptance` roll-up the
+   * server uses to gate approval, so the button and the rule cannot disagree.
+   * ------------------------------------------------------------------------- */
+%>
+<!-- The gate on approval, stating what is blocking it when it is blocked. -->
+<div class="bg-[#0D1527] border border-[#1E293B] rounded-md p-4 space-y-3" data-request-processing>
+  <div class="flex justify-between items-center">
+    <h2 class="text-sm font-semibold text-white">Request Processing</h2>
+    <span class="text-[10px] text-[#64748B]">Permission-controlled actions</span>
+  </div>
+
+  <div class="p-2.5 rounded <%= approval.canApprove ? 'bg-[#062016]/80 border-[#059669]/40' : 'bg-[#2D1B02] border-[#784E0F]' %> <%= approval.canApprove ? 'text-[#A7F3D0]' : 'text-[#FDE68A]' %> text-xs">
+    <div class="font-semibold <%= approval.canApprove ? 'text-[#34D399]' : 'text-[#F59E0B]' %>" data-acceptance-gate-heading>
+      <%= approval.canApprove ? 'Ready for approval' : 'Review required' %>
+    </div>
+    <%# One decision drives this banner, the button and the server's refusal, so the
+        three cannot disagree: every item Accepted, every document Verified, and
+        not already converted. %>
+    <% if (approval.canApprove) { %>
+      <p class="text-[11px] text-[#94A3B8] mt-0.5" data-acceptance-gate-detail>
+        All <%= acceptance.total %> item<%= acceptance.total === 1 ? '' : 's' %> approved<%= documentState.total ? ` and all ${documentState.total} document${documentState.total === 1 ? '' : 's'} verified` : '' %>. This request can be approved.
+      </p>
+    <% } else { %>
+      <ul class="text-[11px] text-[#FCD34D]/80 mt-0.5 space-y-0.5" data-acceptance-gate-detail>
+        <% approval.reasons.forEach((reason) => { %>
+          <li><%= reason %>.</li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </div>
+
+  <div class="space-y-2 pt-1">
+    <a href="<%= acceptanceReviewHref %>" data-overlay-open="review-acceptance" class="w-full py-2 px-3 bg-[#1E293B] hover:bg-[#334155] text-xs font-medium text-white rounded border border-[#334155] transition text-center block">
+      Review Item Acceptance
+    </a>
+    <a href="<%= informationFormHref %>" data-overlay-open="information" class="w-full py-2 px-3 bg-[#1E293B] hover:bg-[#334155] text-xs font-medium text-white rounded border border-[#334155] transition text-center block">
+      Request Information
+    </a>
+
+    <!-- Approve. Disabled unless every item is Accepted. The "review required"
+         hint sits beside the button name, not instead of it. -->
+    <button type="button" data-approve-request
+            <% if (!canApprove) { %>disabled<% } %>
+            class="w-full py-2 px-3 <%= canApprove ? 'bg-[#15803D] hover:bg-[#166534]' : 'bg-[#0F172A] text-[#475569] cursor-not-allowed' %> text-xs font-medium rounded border <%= canApprove ? 'border-[#22C55E]/50' : 'border-[#1E293B]' %> transition">
+      Approve Request
+      <% if (!canApprove) { %>
+        <span class="text-[10px] block font-normal text-[#475569]" data-approve-hint>review required</span>
+      <% } %>
+    </button>
+
+    <button type="button" data-reject-request
+            <% if (alreadyDecided) { %>disabled<% } %>
+            class="w-full py-2 px-3 <%= alreadyDecided ? 'bg-[#0F172A] text-[#475569] cursor-not-allowed border-[#1E293B]' : 'bg-[#311313] hover:bg-[#451a1a] text-[#EF4444] border-[#7F1D1D]' %> text-xs font-medium rounded border transition">
+      Reject Request
+    </button>
+
+    <!-- Where the decision went, filled in after the page acts. -->
+    <div class="hidden pt-1 p-2.5 rounded bg-[#080E1A] border border-[#1E293B] text-[11px]" data-request-decision-result></div>
+  </div>
+
+  <div class="pt-2 border-t border-[#1E293B] text-[10px] text-[#64748B] space-y-1">
+    <p class="italic">Opening a review does not count as completing it.</p>
+
+    <div class="mt-3 p-2.5 rounded bg-[#062016]/80 border border-[#059669]/40">
+      <span class="font-semibold text-[#34D399] text-xs block">Automatic Shipment ID</span>
+      <p class="text-[#94A3B8] text-[10px] mt-0.5 leading-snug">
+        Successful approval creates and links the shipment once, and the assigned Shipment ID appears above. Approving again reuses that same shipment rather than creating a second one.
+      </p>
+    </div>
+  </div>
+</div>

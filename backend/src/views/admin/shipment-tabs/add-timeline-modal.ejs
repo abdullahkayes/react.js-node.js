@@ -1,0 +1,278 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Timeline Update Modal - Shipment Timeline
+   *
+   * The one place staff change a shipment's operational status. Submitting
+   * updates the status and writes the timeline entry together, because the two
+   * are the same act: an entry that did not move the status is a note, and a
+   * status that moved without an entry would leave the timeline behind.
+   *
+   * The statuses offered are the approved Shipment Status list from the Status
+   * Source of Truth, so the dropdown and the endpoint cannot disagree. Request
+   * statuses are deliberately absent: they belong to the Request & Booking
+   * workflow, which raises them with its own generated labels.
+   * ------------------------------------------------------------------------- */
+
+  const V = (typeof shipment !== 'undefined' && shipment) ? shipment : null;
+
+  const shipmentId = (V && V.shipmentId) ? V.shipmentId : '';
+  const serviceMode = (V && V.serviceMode) || 'Import';
+  const freightMode = (V && V.freightMode) || '—';
+  const currentStatus = (V && V.status) ? V.status : '—';
+
+  /* The signed-in staff member. Recorded from the session, never entered. */
+  const staffName = (typeof user !== 'undefined' && user && (user.name || user.username))
+    ? (user.name || user.username)
+    : (typeof user !== 'undefined' && user && user.email ? user.email : '—');
+
+  /* The approved statuses, from the server rather than typed in here. */
+  const statusOptions = (typeof timelineStatusOptions !== 'undefined' && Array.isArray(timelineStatusOptions))
+    ? timelineStatusOptions
+    : [];
+
+  const visibilityBadge = (visibility) => {
+    if (visibility === 'Customer Visible') {
+      return 'px-2 py-0.5 rounded-full bg-[#1b2b48]/80 text-[#60a5fa] border border-[#2563eb]/30 text-[9.5px] font-medium';
+    }
+    return 'px-2 py-0.5 rounded-full bg-[#1e293b] text-slate-400 border border-slate-700 text-[9.5px] font-medium';
+  };
+%>
+
+<!-- Popup Modal Backdrop (hidden so it never opens on its own) -->
+<div id="timelineModal"
+     data-shipment-ref="<%= shipmentId %>"
+     class="hidden fixed inset-0 z-50 bg-[#020712]/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+     role="dialog" aria-modal="true" aria-labelledby="timelineModalTitle">
+
+  <div class="bg-[#071122] border border-[#182945] rounded-xl shadow-2xl w-full max-w-3xl my-auto overflow-hidden text-slate-200 font-sans text-[11.5px] antialiased">
+
+    <!-- Header -->
+    <div class="px-6 pt-5 pb-4 border-b border-[#132238]">
+      <div class="text-[10.5px] text-slate-400 mb-2 font-medium">
+        Manage Shipment <span class="mx-1 text-slate-600">/</span> Shipment Timeline <span class="mx-1 text-slate-600">/</span> <span class="text-slate-300">Timeline Update</span>
+      </div>
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h2 id="timelineModalTitle" class="text-xl font-bold text-white tracking-tight">Timeline Update</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5">Set the shipment's current status and record the entry in its timeline.</p>
+        </div>
+        <button type="button" data-close-timeline-modal class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-[#12213a] transition-colors shrink-0" aria-label="Close">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <form id="timelineUpdateForm" novalidate>
+
+      <!-- Body -->
+      <div class="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+
+        <!-- Shipment context, read from the shipment -->
+        <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+          <div>
+            <span class="block text-[10px] text-slate-400 font-medium">Shipment ID</span>
+            <span class="text-xs font-bold text-white font-mono mt-0.5 block"><%= shipmentId || '—' %></span>
+          </div>
+          <div>
+            <span class="block text-[10px] text-slate-400 font-medium">Service / Freight Mode</span>
+            <span class="text-xs font-semibold text-slate-200 mt-0.5 block"><%= serviceMode %> / <%= freightMode %></span>
+          </div>
+          <div>
+            <span class="block text-[10px] text-slate-400 font-medium mb-1">Current Shipment Status</span>
+            <span class="inline-block px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10.5px] font-semibold">
+              <%= currentStatus %>
+            </span>
+          </div>
+        </div>
+
+        <!-- Shipment Status. The approved list, and nothing else. -->
+        <div class="space-y-1.5">
+          <label for="timelineStatus" class="block font-bold text-white text-[11px]">
+            Shipment Status <span class="text-[#f87171]">*</span>
+          </label>
+          <div class="relative">
+            <select id="timelineStatus" name="status"
+                    class="w-full appearance-none bg-[#050b18] border border-[#1b2b48] text-slate-200 text-[11px] rounded px-2.5 py-1.5 focus:outline-none focus:border-[#f97316] cursor-pointer pr-8">
+              <option value="" disabled selected>Select a shipment status</option>
+              <% statusOptions.forEach((opt) => { %>
+                <option value="<%= opt.status %>"><%= opt.status %><%= opt.visibility === 'Customer Visible' ? ' (Customer Visible)' : '' %></option>
+              <% }); %>
+            </select>
+            <svg class="w-4 h-4 text-slate-500 absolute right-2.5 top-2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+          <p class="text-[10px] text-slate-400 leading-relaxed">
+            Any approved status may be selected when correcting or updating the current status; there is no required sequence to follow.
+          </p>
+        </div>
+
+        <!-- Timeline Label. Staff provide this one. -->
+        <div class="space-y-1.5">
+          <label for="timelineLabel" class="block font-bold text-white text-[11px]">
+            Timeline Label <span class="text-[#f87171]">*</span>
+          </label>
+          <textarea id="timelineLabel" name="label" rows="3" required maxlength="255"
+                    class="w-full bg-[#050b18] border border-[#162846] text-slate-200 text-[11px] rounded-lg p-3 focus:outline-none focus:border-blue-500 placeholder:text-slate-500 leading-relaxed"
+                    placeholder="What this status update records, for example: Parcels received at the USA warehouse and matched to this shipment."></textarea>
+          <p class="text-[10px] text-slate-400 leading-relaxed">
+            Shown next to the status on the timeline. Request statuses are labelled by the workflow instead and cannot be worded here.
+          </p>
+        </div>
+
+        <!-- Visibility follows the status, not a choice here. -->
+        <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-3 flex items-center justify-between gap-3">
+          <div>
+            <span class="block text-[10px] text-slate-400 font-medium">Visibility on the timeline</span>
+            <span class="text-[10.5px] text-slate-300">Set by the approved status, so it cannot be chosen separately.</span>
+          </div>
+          <span id="timelineVisibilityPreview" class="<%= visibilityBadge('Internal Only') %>">Internal Only</span>
+        </div>
+
+        <!-- What the server reports if it refuses the update. -->
+        <div id="timelineUpdateError" class="hidden bg-[#450a0a] border border-[#b91c1c] rounded-lg px-3 py-2 text-[11px] text-[#fca5a5]"></div>
+
+      </div>
+
+      <!-- Footer: recorded-by and recorded-at are the system's, shown for review -->
+      <div class="px-6 py-3 bg-[#040914] border-t border-[#132238] flex items-center justify-between text-[10.5px] text-slate-400">
+        <div>Recorded By <span id="timelineRecordedBy" class="text-slate-300 font-mono"><%= staffName %></span></div>
+        <div>Recorded At <span class="text-slate-300 font-mono">on submit</span></div>
+      </div>
+
+      <!-- Footer actions -->
+      <div class="px-6 py-4 bg-[#0a142a] border-t border-[#132238] flex items-center justify-end gap-2.5">
+        <button type="button" data-close-timeline-modal class="px-4 py-2 bg-[#0e1f3b] hover:bg-[#152a4e] border border-[#22406d] text-slate-300 text-[11px] font-semibold rounded transition-colors">
+          Cancel
+        </button>
+        <button type="submit" form="timelineUpdateForm" id="timelineSubmitBtn" disabled
+                class="px-4 py-2 bg-[#f97316] hover:bg-[#ea580c] text-white text-[11px] font-semibold rounded shadow transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          Add Timeline Update
+        </button>
+      </div>
+
+    </form>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    const modal = document.getElementById('timelineModal');
+    if (!modal) return;
+
+    const form = document.getElementById('timelineUpdateForm');
+    const status = document.getElementById('timelineStatus');
+    const label = document.getElementById('timelineLabel');
+    const visibilityPreview = document.getElementById('timelineVisibilityPreview');
+    const errorBox = document.getElementById('timelineUpdateError');
+    const submit = document.getElementById('timelineSubmitBtn');
+
+    const INTERNAL = 'px-2 py-0.5 rounded-full bg-[#1e293b] text-slate-400 border border-slate-700 text-[9.5px] font-medium';
+    const CUSTOMER = 'px-2 py-0.5 rounded-full bg-[#1b2b48]/80 text-[#60a5fa] border border-[#2563eb]/30 text-[9.5px] font-medium';
+
+    /* The option the server rendered carries the visibility in its text, which
+       is the same rule the endpoint applies. Reading it from the option keeps
+       the preview honest without a second list in the page. */
+    const showVisibility = () => {
+      const opt = status.options[status.selectedIndex];
+      const text = opt ? opt.textContent : '';
+      const customer = text.includes('Customer Visible');
+      if (visibilityPreview) {
+        visibilityPreview.className = customer ? CUSTOMER : INTERNAL;
+        visibilityPreview.textContent = customer ? 'Customer Visible' : 'Internal Only';
+      }
+    };
+
+    const complete = () => Boolean(status.value) && label.value.trim().length > 0;
+
+    const refresh = () => {
+      if (submit) submit.disabled = !complete();
+      showVisibility();
+    };
+
+    status?.addEventListener('change', refresh);
+    label?.addEventListener('input', refresh);
+
+    window.openTimelineModal = function () {
+      if (errorBox) { errorBox.classList.add('hidden'); errorBox.textContent = ''; }
+      form?.reset();
+      refresh();
+      modal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    };
+
+    window.closeTimelineModal = function () {
+      modal.classList.add('hidden');
+      document.body.style.overflow = '';
+      if (submit) submit.disabled = false;
+    };
+
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('[data-open-timeline-modal]')) {
+        e.preventDefault();
+        window.openTimelineModal();
+      }
+      if (e.target === modal) window.closeTimelineModal();
+    });
+
+    modal.querySelectorAll('[data-close-timeline-modal]').forEach((btn) => {
+      btn.addEventListener('click', window.closeTimelineModal);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) window.closeTimelineModal();
+    });
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (errorBox) { errorBox.classList.add('hidden'); errorBox.textContent = ''; }
+
+      if (!complete()) {
+        if (submit) submit.disabled = true;
+        return;
+      }
+
+      const ref = modal.getAttribute('data-shipment-ref');
+      if (!ref) {
+        if (errorBox) {
+          errorBox.textContent = 'This shipment cannot be identified. Reload the Manage Shipment page and try again.';
+          errorBox.classList.remove('hidden');
+        }
+        return;
+      }
+
+      if (submit) submit.disabled = true;
+
+      try {
+        const res = await fetch(`/admin/shipments/${encodeURIComponent(ref)}/timeline`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ status: status.value, label: label.value.trim() }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || !body.success) {
+          throw new Error(body.error || `Timeline update failed (${res.status})`);
+        }
+
+        /* The status changed and the entry was written, so the page is re-read
+           from the database rather than patched in place: the current-status
+           badge, the timeline and the audit trail all follow what was stored. */
+        if (typeof window.onTimelineUpdated === 'function') {
+          window.onTimelineUpdated(body);
+        } else {
+          window.location.reload();
+        }
+        window.closeTimelineModal();
+      } catch (err) {
+        if (errorBox) {
+          errorBox.textContent = err.message || 'The timeline could not be updated.';
+          errorBox.classList.remove('hidden');
+        }
+        if (submit) submit.disabled = false;
+      }
+    });
+  })();
+</script>

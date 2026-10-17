@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#050c18]">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Documents - Dazzling Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] }, colors: { brand: { dark: '#050c18', card: '#081225', border: '#1b2b48', orange: '#f97316', 'orange-hover': '#ea580c', accentBlue: '#38bdf8', accentGreen: '#22c55e' } } } } }
+  </script>
+</head>
+<body class="h-full bg-[#050c18] text-slate-200 font-sans antialiased overflow-x-hidden">
+  <div class="flex min-h-screen w-full">
+    <%- include('partials/sidebar', { active: 'assisted-purchase' }) %>
+    <div class="flex-1 flex flex-col min-w-0">
+      <%- include('partials/header', { title: 'Documents', subtitle: 'Manage purchase documents', user: typeof user !== 'undefined' ? user : {} }) %>
+      <main class="flex-1 p-6 space-y-5 overflow-y-auto">
+        <div class="max-w-[1400px] mx-auto space-y-5">
+          
+          <%
+            /* ---------------------------------------------------------------------------
+             * Purchase Documents Context & Data Setup
+             * ------------------------------------------------------------------------- */
+            const shipmentId = typeof purchaseId !== 'undefined' ? purchaseId : 'SHP-2602847';
+            const subtitle = 'Purchase evidence, seller documents and linked finance files';
+
+            const documents = (typeof docs !== 'undefined' && Array.isArray(docs) && docs.length > 0)
+              ? docs
+              : [
+                  {
+                    title: 'Order Receipt',
+                    filename: 'amazon-order-receipt.pdf',
+                    linkedText: 'ITM-260847-01, ITM-260847-02\n113-8472600-0912456',
+                    uploadedBy: 'STF-260018',
+                    uploadedAt: '07 Sep 2026\n10:45 AM',
+                    verification: 'Pending Review',
+                    verifiedBy: '—',
+                    hasReviewAction: true
+                  },
+                  {
+                    title: 'Order Confirmation',
+                    filename: 'amazon-order-confirmation.pdf',
+                    linkedText: 'ITM-260847-01, ITM-260847-02\n113-8472600-0912456',
+                    uploadedBy: 'STF-260018',
+                    uploadedAt: '07 Sep 2026\n10:45 AM',
+                    verification: 'Pending Review',
+                    verifiedBy: '—',
+                    hasReviewAction: true
+                  },
+                  {
+                    title: 'Seller Return Terms',
+                    filename: 'seller-terms-approved.pdf',
+                    linkedText: 'ITM-260847-01-04',
+                    uploadedBy: 'STF-260018',
+                    uploadedAt: '06 Sep 2026\n03:30 PM',
+                    verification: 'Verified',
+                    verifiedBy: 'STF-260021',
+                    hasReviewAction: false
+                  },
+                  {
+                    title: 'Cart Screenshot',
+                    filename: 'headphones-cart.png',
+                    linkedText: 'ITM-260847-03',
+                    uploadedBy: 'CUS-2600032',
+                    uploadedAt: '06 Sep 2026\n01:05 PM',
+                    verification: 'Verified',
+                    verifiedBy: 'STF-260021',
+                    hasReviewAction: false
+                  },
+                  {
+                    title: 'Cart Screenshot',
+                    filename: 'amazon-cart.png',
+                    linkedText: 'ITM-260847-01, ITM-260847-02',
+                    uploadedBy: 'CUS-2600032',
+                    uploadedAt: '06 Sep 2026\n01:05 PM',
+                    verification: 'Verified',
+                    verifiedBy: 'STF-260021',
+                    hasReviewAction: false
+                  },
+                  {
+                    title: 'Cart Screenshot',
+                    filename: 'shoes-cart.png',
+                    linkedText: 'ITM-260847-04',
+                    uploadedBy: 'CUS-2600032',
+                    uploadedAt: '06 Sep 2026\n01:05 PM',
+                    verification: 'Verified',
+                    verifiedBy: 'STF-260021',
+                    hasReviewAction: false
+                  }
+                ];
+          %>
+
+          <!-- Top Page Header Strip -->
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <h1 class="text-xl font-bold text-white tracking-tight">Documents</h1>
+              <p class="text-[11px] text-slate-400 mt-0.5">
+                <span class="font-mono text-blue-400"><%= shipmentId %></span> · <%= subtitle %> 
+              </p>
+            </div>
+            
+            <button type="button" data-open-upload-modal class="px-3.5 py-1.5 bg-[#f97316] hover:bg-[#ea580c] text-white text-[11px] font-semibold rounded shadow transition-colors shrink-0">
+              Upload Document 
+            </button>
+          </div>
+
+          <!-- Existing Sub-Tabs Bar (Unchanged for smooth routing) -->
+          <div class="border-b border-[#1b2b48] flex items-center gap-6 text-[11.5px] font-medium pt-1">
+            <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Overview</a>
+            <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/items-purchase-preparation" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Items &amp; Purchase Preparation</a>
+            <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/invoice-advance-payment" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Invoice &amp; Advance Payment</a>
+            <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/seller-orders-tracking" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Seller Orders &amp; Tracking</a>
+            <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/documents" class="pb-2.5 text-[#f97316] border-b-2 border-[#f97316] font-semibold">Documents</a>
+            <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/audit-trail" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Audit Trail</a>
+          </div>
+
+          <!-- Purchase Documents Section -->
+          <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+            <div class="border-b border-[#132238] pb-2.5 flex items-center justify-between gap-4">
+              <h2 class="text-xs font-bold text-white uppercase tracking-wider">Purchase Documents </h2>
+            </div>
+
+            <!-- Search Field & Count Header -->
+            <div class="flex items-center justify-between gap-4 py-1">
+              <div class="relative w-full max-w-sm">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input type="text" placeholder="Search file name, Item ID or seller order number" class="w-full bg-[#050c18] border border-[#1b2b48] text-slate-200 rounded-md pl-9 pr-3 py-1.5 text-[11px] focus:outline-none focus:border-blue-500 placeholder:text-slate-500" /> 
+              </div>
+              <div class="text-[10.5px] text-slate-400 font-medium shrink-0">
+                <%= documents.length %> documents · latest uploaded first 
+              </div>
+            </div>
+
+            <!-- Documents Table -->
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse text-[11px]">
+                <thead>
+                  <tr class="border-b border-[#1b2b48] text-slate-400 text-[10px]">
+                    <th class="py-2.5 pr-3 font-semibold">Document / File </th>
+                    <th class="py-2.5 px-3 font-semibold">Linked Items / Seller Order </th>
+                    <th class="py-2.5 px-3 font-semibold">Uploaded By </th>
+                    <th class="py-2.5 px-3 font-semibold">Uploaded At </th>
+                    <th class="py-2.5 px-3 font-semibold">Verification </th>
+                    <th class="py-2.5 px-3 font-semibold">Verified By </th>
+                    <th class="py-2.5 pl-3 text-right font-semibold">Action </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-[#16243d]/60 text-slate-300">
+                  <% documents.forEach((doc) => { %>
+                    <tr class="hover:bg-[#0f1d35]/50 transition-colors">
+                      
+                      <!-- Document / File -->
+                      <td class="py-3.5 pr-3 align-top">
+                        <div class="text-white font-semibold"><%= doc.title %> </div>
+                        <a href="#" class="text-blue-400 hover:underline font-mono text-[10.5px] mt-0.5 block"><%= doc.filename %></a> 
+                      </td>
+
+                      <!-- Linked Items / Seller Order -->
+                      <td class="py-3.5 px-3 font-mono text-[10.5px] text-slate-300 whitespace-pre-line leading-relaxed align-top">
+                        <%= doc.linkedText %> 
+                      </td>
+
+                      <!-- Uploaded By -->
+                      <td class="py-3.5 px-3 font-mono text-blue-400 align-top">
+                        <a href="#" class="hover:underline"><%= doc.uploadedBy %></a> 
+                      </td>
+
+                      <!-- Uploaded At -->
+                      <td class="py-3.5 px-3 text-slate-400 whitespace-pre-line text-[10.5px] leading-snug align-top">
+                        <%= doc.uploadedAt %> 
+                      </td>
+
+                      <!-- Verification Badge -->
+                      <td class="py-3.5 px-3 align-top">
+                        <% if (doc.verification === 'Verified') { %>
+                          <span class="px-2.5 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[10px] font-semibold inline-block">
+                            Verified 
+                          </span>
+                        <% } else { %>
+                          <span class="px-2.5 py-0.5 rounded bg-[#78350f]/80 text-[#fbbf24] border border-[#d97706]/40 text-[10px] font-semibold inline-block">
+                            Pending Review 
+                          </span>
+                        <% } %>
+                      </td>
+
+                      <!-- Verified By -->
+                      <td class="py-3.5 px-3 font-mono text-slate-400 align-top">
+                        <% if (doc.verifiedBy !== '—') { %>
+                          <a href="#" class="text-blue-400 hover:underline"><%= doc.verifiedBy %></a> 
+                        <% } else { %>
+                          <span>—</span> 
+                        <% } %>
+                      </td>
+
+                      <!-- Action Links -->
+                      <td class="py-3.5 pl-3 text-right align-top space-y-1">
+                        <div>
+                          <a href="#" class="text-blue-400 hover:underline font-medium text-[10.5px]">Open File</a> 
+                        </div>
+                        <% if (doc.hasReviewAction) { %>
+                          <div>
+                            <a href="#" class="text-blue-400 hover:underline font-medium text-[10.5px]">Review Document</a> 
+                          </div>
+                        <% } %>
+                      </td>
+
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Table Footer Pagination Strip -->
+            <div class="flex items-center justify-between pt-3 border-t border-[#1b2b48] text-[11px] text-slate-400">
+              <div>Showing 1–6 of <%= documents.length %> documents</div> 
+              <div class="flex items-center gap-1.5 font-medium">
+                <button type="button" class="px-2 py-1 bg-[#050c18] border border-[#1b2b48] rounded text-slate-500 hover:text-slate-300 disabled:opacity-50" disabled>&lt;</button> 
+                <button type="button" class="px-2.5 py-1 bg-[#f97316] text-white rounded font-bold">1</button> 
+                <button type="button" class="px-2 py-1 bg-[#050c18] border border-[#1b2b48] rounded text-slate-300 hover:bg-[#0e1d38]">&gt;</button> 
+              </div>
+            </div>
+          </div>
+
+          <!-- Linked Finance Documents Panel -->
+          <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+            <div class="border-b border-[#132238] pb-2.5">
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider">Linked Finance Documents </h3>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-6 pt-1 text-[11px]">
+              <a href="#" class="text-blue-400 hover:underline font-medium">
+                View Assisted Purchase Invoice · INV-2600912 
+              </a>
+              <a href="#" class="text-blue-400 hover:underline font-medium">
+                View Payment Evidence · PAY-2600731 
+              </a>
+            </div>
+          </div>
+
+          <!-- Developer Reference Footer Box -->
+          <div class="bg-[#050c18] border border-dashed border-[#1b2b48] rounded-md p-3.5 text-[11px] text-slate-400 space-y-1">
+            <div class="text-slate-300 font-semibold">Developer reference — outside the live tab </div>
+            <p class="text-[10.5px] leading-relaxed">
+              Uploaded By and Verified By show clickable customer or staff account IDs and open the matching profile. Open File previews the saved file. Review Document opens its authorized verification flow; verification does not approve an invoice or payment. Upload Document links the file to this shipment and the applicable item(s) or seller order. Preserve existing document records, uploader identity and audit history; do not duplicate finance files. Missing optional cart screenshots do not block purchasing. 
+            </p>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+  <script>if (window.lucide) lucide.createIcons();</script>
+</body>
+</html>

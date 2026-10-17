@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#050c18]">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manage Purchase - SHP-2602847 - Dazzling Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            brand: {
+              dark: '#050c18', card: '#081225', border: '#1b2b48',
+              orange: '#f97316', 'orange-hover': '#ea580c',
+              accentBlue: '#38bdf8', accentGreen: '#22c55e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="h-full bg-[#050c18] text-slate-200 font-sans antialiased overflow-x-hidden">
+  <div class="flex min-h-screen w-full">
+    <%- include('partials/sidebar', { active: 'assisted-purchase' }) %>
+    
+    <div class="flex-1 flex flex-col min-w-0">
+      <%- include('partials/header', { 
+        title: 'Manage Purchase', 
+        subtitle: 'Coordinate the approved purchase and follow seller orders', 
+        user: typeof user !== 'undefined' ? user : {} 
+      }) %>
+
+      <main class="flex-1 p-6 space-y-5 overflow-y-auto">
+        <%
+          /* ---------------------------------------------------------------------------
+           * Manage Purchase Context & Data Setup
+           * ------------------------------------------------------------------------- */
+          const purchase = (typeof purchaseData !== 'undefined' && purchaseData) ? purchaseData : {
+            shipmentId: 'SHP-2602847',
+            status: 'Partially Purchased',
+            customerName: 'Urban Cart BD',
+            customerId: 'CUS-2600032',
+            lastUpdated: '07 Sep 2026, 10:45 AM',
+            totalItems: 4,
+            invoiceAmount: 'USD 1,030.00',
+            paymentStatus: 'Completed',
+            itemsPurchasedCount: 2,
+            contactPerson: 'Arif Hasan',
+            email: 'orders@example.com',
+            phone: '+880 1700-000000',
+            customerType: 'E-commerce / F-commerce',
+            invoiceId: 'INV-2600912',
+            serviceMode: 'Import',
+            freightMode: 'Air',
+            origin: 'USA',
+            destination: 'Bangladesh',
+            receivingFacility: 'USA Warehouse',
+            approvedItemsText: '4 items',
+            requestApproval: 'Approved - 06 Sep 2026, 02:15 PM',
+            acceptanceReview: '4 of 4 items approved',
+            additionalNotes: 'Purchase the exact products and variants from the supplied links. Keep original retail packaging.',
+            parcelInsuranceRequested: 'Yes',
+            sellerOrdersRecorded: '1',
+            sellerOrdersText: 'Amazon - order receipt recorded'
+          };
+        %>
+
+        <!-- Top Breadcrumb & Title Section -->
+        <div class="space-y-1">
+          <div class="text-[10.5px] text-slate-400 font-medium">
+            <a href="/admin/assisted-purchases" class="hover:underline">Assisted Purchase &amp; Procurement</a> 
+            <span class="mx-1 text-slate-600">/</span> 
+            <span class="text-slate-300">Manage Purchase</span>
+          </div>
+
+          <div class="flex items-center gap-3 pt-0.5">
+            <h1 class="text-2xl font-bold text-white tracking-tight font-mono"><%= purchase.shipmentId %></h1>
+            <span class="px-2.5 py-0.5 rounded bg-[#1e3a8a]/90 text-[#60a5fa] border border-[#2563eb]/50 text-[10.5px] font-semibold">
+              <%= purchase.status %>
+            </span>
+          </div>
+
+          <div class="text-[11px] text-slate-400">
+            <%= purchase.customerName %> · 
+            <a href="#" class="text-blue-400 hover:underline font-mono"><%= purchase.customerId %></a> · 
+            Last updated <%= purchase.lastUpdated %>
+          </div>
+        </div>
+
+        <!-- 4 Top Metric Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <!-- Total Items -->
+          <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-3.5">
+            <div class="text-[10px] text-slate-400 font-medium">Total Items</div>
+            <div class="text-xl font-bold text-white mt-1"><%= purchase.totalItems %></div>
+            <div class="text-[9.5px] text-slate-500 mt-0.5">Approved purchase items</div>
+          </div>
+
+          <!-- Assisted Purchase Invoice -->
+          <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-3.5">
+            <div class="text-[10px] text-slate-400 font-medium">Assisted Purchase Invoice</div>
+            <div class="text-xl font-bold text-white mt-1"><%= purchase.invoiceAmount %></div>
+            <div class="text-[9.5px] text-slate-500 mt-0.5">Issued invoice total</div>
+          </div>
+
+          <!-- Payment Status -->
+          <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-3.5">
+            <div class="text-[10px] text-slate-400 font-medium">Payment Status</div>
+            <div class="text-xl font-bold text-emerald-400 mt-1"><%= purchase.paymentStatus %></div>
+            <div class="text-[9.5px] text-slate-500 mt-0.5">Advance payment cleared</div>
+          </div>
+
+          <!-- Purchase Progress -->
+          <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-3.5">
+            <div class="text-[10px] text-slate-400 font-medium">Purchase Progress</div>
+            <div class="text-xl font-bold text-white mt-1"><%= purchase.itemsPurchasedCount %> of <%= purchase.totalItems %></div>
+            <div class="text-[9.5px] text-slate-500 mt-0.5">Items purchased</div>
+          </div>
+        </div>
+
+        <!-- Section Sub-Tabs Navigation Strip -->
+        <div class="border-b border-[#1b2b48] flex items-center gap-6 text-[11.5px] font-medium pt-1">
+          <a href="#" class="pb-2.5 text-[#f97316] border-b-2 border-[#f97316] font-semibold">Overview</a>
+          <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/items-purchase-preparation" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Items &amp; Purchase Preparation</a>
+          <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/invoice-advance-payment" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Invoice &amp; Advance Payment</a>
+          <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/seller-orders-tracking" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Seller Orders &amp; Tracking</a>
+          <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/documents" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Documents</a>
+          <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/audit-trail" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Audit Trail</a>
+        </div>
+
+        <!-- Action Required Alert Banner -->
+        <div class="bg-[#78350f]/20 border border-[#d97706]/40 rounded-md p-3.5 flex items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="w-7 h-7 rounded bg-[#78350f]/60 border border-[#d97706]/50 flex items-center justify-center text-[#f97316] shrink-0 font-bold">
+              !
+            </div>
+            <div>
+              <div class="text-[11px] font-bold text-[#f97316]">Action Required</div>
+              <div class="text-[10.5px] text-slate-300 mt-0.5">Record the remaining purchases and add carrier tracking when the stores dispatch the parcels.</div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-4 text-[10.5px] shrink-0">
+            <a href="#" class="text-blue-400 hover:underline font-medium">Record Seller Order</a>
+            <a href="#" class="text-blue-400 hover:underline font-medium">Add Carrier Tracking Number</a>
+          </div>
+        </div>
+
+        <!-- Main 2-Column Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          
+          <!-- LEFT COLUMN (7 Cols) -->
+          <div class="lg:col-span-7 space-y-5">
+            
+            <!-- Card 1: Purchase Overview -->
+            <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+              <div class="flex items-center justify-between border-b border-[#132238] pb-2.5">
+                <h3 class="text-xs font-bold text-white">Purchase Overview</h3>
+                <a href="/admin/requests-bookings" class="text-blue-400 hover:underline text-[10.5px]">View Original Request</a>
+              </div>
+
+              <div class="grid grid-cols-2 gap-y-3 gap-x-4 text-[11px]">
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Shipment ID</span>
+                  <span class="font-mono text-white mt-0.5 block font-medium"><%= purchase.shipmentId %></span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Purchase Type</span>
+                  <span class="text-slate-200 mt-0.5 block font-medium">Assisted Purchase</span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Service Mode</span>
+                  <span class="text-slate-200 mt-0.5 block font-medium"><%= purchase.serviceMode %></span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Freight Mode</span>
+                  <span class="text-slate-200 mt-0.5 block font-medium"><%= purchase.freightMode %></span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Origin</span>
+                  <span class="text-slate-200 mt-0.5 block font-medium"><%= purchase.origin %></span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Destination</span>
+                  <span class="text-slate-200 mt-0.5 block font-medium"><%= purchase.destination %></span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Receiving Facility</span>
+                  <span class="text-slate-200 mt-0.5 block font-medium"><%= purchase.receivingFacility %></span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Approved Items</span>
+                  <span class="text-slate-200 mt-0.5 block font-medium"><%= purchase.approvedItemsText %></span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Request Approval</span>
+                  <span class="text-slate-200 mt-0.5 block font-medium"><%= purchase.requestApproval %></span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block mb-1">Acceptance Review</span>
+                  <span class="px-2 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-semibold">
+                    <%= purchase.acceptanceReview %>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2: Customer Instructions & Insurance -->
+            <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+              <h3 class="text-xs font-bold text-white border-b border-[#132238] pb-2.5">Customer Instructions &amp; Insurance</h3>
+
+              <div class="space-y-3 text-[11px]">
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Additional Notes</span>
+                  <p class="text-slate-300 mt-1 leading-relaxed"><%= purchase.additionalNotes %></p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 pt-1">
+                  <div>
+                    <span class="text-[10px] text-slate-400 block">Parcel Insurance Requested</span>
+                    <span class="text-slate-200 mt-0.5 block font-medium"><%= purchase.parcelInsuranceRequested %></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 3: Seller Orders & Warehouse Arrival -->
+            <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+              <h3 class="text-xs font-bold text-white border-b border-[#132238] pb-2.5">Seller Orders &amp; Warehouse Arrival</h3>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <!-- Items Purchased Card -->
+                <div class="bg-[#050c18] border border-[#13223b] rounded p-3 space-y-2">
+                  <div class="text-[10px] text-slate-400 font-medium">Items Purchased</div>
+                  <div class="text-lg font-bold text-white"><%= purchase.itemsPurchasedCount %> of <%= purchase.totalItems %></div>
+                  
+                  <!-- Progress Bar -->
+                  <div class="w-full bg-[#101f38] h-1.5 rounded-full overflow-hidden">
+                    <div class="bg-blue-500 h-full rounded-full" style="width: 50%;"></div>
+                  </div>
+                  <div class="text-[9.5px] text-slate-400">2 items remaining to purchase</div>
+                </div>
+
+                <!-- Recorded Seller Orders Card -->
+                <div class="bg-[#050c18] border border-[#13223b] rounded p-3 space-y-1">
+                  <div class="text-[10px] text-slate-400 font-medium">Recorded Seller Orders</div>
+                  <div class="text-lg font-bold text-white"><%= purchase.sellerOrdersRecorded %></div>
+                  <div class="text-[10px] text-slate-400 mt-1"><%= purchase.sellerOrdersText %></div>
+                </div>
+              </div>
+
+              <!-- Extra Summary Details Strip -->
+              <div class="pt-2 text-[11px] space-y-2 divide-y divide-[#13223b]/50">
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-400">Carrier Tracking Numbers</span>
+                  <span class="text-slate-400 italic">Not yet provided by seller</span>
+                </div>
+                <div class="flex justify-between items-center pt-2">
+                  <span class="text-slate-400">Warehouse Receipt</span>
+                  <span class="text-slate-400 italic">None recorded</span>
+                </div>
+              </div>
+
+              <div class="flex justify-between items-center pt-2 border-t border-[#132238] text-[10.5px]">
+                <span class="text-slate-500">Warehouse receipt information updates from Warehouse &amp; Hub Operations.</span>
+                <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/seller-orders-tracking" class="text-blue-400 hover:underline font-medium shrink-0">Open Seller Orders &amp; Tracking</a>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- RIGHT COLUMN (5 Cols) -->
+          <div class="lg:col-span-5 space-y-5">
+            
+            <!-- Customer & Contact -->
+            <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+              <h3 class="text-xs font-bold text-white border-b border-[#132238] pb-2.5">Customer &amp; Contact</h3>
+
+              <div class="grid grid-cols-2 gap-y-3 gap-x-4 text-[11px]">
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Customer Name</span>
+                  <span class="text-white mt-0.5 block font-semibold"><%= purchase.customerName %></span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Customer ID</span>
+                  <a href="#" class="text-blue-400 hover:underline font-mono mt-0.5 block font-medium"><%= purchase.customerId %></a>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Contact Person</span>
+                  <span class="text-slate-200 mt-0.5 block font-medium"><%= purchase.contactPerson %></span>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Email</span>
+                  <a href="mailto:<%= purchase.email %>" class="text-slate-300 hover:underline mt-0.5 block font-mono text-[10.5px]"><%= purchase.email %></a>
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block">Phone</span>
+                  <span class="text-slate-300 mt-0.5 block font-mono text-[10.5px]"><%= purchase.phone %></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2: Invoice & Advance Payment -->
+            <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+              <div class="flex items-center justify-between border-b border-[#132238] pb-2.5">
+                <h3 class="text-xs font-bold text-white">Invoice &amp; Advance Payment</h3>
+              </div>
+
+              <div class="space-y-3 text-[11px]">
+                <div>
+                  <a href="#" class="text-blue-400 hover:underline font-mono text-[10.5px]"><%= purchase.invoiceId %></a>
+                  <div class="text-xl font-bold text-white mt-0.5"><%= purchase.invoiceAmount %></div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">Assisted Purchase Invoice</div>
+                </div>
+
+                <!-- Status Check Items -->
+                <div class="space-y-2 pt-1 border-t border-[#13223b]/50">
+                  <div class="flex items-center justify-between">
+                    <span class="text-slate-300">Invoice Checking &amp; Approval</span>
+                    <span class="px-2 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-semibold">Approved</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-slate-300">Payment Status</span>
+                    <span class="px-2 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-semibold">Completed</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-slate-300">Payment Checking &amp; Approval</span>
+                    <span class="px-2 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-semibold">Approved</span>
+                  </div>
+                </div>
+
+                <div class="text-right pt-1">
+                  <a href="/admin/assisted-purchase/manage/<%= typeof purchaseId !== 'undefined' ? purchaseId : '' %>/invoice-advance-payment" class="text-blue-400 hover:underline text-[10.5px] font-medium">Open Invoice &amp; Advance Payment</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 3: Purchase Clearance -->
+            <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+              <div class="flex items-center justify-between border-b border-[#132238] pb-2.5">
+                <h3 class="text-xs font-bold text-white">Purchase Clearance</h3>
+                <span class="text-[10px] text-slate-500 font-medium">Read-only summary</span>
+              </div>
+
+              <div class="space-y-2 text-[11px]">
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-300">Item Acceptance</span>
+                  <span class="px-2 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-semibold">Approved</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-300">Seller Return Terms &amp; Customer Consent</span>
+                  <span class="px-2 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-semibold">Recorded</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-300">Required Advance Payment</span>
+                  <span class="px-2 py-0.5 rounded bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-semibold">Completed</span>
+                </div>
+              </div>
+
+              <div class="pt-2 border-t border-[#132238] text-[9.5px] text-slate-500 leading-relaxed">
+                Clearance reflects saved reviews, customer consent and finance approval. Purchase only the approved products, quantities and variants.
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    if (window.lucide) lucide.createIcons();
+  </script>
+</body>
+</html>

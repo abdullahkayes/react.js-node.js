@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#050c18]">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audit Trail - Dazzling Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] }, colors: { brand: { dark: '#050c18', card: '#081225', border: '#1b2b48', orange: '#f97316', 'orange-hover': '#ea580c', accentBlue: '#38bdf8', accentGreen: '#22c55e' } } } } }
+  </script>
+</head>
+<body class="h-full bg-[#050c18] text-slate-200 font-sans antialiased overflow-x-hidden">
+  <div class="flex min-h-screen w-full">
+    <%- include('partials/sidebar', { active: 'assisted-purchase' }) %>
+    <div class="flex-1 flex flex-col min-w-0">
+      <%- include('partials/header', { title: 'Audit Trail', subtitle: 'View purchase audit trail', user: typeof user !== 'undefined' ? user : {} }) %>
+      <main class="flex-1 p-6 space-y-5 overflow-y-auto">
+        <div class="max-w-[1400px] mx-auto space-y-5">
+          
+          <%
+            /* ---------------------------------------------------------------------------
+             * Safe Local Variable Binding (Avoids TDZ Scoping Conflicts)
+             * ------------------------------------------------------------------------- */
+            var currentPurchaseId = (typeof purchaseId !== 'undefined' && purchaseId) ? purchaseId : 'SHP-2602847';
+            var subtitleText = 'Review recorded actions and changes for this purchase';
+
+            var auditLogs = (typeof logs !== 'undefined' && Array.isArray(logs) && logs.length > 0)
+              ? logs
+              : [
+                  {
+                    actor: 'STF-260018',
+                    action: 'Recorded Seller Order',
+                    entityType: 'Shipment',
+                    entityId: 'SHP-2602847',
+                    details: 'Recorded Amazon seller order 113-8472600-0912456 for ITM-260847-01 and ITM-260847-02. Actual order total USD 467.60.',
+                    ipAddress: '192.0.2.18'
+                  },
+                  {
+                    actor: 'STF-260018',
+                    action: 'Uploaded Documents',
+                    entityType: 'Shipment',
+                    entityId: 'SHP-2602847',
+                    details: 'Added seller order receipt and order confirmation.',
+                    ipAddress: '192.0.2.18'
+                  },
+                  {
+                    actor: 'STF-260003',
+                    action: 'Approved Payment',
+                    entityType: 'Payment',
+                    entityId: 'PAY-2600731',
+                    details: 'Approved USD 1,030.00 advance payment after checking.',
+                    ipAddress: '192.0.2.3'
+                  },
+                  {
+                    actor: 'STF-260015',
+                    action: 'Checked Payment',
+                    entityType: 'Payment',
+                    entityId: 'PAY-2600731',
+                    details: 'Checked the recorded bank receipt and reference.',
+                    ipAddress: '192.0.2.15'
+                  },
+                  {
+                    actor: 'STF-260012',
+                    action: 'Recorded Payment',
+                    entityType: 'Payment',
+                    entityId: 'PAY-2600731',
+                    details: 'Recorded bank transfer: USD 1,030.00.',
+                    ipAddress: '192.0.2.12'
+                  },
+                  {
+                    actor: 'CUS-2600032',
+                    action: 'Accepted Purchase Terms',
+                    entityType: 'Shipment',
+                    entityId: 'SHP-2602847',
+                    details: 'Recorded consent to applicable seller return terms and procurement/service fee conditions.',
+                    ipAddress: '198.51.100.32'
+                  },
+                  {
+                    actor: 'STF-260003',
+                    action: 'Approved Invoice',
+                    entityType: 'Invoice',
+                    entityId: 'INV-2600912',
+                    details: 'Approved assisted purchase invoice total USD 1,030.00.',
+                    ipAddress: '192.0.2.3'
+                  },
+                  {
+                    actor: 'STF-260018',
+                    action: 'Updated Purchase Preparation',
+                    entityType: 'Shipment Item',
+                    entityId: 'ITM-260847-03',
+                    details: 'Saved seller availability and confirmed unit price USD 90.00.',
+                    ipAddress: '192.0.2.18'
+                  }
+                ];
+          %>
+
+          <!-- Top Header Strip -->
+          <div class="space-y-1">
+            <h1 class="text-xl font-bold text-white tracking-tight">Audit Trail</h1> 
+            <p class="text-[11px] text-slate-400 mt-0.5">
+              <span class="font-mono text-blue-400"><%= currentPurchaseId %></span> &bull; <%= subtitleText %> 
+            </p>
+          </div>
+
+          <!-- Sub-Tabs Navigation Strip (Identical Route Links across all sub-tabs) -->
+          <div class="border-b border-[#1b2b48] flex items-center gap-6 text-[11.5px] font-medium pt-1">
+            <a href="/admin/assisted-purchase/manage/<%= currentPurchaseId %>" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Overview</a>
+            <a href="/admin/assisted-purchase/manage/<%= currentPurchaseId %>/items-purchase-preparation" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Items &amp; Purchase Preparation</a>
+            <a href="/admin/assisted-purchase/manage/<%= currentPurchaseId %>/invoice-advance-payment" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Invoice &amp; Advance Payment</a>
+            <a href="/admin/assisted-purchase/manage/<%= currentPurchaseId %>/seller-orders-tracking" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Seller Orders &amp; Tracking</a>
+            <a href="/admin/assisted-purchase/manage/<%= currentPurchaseId %>/documents" class="pb-2.5 text-slate-400 hover:text-slate-200 transition-colors">Documents</a>
+            <a href="/admin/assisted-purchase/manage/<%= currentPurchaseId %>/audit-trail" class="pb-2.5 text-[#f97316] border-b-2 border-[#f97316] font-semibold">Audit Trail</a>
+          </div>
+
+          <!-- Purchase Activity Panel -->
+          <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+            <div class="border-b border-[#132238] pb-2.5">
+              <h2 class="text-xs font-bold text-white uppercase tracking-wider">Purchase Activity</h2> 
+            </div>
+
+            <!-- Search Field & Sorting Header -->
+            <div class="flex items-center justify-between gap-4 py-1">
+              <div class="relative w-full max-w-sm">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input type="text" placeholder="Search actor, action, entity type, entity ID or IP address" class="w-full bg-[#050c18] border border-[#1b2b48] text-slate-200 rounded-md pl-9 pr-3 py-1.5 text-[11px] focus:outline-none focus:border-blue-500 placeholder:text-slate-500" /> 
+              </div>
+              <div class="text-[10.5px] text-slate-400 font-medium shrink-0">
+                Latest activity first 
+              </div>
+            </div>
+
+            <!-- Audit Trail Table -->
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse text-[11px]">
+                <thead>
+                  <tr class="border-b border-[#1b2b48] text-slate-400 text-[10px]">
+                    <th class="py-2.5 pr-3 font-semibold">Actor</th> 
+                    <th class="py-2.5 px-3 font-semibold">Action</th> 
+                    <th class="py-2.5 px-3 font-semibold">Entity Type</th> 
+                    <th class="py-2.5 px-3 font-semibold">Entity ID</th> 
+                    <th class="py-2.5 px-3 font-semibold">Details</th> 
+                    <th class="py-2.5 pl-3 text-right font-semibold">IP Address</th> 
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-[#16243d]/60 text-slate-300">
+                  <% auditLogs.forEach(function(log) { %>
+                    <tr class="hover:bg-[#0f1d35]/50 transition-colors">
+                      
+                      <!-- Actor -->
+                      <td class="py-3.5 pr-3 font-mono text-blue-400 font-medium align-top">
+                        <a href="#" class="hover:underline"><%= log.actor %></a> 
+                      </td>
+
+                      <!-- Action -->
+                      <td class="py-3.5 px-3 font-medium text-white align-top">
+                        <%= log.action %> 
+                      </td>
+
+                      <!-- Entity Type -->
+                      <td class="py-3.5 px-3 text-slate-300 align-top">
+                        <%= log.entityType %> 
+                      </td>
+
+                      <!-- Entity ID -->
+                      <td class="py-3.5 px-3 font-mono text-blue-400 align-top">
+                        <a href="#" class="hover:underline"><%= log.entityId %></a> 
+                      </td>
+
+                      <!-- Details -->
+                      <td class="py-3.5 px-3 text-slate-300 leading-relaxed align-top">
+                        <%= log.details %> 
+                      </td>
+
+                      <!-- IP Address -->
+                      <td class="py-3.5 pl-3 text-right font-mono text-slate-400 align-top">
+                        <%= log.ipAddress %> 
+                      </td>
+
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination Footer -->
+            <div class="flex items-center justify-between pt-3 border-t border-[#1b2b48] text-[11px] text-slate-400">
+              <div>Showing 1–8 of <%= auditLogs.length %> entries</div> 
+              <div class="flex items-center gap-1.5 font-medium">
+                <button type="button" class="px-2 py-1 bg-[#050c18] border border-[#1b2b48] rounded text-slate-500 hover:text-slate-300 disabled:opacity-50" disabled>&lt;</button> 
+                <button type="button" class="px-2.5 py-1 bg-[#f97316] text-white rounded font-bold">1</button> 
+                <button type="button" class="px-2 py-1 bg-[#050c18] border border-[#1b2b48] rounded text-slate-300 hover:bg-[#0e1d38]">&gt;</button> 
+              </div>
+            </div>
+          </div>
+
+          <!-- Developer Reference Footer Box -->
+          <div class="bg-[#050c18] border border-dashed border-[#1b2b48] rounded-md p-3.5 text-[11px] text-slate-400 space-y-1">
+            <div class="text-slate-300 font-semibold">Developer reference — outside the live tab</div> 
+            <p class="text-[10.5px] leading-relaxed">
+              Use the same audit field labels across the website: Actor, Action, Entity Type, Entity ID, Details and IP Address. Actor account IDs open the matching staff or customer profile. Entity Type and Entity ID must identify the actual logged record; show the recorded change in Details. Audit entries are read-only. Retain event timestamps internally and sort newest first. Show System for automated actors and a dash when an IP address was not captured; never invent one. Addresses in this visual are illustrative. Map readable labels to the stored audit events. 
+            </p>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+  <script>if (window.lucide) lucide.createIcons();</script>
+</body>
+</html>

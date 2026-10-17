@@ -1,0 +1,345 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Manage Shipment - Quotations & Invoices Tab
+   *
+   * Invoices are read from the database. Every invoice created through the
+   * Create Invoice modal is written to the invoices table and linked to this
+   * shipment, so the panel below shows the real records rather than examples.
+   *
+   * Quotations are not persisted: there is no quotations table yet, so that
+   * panel reports an empty state instead of showing sample rows that would
+   * look like real records. See renderFinance in adminPageController, which
+   * reads the same way.
+   * ------------------------------------------------------------------------- */
+
+  /* Sequelize instances carry a get(); plain objects do not. Both are accepted
+     so the tab can be rendered from the manage page or from a plain object. */
+  const plainOf = (row) => (row && typeof row.get === 'function') ? row.get({ plain: true }) : (row || {});
+
+  const numOr = (value, fallback) => {
+    const n = Number(value);
+    return isNaN(n) ? fallback : n;
+  };
+
+  /* The totals are held in both currencies, so the panel shows both rather
+     than picking one. */
+  const dualMoney = (bdt, usd) =>
+    'BDT ' + numOr(bdt, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+    ' / USD ' + numOr(usd, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  /* The PDF is written under uploads/invoices and served from /uploads, so the
+     stored absolute path becomes a URL by keeping everything from uploads on. */
+  const pdfUrlOf = (filePath) => {
+    const s = String(filePath || '').replace(/\\/g, '/');
+    const at = s.indexOf('/uploads/');
+    return at === -1 ? null : s.slice(at);
+  };
+
+  const invoiceRef = (inv) => inv.invoiceId || ('INV-' + String(inv.id || '').padStart(7, '0'));
+
+  /* ---- Invoices: read from the database -------------------------------- */
+  const rawInvoices = (typeof shipment !== 'undefined' && shipment && Array.isArray(shipment.invoices))
+    ? shipment.invoices
+    : [];
+
+  const invoicesList = rawInvoices
+    .map(plainOf)
+    .map((inv) => ({
+      id: invoiceRef(inv),
+      numericId: inv.id,
+      type: inv.invoiceType || 'Invoice',
+      /* Payment status is what the panel's badge reports: an invoice is Pending
+         until a payment is recorded against it. */
+      status: inv.paymentStatus || 'Pending',
+      total: dualMoney(inv.totalBdt, inv.totalUsd),
+      totalBdt: numOr(inv.totalBdt, 0),
+      totalUsd: numOr(inv.totalUsd, 0),
+      dueDate: inv.dueDate,
+      issuedAt: inv.issuedAt || inv.createdAt,
+      itemCount: Array.isArray(inv.items) ? inv.items.length : 0,
+      items: Array.isArray(inv.items) ? inv.items.map(plainOf) : [],
+      pdfUrl: pdfUrlOf(inv.pdfPath),
+    }))
+    /* Newest first: an invoice raised today is the one staff are looking for. */
+    .sort((a, b) => new Date(b.issuedAt || 0) - new Date(a.issuedAt || 0));
+
+  /* Status rule for a quotation: stored as Sent when it is generated, and it
+     reads Expired once the Valid Until date has passed. The lapse is derived
+     from the date rather than stored, so a quotation never shows as Sent after
+     it expired and nothing has to be updated to make that happen. The helper is
+     shared with the controller when it is supplied, and derived here otherwise,
+     so this partial can stand on its own if it is rendered without it. */
+  const quotationStatusOf = (typeof quotationDisplayStatus === 'function')
+    ? (quo) => quotationDisplayStatus(quo)
+    : (quo) => {
+        if (quo.status === 'Cancelled') return 'Cancelled';
+        if (!quo.validUntil) return quo.status || 'Sent';
+        const today = new Date();
+        const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        return new Date(quo.validUntil) < endOfToday ? 'Expired' : (quo.status || 'Sent');
+      };
+
+  /* ---- Quotations: read from the database ------------------------------ */
+  const rawQuotations = (typeof shipment !== 'undefined' && shipment && Array.isArray(shipment.quotations))
+    ? shipment.quotations
+    : [];
+
+  const quotations = rawQuotations.map(plainOf).map((quo) => ({
+    id: quo.quotationId || ('QUO-' + String(quo.id || '').padStart(7, '0')),
+    type: quo.quotationType || 'Quotation',
+    status: quotationStatusOf(quo),
+    total: dualMoney(quo.totalBdt, quo.totalUsd),
+    validUntil: quo.validUntil,
+    issuedAt: quo.issuedAt || quo.createdAt,
+    items: Array.isArray(quo.items) ? quo.items.map(plainOf) : [],
+    pdfUrl: pdfUrlOf(quo.pdfPath),
+  })).sort((a, b) => new Date(b.issuedAt || 0) - new Date(a.issuedAt || 0));
+
+  /* The quotation whose items are listed below: the newest one on file. */
+  const activeQuotation = quotations.length ? quotations[0] : null;
+%>
+
+<div id="quotations-invoices-tab" class="space-y-4 text-slate-200 font-sans text-[12px] antialiased">
+
+  <!-- Header & Main Actions -->
+  <div class="flex items-center justify-between gap-4 pb-1">
+    <div>
+      <h1 class="text-xl font-bold text-white tracking-tight">Quotations & Invoices</h1>
+      <p class="text-[11px] text-slate-400 mt-0.5">Manage estimated charges separately from final payable invoices.</p>
+    </div>
+
+    <div class="flex items-center gap-2 shrink-0">
+      <button type="button" data-open-quotation-modal class="px-3 py-1.5 bg-[#12233f] hover:bg-[#182d50] text-slate-200 border border-[#23385d] text-[11px] font-semibold rounded transition-colors">
+        Create Quotation
+      </button>
+      <button type="button" data-open-invoice-modal class="px-3.5 py-1.5 bg-[#f97316] hover:bg-[#ea580c] text-white text-[11px] font-semibold rounded shadow transition-colors">
+        Create Invoice
+      </button>
+    </div>
+  </div>
+
+  <!-- Top Section Grid (Quotations & Invoices Split) -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+    <!-- LEFT PANEL: Quotations -->
+    <div class="lg:col-span-7 bg-[#081225] border border-[#1b2b48] rounded-md p-4 flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold text-white">Quotations</h2>
+          <% if (quotations.length) { %>
+            <span class="text-[10px] text-slate-400"><%= quotations.length %> on file</span>
+          <% } %>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-[11px]">
+            <thead>
+              <tr class="border-b border-[#1b2b48] text-slate-400 text-[10.5px]">
+                <th class="py-2 pr-2 font-medium">Quotation ID</th>
+                <th class="py-2 px-2 font-medium">Type</th>
+                <th class="py-2 px-2 font-medium">Status</th>
+                <th class="py-2 px-2 font-medium">Estimated Total</th>
+                <th class="py-2 px-2 font-medium">Valid Until</th>
+                <th class="py-2 pl-2 text-right font-medium">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[#16243d]/60 text-slate-300">
+              <% if (!quotations.length) { %>
+                <tr>
+                  <td colspan="6" class="py-8 text-center">
+                    <p class="text-slate-300 text-[12px] font-medium">No quotations recorded</p>
+                    <p class="text-[10.5px] text-slate-500 mt-1">Quotations are not stored yet, so none can be listed. Use the Create Quotation action to issue an estimate.</p>
+                  </td>
+                </tr>
+              <% } else { %>
+                <% quotations.forEach((quo) => { %>
+                  <tr class="hover:bg-[#0f1d35]/50 transition-colors">
+                    <td class="py-2.5 pr-2 font-medium text-white font-mono"><%= quo.id %></td>
+                    <td class="py-2.5 px-2 text-slate-300"><%= quo.type %></td>
+                    <td class="py-2.5 px-2">
+                      <% if (quo.status === 'Sent') { %>
+                        <span class="px-2 py-0.5 rounded-full bg-[#1e3a5f]/80 text-[#60a5fa] border border-[#2563eb]/40 text-[9.5px] font-medium">
+                          Sent
+                        </span>
+                      <% } else if (quo.status === 'Expired') { %>
+                        <span class="px-2 py-0.5 rounded-full bg-[#1e293b] text-slate-400 border border-slate-700 text-[9.5px] font-medium">
+                          Expired
+                        </span>
+                      <% } else if (quo.status === 'Cancelled') { %>
+                        <span class="px-2 py-0.5 rounded-full bg-[#3f1d1d] text-[#f87171] border border-[#7f1d1d]/50 text-[9.5px] font-medium">
+                          Cancelled
+                        </span>
+                      <% } else { %>
+                        <span class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[9.5px] font-medium">
+                          <%= quo.status %>
+                        </span>
+                      <% } %>
+                    </td>
+                    <td class="py-2.5 px-2 font-medium text-white font-mono text-[10.5px]"><%= quo.total %></td>
+                    <td class="py-2.5 px-2 text-slate-300"><%= typeof fmtDate === 'function' ? fmtDate(quo.validUntil) : '—' %></td>
+                    <td class="py-2.5 pl-2 text-right">
+                      <% if (quo.pdfUrl) { %>
+                        <a href="<%= quo.pdfUrl %>" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300 hover:underline text-[11px]">View PDF</a>
+                      <% } else { %>
+                        <span class="text-slate-500 text-[11px]" title="The PDF could not be generated when this quotation was issued">No PDF</span>
+                      <% } %>
+                    </td>
+                  </tr>
+                <% }); %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Invoices -->
+    <div class="lg:col-span-5 bg-[#081225] border border-[#1b2b48] rounded-md p-4 flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold text-white">Invoices</h2>
+          <% if (invoicesList.length) { %>
+            <span class="text-[10px] text-slate-400"><%= invoicesList.length %> on file</span>
+          <% } %>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-[11px]">
+            <thead>
+              <tr class="border-b border-[#1b2b48] text-slate-400 text-[10.5px]">
+                <th class="py-2 pr-2 font-medium">Invoice ID</th>
+                <th class="py-2 px-2 font-medium">Type</th>
+                <th class="py-2 px-2 font-medium">Status</th>
+                <th class="py-2 px-2 font-medium">Total</th>
+                <th class="py-2 px-2 font-medium">Due Date</th>
+                <th class="py-2 pl-2 text-right font-medium">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[#16243d]/60 text-slate-300">
+              <% if (!invoicesList.length) { %>
+                <tr>
+                  <td colspan="6" class="py-8 text-center">
+                    <p class="text-slate-300 text-[12px] font-medium">No invoices created yet</p>
+                    <p class="text-[10.5px] text-slate-500 mt-1">Invoices raised with the Create Invoice action are stored against this shipment and listed here.</p>
+                  </td>
+                </tr>
+              <% } else { %>
+                <% invoicesList.forEach((inv) => { %>
+                  <tr class="hover:bg-[#0f1d35]/50 transition-colors">
+                    <td class="py-2.5 pr-2 font-medium text-white font-mono"><%= inv.id %></td>
+                    <td class="py-2.5 px-2 text-slate-300"><%= inv.type %></td>
+                    <td class="py-2.5 px-2">
+                      <% /* Payment status, which the create-invoice
+                           step sets to Pending on generation and a
+                           recorded payment moves to Completed. */ %>
+                      <% if (inv.status === 'Paid' || inv.status === 'Completed') { %>
+                        <span class="px-2 py-0.5 rounded-full bg-[#064e3b]/80 text-[#34d399] border border-[#059669]/40 text-[9.5px] font-medium">
+                          <%= inv.status %>
+                        </span>
+                      <% } else if (inv.status === 'Pending') { %>
+                        <span class="px-2 py-0.5 rounded-full bg-[#78350f]/80 text-[#fbbf24] border border-[#b45309]/40 text-[9.5px] font-medium">
+                          Pending
+                        </span>
+                      <% } else if (inv.status === 'Refunded') { %>
+                        <span class="px-2 py-0.5 rounded-full bg-[#1e293b] text-slate-400 border border-slate-700 text-[9.5px] font-medium">
+                          Refunded
+                        </span>
+                      <% } else { %>
+                        <span class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[9.5px] font-medium">
+                          <%= inv.status %>
+                        </span>
+                      <% } %>
+                    </td>
+                    <td class="py-2.5 px-2 font-medium text-white font-mono text-[10.5px]"><%= inv.total %></td>
+                    <td class="py-2.5 px-2 text-slate-300"><%= typeof fmtDate === 'function' ? fmtDate(inv.dueDate) : '—' %></td>
+                    <td class="py-2.5 pl-2 text-right">
+                      <% if (inv.pdfUrl) { %>
+                        <a href="<%= inv.pdfUrl %>" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300 hover:underline text-[11px]">View PDF</a>
+                      <% } else { %>
+                        <span class="text-slate-500 text-[11px]" title="The PDF could not be generated when this invoice was issued">No PDF</span>
+                      <% } %>
+                    </td>
+                  </tr>
+                <% }); %>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Footer Message in Invoices Card: only while there is nothing to say -->
+      <div class="mt-6 pt-4 text-center">
+        <% if (!invoicesList.some((inv) => inv.type === 'Import Final Shipment')) { %>
+          <p class="text-white font-bold text-[12px]">Final shipment invoice not created</p>
+          <p class="text-[10.5px] text-slate-400 mt-0.5">It will appear as a separate Import Final Shipment invoice when issued.</p>
+        <% } else { %>
+          <p class="text-slate-400 text-[10.5px]">Import Final Shipment invoices are listed above.</p>
+        <% } %>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Quotation Items Panel -->
+  <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+    <div class="flex items-center justify-between pb-2">
+      <h2 class="text-sm font-bold text-white">
+        Quotation Items · <span class="text-slate-300"><%= activeQuotation ? (activeQuotation.id || '—') : 'None on file' %></span>
+      </h2>
+      <span class="text-[10px] text-slate-400">Currency: USD</span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-[11px]">
+        <thead>
+          <tr class="border-b border-[#1b2b48] text-slate-400 text-[10.5px]">
+            <th class="py-2 pr-2 font-medium">Quotation Item ID</th>
+            <th class="py-2 px-2 font-medium">Item ID</th>
+            <th class="py-2 px-2 font-medium">Charge</th>
+            <th class="py-2 px-2 font-medium">Quantity</th>
+            <th class="py-2 px-2 font-medium">Unit Price</th>
+            <th class="py-2 pl-2 text-right font-medium">Line Total</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#16243d]/60 text-slate-300">
+          <% if (!activeQuotation) { %>
+            <tr>
+              <td colspan="6" class="py-8 text-center">
+                <p class="text-slate-300 text-[12px] font-medium">No quotation items to show</p>
+                <p class="text-[10.5px] text-slate-500 mt-1">Line items appear here once a quotation is stored for this shipment.</p>
+              </td>
+            </tr>
+          <% } else if (!activeQuotation.items.length) { %>
+            <tr>
+              <td colspan="6" class="py-8 text-center">
+                <p class="text-slate-300 text-[12px] font-medium">No line items on this quotation</p>
+                <p class="text-[10.5px] text-slate-500 mt-1">Quotation <%= activeQuotation.id %> was saved without any line items.</p>
+              </td>
+            </tr>
+          <% } else { %>
+            <% activeQuotation.items.forEach((item, idx) => { %>
+              <tr class="hover:bg-[#0f1d35]/40 transition-colors">
+                <td class="py-2.5 pr-2 font-medium text-slate-200 font-mono"><%= activeQuotation.id %>-<%= String(idx + 1).padStart(2, '0') %></td>
+                <td class="py-2.5 px-2 text-slate-400">—</td>
+                <td class="py-2.5 px-2 font-medium text-white"><%= item.description %></td>
+                <td class="py-2.5 px-2 text-slate-300"><%= Number(item.quantity || 0).toLocaleString('en-US') %><%= item.unit ? ' ' + item.unit : '' %></td>
+                <td class="py-2.5 px-2 text-slate-300 font-mono text-[10.5px]">
+                  BDT <%= Number(item.unitPriceBdt || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) %>
+                  / USD <%= Number(item.unitPriceUsd || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) %>
+                </td>
+                <td class="py-2.5 pl-2 text-right font-semibold text-white font-mono text-[10.5px]">
+                  BDT <%= Number(item.amountBdt || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) %>
+                  / USD <%= Number(item.amountUsd || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) %>
+                </td>
+              </tr>
+            <% }); %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<%- include('./create-quotation-modal') %>
+<%- include('./create-invoice-modal') %>

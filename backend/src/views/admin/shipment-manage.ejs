@@ -1,0 +1,181 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Manage Shipment - shell page
+   *
+   * Same layout as Customer Details: the shipment header banner and the
+   * tab strip live here and stay visible (sticky), while the active
+   * section is rendered into #tabContent below. The overview is inlined
+   * on first render; every other section is loaded as an AJAX partial
+   * from /admin/shipments/manage/:ref/:tab?partial=1, so each menu has
+   * its own shareable URL.
+   * ------------------------------------------------------------------------- */
+  const shipmentManageMenu = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'items', label: 'Items & Carrier Tracking' },
+    { key: 'documents', label: 'Documents' },
+    { key: 'timeline', label: 'Shipment Timeline' },
+    { key: 'quotations', label: 'Quotations & Invoices' },
+    { key: 'payments', label: 'Payments' },
+    { key: 'insurance', label: 'Insurance & Claims' },
+    { key: 'returns', label: 'Return & RTO' },
+    { key: 'audit', label: 'Audit Trail' },
+  ];
+%>
+
+<%- include('partials/head', { pageTitle: `Manage ${shipment ? shipment.shipmentId : reference} - Dazzling Shipping`, active: 'shipments' }) %>
+
+<%- include('partials/header', {
+  title: 'Manage Shipment',
+  subtitle: shipment ? `Shipments / ${shipment.shipmentId}` : `Looking up ${reference}`,
+  user: typeof user !== 'undefined' ? user : {},
+}) %>
+
+<%- include('shipment-tabs/request-info-modal', { shipment, user }) %>
+<%- include('shipment-tabs/add-timeline-modal', { shipment, user, timelineStatusOptions }) %>
+
+<main class="flex-1 overflow-y-auto overflow-x-hidden bg-[#070d19] text-slate-200 font-sans text-[12px] antialiased">
+  <div class="mx-auto w-full max-w-[1600px] p-4 lg:p-6 space-y-4">
+
+    <% if (!found) { %>
+      <!-- Not Found State -->
+      <div class="bg-[#0c1629] border border-[#1b2b48] rounded p-6">
+        <div class="flex items-start gap-3">
+          <i data-lucide="search" class="w-5 h-5 text-amber-400 shrink-0 mt-0.5"></i>
+          <div>
+            <h2 class="text-sm font-bold text-white">No shipment found for <span class="font-mono text-blue-400"><%= reference %></span></h2>
+            <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">
+              Nothing in the database matches this reference yet. This page reads the shipments table, so it fills in on its own once the row exists.
+            </p>
+            <a href="/admin/shipments" class="inline-block mt-3 px-3 py-1.5 bg-[#14233c] border border-[#20375e] hover:bg-[#1a2d4d] text-slate-200 text-[11px] font-medium rounded transition-colors">Back to Shipments</a>
+          </div>
+        </div>
+      </div>
+    <% } else { %>
+
+      <!-- Sticky Top Section: Shipment Header Banner + Tabs -->
+      <div class="bg-[#0b1426] border border-[#1b2b48] rounded p-4 space-y-4 sticky top-0 z-20">
+
+        <!-- Shipment Header Banner -->
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-3">
+              <h1 class="text-2xl font-bold text-white font-sans tracking-tight"><%= shipment.shipmentId || 'SHP-2602844' %></h1>
+            </div>
+            <div class="text-[11px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-2">
+              <span>Dazzling Tracking Number: <span class="text-slate-300 font-medium"><%= shipment.trackingNumber || 'DS-2602844' %></span></span>
+              <span>•</span>
+              <span>Created <%= shipment.createdAt ? fmtDate(shipment.createdAt) : '02 Sep 2026' %></span>
+              <span>•</span>
+              <span>Last updated <%= shipment.updatedAt ? fmtDateTime(shipment.updatedAt) : '05 Sep 2026, 10:20 AM' %></span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button type="button" data-open-req-info-modal class="px-3 py-1.5 bg-[#12213a] border border-[#20365c] hover:bg-[#182c4d] text-slate-200 text-[11px] font-medium rounded transition-colors">
+              Request Information
+            </button>
+            <button type="button" data-open-timeline-modal class="px-3 py-1.5 bg-[#12213a] border border-[#20365c] hover:bg-[#182c4d] text-slate-200 text-[11px] font-medium rounded transition-colors">
+              Add Timeline Update
+            </button>
+            <a href="/admin/bookings/<%= shipment.shipmentId %>" class="px-3.5 py-1.5 bg-[#f97316] hover:bg-[#ea580c] text-white text-[11px] font-semibold rounded shadow transition-colors">
+              Review Item
+            </a>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="border-t border-[#16243d] pt-2">
+          <nav class="flex items-center gap-6 overflow-x-auto text-[12px] font-medium" id="shipmentTabs">
+            <% shipmentManageMenu.forEach((menu) => {
+              const isActive = activeTab === menu.key;
+            %>
+              <button type="button" data-tab="<%= menu.key %>" class="tab-btn shrink-0 pb-2 <%= isActive ? 'text-[#f97316] border-b-2 border-[#f97316] font-semibold' : 'text-slate-400 hover:text-slate-200' %>"><%= menu.label %></button>
+            <% }) %>
+          </nav>
+        </div>
+      </div>
+
+      <!-- Tab Content Area -->
+      <!-- On initial server render the active tab's partial is inlined; clicking
+           a tab loads the partial via AJAX so the sticky top section stays visible. -->
+      <div id="tabContent" class="space-y-4">
+        <%- include(view, { user, shipment, reference, found, activeTab, auditTrail, auditStats, fmtDate, fmtDateTime, orDash, money, titleCase, fmtBytes, docTypeLabel, sourceRequestItems: (shipment && shipment.sourceRequestItems) || [] }) %>
+      </div>
+
+    <% } %>
+
+  </div>
+</main>
+
+<script>
+  const shipmentRef = "<%= found && shipment ? shipment.shipmentId : reference %>";
+  const validTabs = ['overview','items','documents','timeline','quotations','payments','insurance','returns','audit'];
+
+  function switchTab(name) {
+    if (!validTabs.includes(name)) return;
+    fetch(`/admin/shipments/manage/${encodeURIComponent(shipmentRef)}/${name}?partial=1`)
+      .then(r => {
+        if (!r.ok) throw new Error(`Failed to load ${name} tab (${r.status})`);
+        return r.text();
+      })
+      .then(html => {
+        const container = document.getElementById('tabContent');
+        container.innerHTML = html;
+        // innerHTML does not execute <script> tags, so run any script that
+        // came with the partial. Re-created rather than moved so a
+        // self-re-inserting script cannot loop.
+        container.querySelectorAll('script').forEach(old => {
+          const fresh = document.createElement('script');
+          for (const attr of old.attributes) fresh.setAttribute(attr.name, attr.value);
+          fresh.textContent = old.textContent;
+          old.replaceWith(fresh);
+        });
+        document.querySelectorAll('#shipmentTabs .tab-btn').forEach(btn => {
+          btn.classList.remove('text-[#f97316]','border-b-2','border-[#f97316]','font-semibold');
+          btn.classList.add('text-slate-400','hover:text-slate-200');
+        });
+        const activeBtn = document.querySelector('#shipmentTabs .tab-btn[data-tab="' + name + '"]');
+        if (activeBtn) {
+          activeBtn.classList.remove('text-slate-400','hover:text-slate-200');
+          activeBtn.classList.add('text-[#f97316]','border-b-2','border-[#f97316]','font-semibold');
+        }
+        window.history.pushState({ tab: name }, '', `/admin/shipments/manage/${encodeURIComponent(shipmentRef)}/${name}`);
+        if (window.lucide) lucide.createIcons();
+      })
+      .catch(() => { if (window.lucide) lucide.createIcons(); });
+  }
+
+  document.querySelectorAll('#shipmentTabs .tab-btn').forEach(btn => {
+    btn.addEventListener('click', function () { switchTab(this.getAttribute('data-tab')); });
+  });
+
+  // Request Information Modal
+  const reqModal = document.getElementById('reqInfoBackdrop');
+  if (reqModal) {
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('[data-open-req-info-modal]')) {
+        e.preventDefault();
+        reqModal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      }
+      if (e.target === reqModal) {
+        reqModal.classList.add('hidden');
+        document.body.style.overflow = '';
+      }
+    });
+    reqModal.querySelectorAll('[data-req-action="close"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        reqModal.classList.add('hidden');
+        document.body.style.overflow = '';
+      });
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !reqModal.classList.contains('hidden')) {
+        reqModal.classList.add('hidden');
+        document.body.style.overflow = '';
+      }
+    });
+  }
+
+  if (window.lucide) lucide.createIcons();
+</script>

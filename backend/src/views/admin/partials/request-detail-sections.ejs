@@ -1,0 +1,244 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Everything the three request-details pages share.
+
+   * The pages differ only in which columns answer each question, and that is
+   * described per request type in the request-queue config. These partials hold
+   * the single implementation of each section, so a change to one of them reaches
+   * all three pages and none of them can drift.
+   *
+   * Each partial expects the shared locals the page sets up: `orDash`,
+   * `acceptanceBadge`, `verificationBadge`, `chargeableVolume` and the rest of
+   * the helpers defined at the top of the page.
+   * ------------------------------------------------------------------------- */
+%>
+
+<!-- ================= SUMMARY CARDS ================= -->
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6" data-summary-cards>
+  <div class="bg-[#0D1527] border border-[#1E293B] rounded-md p-3">
+    <div class="text-[10px] uppercase tracking-wider text-[#64748B] font-medium">Request Type</div>
+    <div class="font-semibold text-white text-sm mt-1"><%= type.label %></div>
+    <div class="text-[11px] text-[#64748B] mt-0.5">Customer submission</div>
+  </div>
+
+  <div class="bg-[#0D1527] border border-[#1E293B] rounded-md p-3">
+    <div class="text-[10px] uppercase tracking-wider text-[#64748B] font-medium">Service Mode</div>
+    <div class="font-semibold text-white text-sm mt-1"><%= type.serviceMode %></div>
+    <div class="text-[11px] text-[#64748B] mt-0.5"><%= type.serviceModeNote %></div>
+  </div>
+
+  <div class="bg-[#0D1527] border border-[#1E293B] rounded-md p-3">
+    <div class="text-[10px] uppercase tracking-wider text-[#64748B] font-medium">Freight Mode</div>
+    <div class="font-semibold text-white text-sm mt-1"><%= freightLabel %></div>
+    <div class="text-[11px] text-[#64748B] mt-0.5"><%= isAir ? 'Charged on volumetric weight' : 'Charged on cubic metres' %></div>
+  </div>
+
+  <div class="bg-[#0D1527] border border-[#1E293B] rounded-md p-3">
+    <div class="text-[10px] uppercase tracking-wider text-[#64748B] font-medium">Customer Type</div>
+    <div class="font-semibold text-white text-sm mt-1"><%= orDash(record.customerType) %></div>
+    <div class="text-[11px] text-[#64748B] mt-0.5">From customer profile</div>
+  </div>
+
+  <!-- The linked shipment appears only once the request has actually been
+       converted. A request still under review has no shipment yet, and showing a
+       placeholder ID for it would be a lie. -->
+  <div class="bg-[#0D1527] border border-[#1E293B] rounded-md p-3 col-span-2 sm:col-span-1" data-linked-shipment-card>
+    <div class="text-[10px] uppercase tracking-wider text-[#64748B] font-medium">Linked Shipment</div>
+    <% if (linkedShipment) { %>
+      <div class="font-semibold text-white text-sm mt-1">
+        <a href="<%= linkedShipment.href %>" class="text-[#38BDF8] hover:underline"><%= linkedShipment.ref %></a>
+      </div>
+      <div class="text-[11px] text-[#64748B] mt-0.5">Created on approval</div>
+    <% } else { %>
+      <div class="font-semibold text-white text-sm mt-1">N/A</div>
+      <div class="text-[11px] text-[#64748B] mt-0.5">Automatically assigned on approval</div>
+    <% } %>
+  </div>
+</div>
+
+<!-- ================= REQUEST INFORMATION ================= -->
+<div class="bg-[#0D1527] border border-[#1E293B] rounded-md p-4">
+  <h2 class="text-sm font-semibold text-white mb-3">Request Information</h2>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6">
+    <div>
+      <div class="text-[11px] text-[#64748B]">Request ID</div>
+      <div class="text-white font-medium text-xs mt-0.5"><%= row.requestRef %></div>
+    </div>
+    <div>
+      <div class="text-[11px] text-[#64748B]">Submitted</div>
+      <div class="text-white font-medium text-xs mt-0.5"><%= fmtDateTime(record.submittedAt || record.createdAt) %></div>
+    </div>
+    <div>
+      <div class="text-[11px] text-[#64748B]">Customer</div>
+      <div class="text-white font-medium text-xs mt-0.5"><%= orDash(customer && customer.name) %></div>
+    </div>
+    <div>
+      <div class="text-[11px] text-[#64748B]">Customer ID</div>
+      <div class="text-[#38BDF8] font-medium text-xs mt-0.5">
+        <% if (customer) { %>
+          <a href="/admin/customers/<%= customer.id %>" class="hover:underline">CUS-<%= String(customer.id).padStart(6, '0') %></a>
+        <% } else { %>—<% } %>
+      </div>
+    </div>
+    <div>
+      <div class="text-[11px] text-[#64748B]">Items</div>
+      <div class="text-white font-medium text-xs mt-0.5"><%= acceptance.total %></div>
+    </div>
+    <div>
+      <div class="text-[11px] text-[#64748B]">Freight Mode</div>
+      <div class="text-white font-medium text-xs mt-0.5"><%= freightLabel %></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SHIPMENT ITEMS ================= -->
+<%- include('request-detail-items') %>
+
+<!-- ================= SHIPMENT INSTRUCTIONS & INSURANCE ================= -->
+<div class="bg-[#0D1527] border border-[#1E293B] rounded-md p-4">
+  <div class="flex justify-between items-center mb-3">
+    <h2 class="text-sm font-semibold text-white">Shipment Instructions & Insurance</h2>
+    <span class="text-[10px] text-[#64748B]">Request-level fields</span>
+  </div>
+  <div class="space-y-3 text-xs">
+    <div>
+      <div class="text-[#64748B] text-[11px]"><%= type.instructions.label %></div>
+      <div class="text-white mt-0.5"><%= orDash(record[type.instructions.column]) %></div>
+    </div>
+    <div>
+      <div class="text-[#64748B] text-[11px]">Add Parcel Insurance</div>
+      <div class="text-white font-medium mt-0.5">
+        <%= record[type.insurance.column] ? type.insurance.on : type.insurance.off %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= DELIVERY INSTRUCTIONS ================= -->
+<!-- The fields are resolved per request type, and a question this type did not
+     capture is left out rather than rendered as an empty row. -->
+<% if (deliveryFields.length) { %>
+  <div class="bg-[#0D1527] border border-[#1E293B] rounded-md p-4">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="text-sm font-semibold text-white"><%= type.key === 'export_booking' ? 'Export Delivery Instructions' : 'Commercial Import Delivery Instructions' %></h2>
+      <span class="text-[10px] text-[#64748B]">From the customer's delivery selection</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+      <% deliveryFields.forEach((field) => { %>
+        <div class="<%= field.wide ? 'sm:col-span-2' : '' %>">
+          <div class="text-[#64748B] text-[11px]"><%= field.label %></div>
+          <div class="text-white <%= field.wide ? '' : 'font-medium' %> mt-0.5"><%= field.value === null ? '—' : field.value %></div>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+<% } %>
+
+<!-- ================= DOCUMENTS ================= -->
+<div class="bg-[#0D1527] border border-[#1E293B] rounded-md p-4" data-documents>
+
+  <% /* The signed-in staff member. A staff member cannot verify a document they
+         uploaded themselves, so every Verify affordance below is withheld from
+         the uploader - the same rule the other document tables apply. */ %>
+  <% const staffId = (typeof user !== 'undefined' && user && user.id !== undefined && user.id !== null) ? user.id : null; %>
+
+  <div class="flex justify-between items-center mb-3">
+    <h2 class="text-sm font-semibold text-white">Documents</h2>
+    <span class="text-[10px] text-[#64748B]"><%= documents.length %> file<%= documents.length === 1 ? '' : 's' %></span>
+  </div>
+
+  <% if (!documents.length) { %>
+    <div class="bg-[#080E1A] border border-[#1E293B] rounded-md p-4 text-center">
+      <div class="text-xs text-[#64748B]">No documents were uploaded on this request.</div>
+    </div>
+  <% } else { %>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs border-collapse">
+        <thead>
+            <tr class="border-b border-[#1E293B] text-[#64748B] text-[11px]">
+              <th class="pb-2 font-medium">Document / File</th>
+              <th class="pb-2 font-medium">Item</th>
+              <th class="pb-2 font-medium">Uploaded</th>
+              <th class="pb-2 font-medium">Verification</th>
+              <th class="pb-2 font-medium">Verified By</th>
+              <th class="pb-2 font-medium text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[#1E293B]/60 text-white" data-document-rows>
+            <% documents.forEach((doc) => { %>
+              <tr data-document-row data-document-id="<%= doc.documentId %>" data-document-status="<%= doc.verificationStatus %>"
+                  <% if (doc.id) { %>data-document-row-id="<%= doc.id %>"<% } %>>
+              <td class="py-2.5">
+                <% if (doc.url) { %>
+                  <a href="<%= doc.url %>" target="_blank" rel="noopener noreferrer" class="text-[#38BDF8] hover:underline block font-medium"><%= doc.label %></a>
+                <% } else { %>
+                  <span class="text-[#F87171] font-medium"><%= doc.label %></span>
+                <% } %>
+                <div class="text-[10px] text-[#64748B]"><%= doc.fileName || '—' %></div>
+                <% if (doc.verificationProblem) { %>
+                  <div class="text-[10px] text-[#F87171] mt-0.5"><%= doc.verificationProblem %></div>
+                <% } %>
+              </td>
+              <td class="py-2.5 text-[#94A3B8] font-mono text-[11px]"><%= orDash(doc.itemRef) %></td>
+              <td class="py-2.5 text-[#94A3B8]"><%= fmtDate(doc.uploadedAt) %></td>
+              <td class="py-2.5">
+                <span class="px-2 py-0.5 text-[10px] font-medium rounded border <%= verificationBadge[doc.verificationStatus] || verificationBadge.Pending %>">
+                  <%= verificationLabel(doc.verificationStatus) %>
+                </span>
+              </td>
+              <td class="py-2.5 text-[#94A3B8]"><%= reviewerRef(doc.reviewedBy) %></td>
+              <td class="py-2.5 text-right whitespace-nowrap">
+                <% if (doc.url) { %>
+                  <a href="<%= doc.url %>" target="_blank" rel="noopener noreferrer" class="text-[#38BDF8] hover:underline mr-3">View</a>
+                <% } else { %>
+                  <span class="text-[#475569] mr-3">Unavailable</span>
+                <% } %>
+                <%# Verified and Rejected are terminal decisions, so the action
+                    switches to a settled state. Needs Correction and Pending keep
+                    the review action - except for the staff member who uploaded
+                    the document, who cannot be the reviewer of their own upload. %>
+                <% const uploadedByViewer = doc.id && staffId !== null && doc.uploadedBy !== null && doc.uploadedBy !== undefined && Number(doc.uploadedBy) === Number(staffId); %>
+                <% if (['Verified', 'Rejected'].includes(doc.verificationStatus)) { %>
+                  <span class="text-[#475569]">Reviewed</span>
+                <% } else if (uploadedByViewer) { %>
+                  <span class="text-[#475569]" title="You uploaded this document, so you cannot verify it.">Awaiting another reviewer</span>
+                <% } else { %>
+                  <button type="button" class="text-[#38BDF8] hover:underline" data-verify-document
+                          data-document-id="<%= doc.documentId %>"
+                          data-file-path="<%= doc.filePath || '' %>"
+                          data-label="<%= doc.label %>">Verify</button>
+                <% } %>
+
+                <%# Remove is offered while the decision is still open, and only
+                    for a registered document: an upload with no row has nothing
+                    to remove. The confirmation and the removal itself are the
+                    shared ones, so this table behaves like every other. %>
+                <% if (doc.id && doc.verificationStatus !== 'Verified') { %>
+                  <button type="button" class="text-[#F87171] hover:underline ml-3" data-open-remove-document
+                          data-document-id="<%= doc.id %>"
+                          data-document-label="<%= doc.documentId %>"
+                          data-document-file="<%= doc.fileName || doc.label %>">Remove</button>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>
+
+<!-- ================= CUSTOMER CONFIRMATION ================= -->
+<div class="bg-[#0D1527] border border-[#1E293B] rounded-md p-4 flex flex-wrap justify-between items-center gap-2">
+  <h2 class="text-xs font-semibold text-white">Customer Confirmation</h2>
+  <span class="text-[10px] text-[#64748B]">Recorded at submission</span>
+  <div class="w-full pt-1 flex items-center gap-1.5 text-xs text-[#94A3B8]">
+    <% if (record[type.confirmation.column]) { %>
+      <span class="text-[#34D399]">✓</span>
+      <span><%= type.confirmation.on %></span>
+    <% } else { %>
+      <span class="text-[#F87171]">!</span>
+      <span><%= type.confirmation.off %></span>
+    <% } %>
+  </div>
+</div>

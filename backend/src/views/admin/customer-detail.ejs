@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#0b0f19]">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customer Details - Dazzling Shipping</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            brand: {
+              dark: '#0b0f19',
+              card: '#111726',
+              border: '#1e293b',
+              orange: '#ff5c00',
+              'orange-hover': '#e05200',
+              accentBlue: '#38bdf8',
+              accentGreen: '#22c55e',
+              accentPurple: '#a855f7',
+              accentRed: '#ef4444',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0b0f19; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+  </style>
+</head>
+<body class="h-full bg-[#0b0f19] text-gray-200 font-sans antialiased overflow-x-hidden">
+  <div class="flex min-h-screen w-full">
+    <%- include('partials/sidebar', { active: 'customers' }) %>
+    <div class="flex-1 flex flex-col min-w-0">
+      <%- include('partials/header', { title: 'Customer Details', subtitle: `Viewing ${typeof customer !== 'undefined' ? customer.name : 'Customer'}`, user: typeof user !== 'undefined' ? user : {} }) %>
+
+      <main class="flex-1 p-6 space-y-6 overflow-y-auto">
+
+        <!-- Sticky Top Section: Customer Header Banner + Tabs -->
+        <div class="bg-[#111726] border border-[#1a2333] rounded-xl p-5 space-y-4 sticky top-0 z-20">
+
+          <!-- Customer Header Banner -->
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div class="space-y-2">
+              <div class="flex items-center gap-3 flex-wrap">
+                <h2 class="text-2xl font-bold text-white tracking-wide"><%= customer.name %></h2>
+              </div>
+              <div class="flex items-center gap-2 text-xs text-gray-300 flex-wrap">
+                <span>Customer ID: <strong class="text-white font-mono font-medium">#<%= customer.id %></strong></span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><%= customer.accountStatus %></span>
+                <span class="text-gray-500">•</span>
+                <span class="text-gray-300"><%= customer.account_type || 'Not specified' %></span>
+              </div>
+            </div>
+
+            <!-- Header Badges & Actions -->
+            <div class="flex flex-wrap items-center gap-3">
+              <div class="flex items-center gap-2 text-xs">
+                <% const emailVerification = ['Not Required', 'Pending', 'Verified'].includes(customer && customer.emailVerificationStatus) ? customer.emailVerificationStatus : 'Not Required';
+                   const phoneVerification = ['Not Required', 'Pending', 'Verified'].includes(customer && customer.phoneVerificationStatus) ? customer.phoneVerificationStatus : 'Not Required';
+                   const verificationIcon = (v) => v === 'Verified'
+                     ? '<i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-400 ml-0.5"></i>'
+                     : v === 'Pending'
+                       ? '<i data-lucide="clock" class="w-3.5 h-3.5 text-amber-400 ml-0.5"></i>'
+                       : ''; %>
+                <span class="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#162032] text-gray-300 border border-[#233149]">
+                  <i data-lucide="mail" class="w-3.5 h-3.5 text-gray-400"></i>
+                  Email <%= emailVerification %>
+                  <%- verificationIcon(emailVerification) %>
+                </span>
+                <span class="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#162032] text-gray-300 border border-[#233149]">
+                  <i data-lucide="phone" class="w-3.5 h-3.5 text-gray-400"></i>
+                  Phone <%= phoneVerification %>
+                  <%- verificationIcon(phoneVerification) %>
+                </span>
+              </div>
+
+              <div class="hidden xl:block h-6 w-px bg-[#1a2333]"></div>
+
+              <div class="text-xs text-gray-400 space-y-0.5">
+                <div>Registered: <span class="text-gray-200"><%= customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A' %></span></div>
+                <div>Last Activity: <span class="text-gray-200"><%= customer.updatedAt ? new Date(customer.updatedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'N/A' %></span></div>
+              </div>
+
+              <div class="flex items-center gap-2 ml-auto lg:ml-0">
+                <button onclick="openModal('notificationModal')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-medium transition-colors">
+                  <i data-lucide="mail" class="w-3.5 h-3.5"></i>
+                  Send Notification
+                </button>
+                <button onclick="openModal('requestModal')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#233149] text-gray-300 hover:bg-[#1a2333] text-xs font-medium transition-colors">
+                  <i data-lucide="info" class="w-3.5 h-3.5"></i>
+                  Request Information
+                </button>
+                <button onclick="switchTab('actions')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#233149] text-gray-300 hover:bg-[#1a2333] text-xs font-medium transition-colors">
+                  <i data-lucide="zap" class="w-3.5 h-3.5 text-orange-400"></i>
+                  Start Account Action
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Navigation Tabs -->
+          <div class="border-t border-[#1a2333] pt-3">
+            <nav class="flex items-center gap-6 text-xs font-medium overflow-x-auto no-scrollbar pb-1" id="customerTabs">
+              <button type="button" data-tab="overview" class="tab-btn <%= typeof activeTab !== 'undefined' && activeTab === 'overview' ? 'active' : '' %> flex items-center gap-1.5 pb-2.5 -mb-3 whitespace-nowrap">Overview</button>
+              <button type="button" data-tab="contacts" class="tab-btn <%= typeof activeTab !== 'undefined' && activeTab === 'contacts' ? 'active' : '' %> flex items-center gap-1.5 pb-2.5 -mb-3 whitespace-nowrap">Contacts & Addresses</button>
+              <button type="button" data-tab="verification" class="tab-btn <%= typeof activeTab !== 'undefined' && activeTab === 'verification' ? 'active' : '' %> flex items-center gap-1.5 pb-2.5 -mb-3 whitespace-nowrap">Verification & Documents</button>
+              <button type="button" data-tab="shipments" class="tab-btn <%= typeof activeTab !== 'undefined' && activeTab === 'shipments' ? 'active' : '' %> flex items-center gap-1.5 pb-2.5 -mb-3 whitespace-nowrap">Shipments & Related Records</button>
+              <button type="button" data-tab="finance" class="tab-btn <%= typeof activeTab !== 'undefined' && activeTab === 'finance' ? 'active' : '' %> flex items-center gap-1.5 pb-2.5 -mb-3 whitespace-nowrap">Finance & Wallet</button>
+              <button type="button" data-tab="compliance" class="tab-btn <%= typeof activeTab !== 'undefined' && activeTab === 'compliance' ? 'active' : '' %> flex items-center gap-1.5 pb-2.5 -mb-3 whitespace-nowrap">Compliance</button>
+              <button type="button" data-tab="actions" class="tab-btn <%= typeof activeTab !== 'undefined' && activeTab === 'actions' ? 'active' : '' %> flex items-center gap-1.5 pb-2.5 -mb-3 whitespace-nowrap">Account Actions</button>
+              <button type="button" data-tab="audit" class="tab-btn <%= typeof activeTab !== 'undefined' && activeTab === 'audit' ? 'active' : '' %> flex items-center gap-1.5 pb-2.5 -mb-3 whitespace-nowrap">Communications & Audit</button>
+            </nav>
+          </div>
+        </div>
+
+        <!-- Tab Content Area -->
+        <!-- On initial server render the active tab's partial is inlined; clicking tabs loads the partial via AJAX so the top section stays visible. -->
+        <div id="tabContent" class="space-y-6">
+          <%- include(view, { user, customer, stats, verificationStats, recordStats, records, recordRules, accountActions, latestAccountAction, addresses, documents, accountDocuments, customerFiles, verificationHistory, returnsRtos, insurances, selfPurchaseRequests, assistedPurchaseRequests, bookShipmentRequests, payments, invoices, shipments, trackingEvents, activity, contactRows, registeredAddresses, wallet, walletTransactions, quotations, financeInvoices, paymentRows, refundRows, claimCompensation, reconciliation, latestReconciliation, compliance, complianceHistory, reviewNoteDefault, reviewNoteLength, kyc, accountActions, latestAccountAction, activeAccountAction, editingAccountAction, accountActionStats, caseNoticeChannels, accountActionOptions, availableChannels, notifyMessageLength, notifications, deliveryEvidence, policyAcceptances, auditTrail, auditStats, fmtDate, documentChecklists }) %>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Send Notification Modal -->
+  <div id="notificationModal" class="fixed inset-0 z-40 hidden bg-black/60 backdrop-blur-sm">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-[#111726] border border-[#1a2333] rounded-xl w-full max-w-lg shadow-xl">
+        <div class="p-5 border-b border-[#1a2333] flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+            <i data-lucide="mail" class="w-4 h-4 text-gray-400"></i>Send Notification
+          </h3>
+          <button onclick="closeModal('notificationModal')" class="text-gray-400 hover:text-gray-200">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <form id="notificationForm" class="p-5 space-y-4 text-xs">
+          <div>
+            <label class="text-gray-400 block mb-1">Subject</label>
+            <input type="text" name="subject" placeholder="Notification subject"
+              class="w-full bg-[#0b0f19] border border-[#1e293b] rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors" />
+          </div>
+          <div>
+            <label class="text-gray-400 block mb-1">Message</label>
+            <textarea name="message" rows="4" placeholder="Type your message here..."
+              class="w-full bg-[#0b0f19] border border-[#1e293b] rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors resize-y"></textarea>
+          </div>
+          <div class="flex items-center justify-end gap-2 pt-2">
+            <button type="button" onclick="closeModal('notificationModal')" class="px-3 py-1.5 rounded-lg border border-[#233149] text-gray-300 hover:bg-[#1a2333] text-xs font-medium transition-colors">Cancel</button>
+            <button type="submit" class="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-medium transition-colors">Send</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Request Information Modal -->
+  <div id="requestModal" class="fixed inset-0 z-40 hidden bg-black/60 backdrop-blur-sm">
+    <div class="flex items-center justify-center min-h-screen p-4">
+      <div class="bg-[#111726] border border-[#1a2333] rounded-xl w-full max-w-lg shadow-xl">
+        <div class="p-5 border-b border-[#1a2333] flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+            <i data-lucide="info" class="w-4 h-4 text-gray-400"></i>Request Information
+          </h3>
+          <button onclick="closeModal('requestModal')" class="text-gray-400 hover:text-gray-200">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <form id="requestForm" class="p-5 space-y-4 text-xs">
+          <div>
+            <label class="text-gray-400 block mb-1">Request Type</label>
+            <select name="type"
+              class="w-full bg-[#0b0f19] border border-[#1e293b] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-orange-500 transition-colors">
+              <option>Update Contact Information</option>
+              <option>Update Business Details</option>
+              <option>Documentation Request</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-gray-400 block mb-1">Details</label>
+            <textarea name="details" rows="4" placeholder="Please describe what information is needed..."
+              class="w-full bg-[#0b0f19] border border-[#1e293b] rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors resize-y"></textarea>
+          </div>
+          <div class="flex items-center justify-end gap-2 pt-2">
+            <button type="button" onclick="closeModal('requestModal')" class="px-3 py-1.5 rounded-lg border border-[#233149] text-gray-300 hover:bg-[#1a2333] text-xs font-medium transition-colors">Cancel</button>
+            <button type="submit" class="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-medium transition-colors">Submit Request</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const customerId = "<%= typeof customer !== 'undefined' && customer.id ? customer.id : '' %>";
+    const customerName = "<%= typeof customer !== 'undefined' && customer.name ? customer.name : 'Customer' %>";
+    const customerEmail = "<%= typeof customer !== 'undefined' && customer.email ? customer.email : 'N/A' %>";
+    const customerPhone = "<%= typeof customer !== 'undefined' && customer.phone ? customer.phone : '' %>";
+    const customerWhatsapp = "<%= typeof customer !== 'undefined' && customer.whatsapp ? customer.whatsapp : '' %>";
+    const staffName = "<%= typeof user !== 'undefined' && user && user.name ? user.name : '' %>";
+    const validTabs = ['overview','contacts','verification','shipments','finance','compliance','actions','audit'];
+
+    function switchTab(name) {
+      if (!validTabs.includes(name)) return;
+      fetch(`/admin/customers/${customerId}/${name}?partial=1`)
+        .then(r => {
+          if (!r.ok) throw new Error(`Failed to load ${name} tab (${r.status})`);
+          return r.text();
+        })
+        .then(html => {
+          const container = document.getElementById('tabContent');
+          container.innerHTML = html;
+          // innerHTML does not execute <script> tags, so run any script that
+          // came with the partial. Re-created rather than moved so a
+          // self-re-inserting script cannot loop.
+          container.querySelectorAll('script').forEach(old => {
+            const fresh = document.createElement('script');
+            for (const attr of old.attributes) fresh.setAttribute(attr.name, attr.value);
+            fresh.textContent = old.textContent;
+            old.replaceWith(fresh);
+          });
+          document.querySelectorAll('#customerTabs .tab-btn').forEach(btn => {
+            btn.classList.remove('text-orange-500','border-orange-500','active');
+            btn.classList.add('text-gray-400','hover:text-gray-200');
+          });
+          const activeBtn = document.querySelector('#customerTabs .tab-btn[data-tab="' + name + '"]');
+          if (activeBtn) {
+            activeBtn.classList.remove('text-gray-400','hover:text-gray-200');
+            activeBtn.classList.add('text-orange-500','border-b-2','border-orange-500');
+          }
+          window.history.pushState({ tab: name }, '', `/admin/customers/${customerId}/${name}`);
+          if (window.lucide) lucide.createIcons();
+        });
+    }
+
+    document.querySelectorAll('#customerTabs .tab-btn').forEach(btn => {
+      btn.addEventListener('click', function () { switchTab(this.getAttribute('data-tab')); });
+    });
+
+    function openModal(id) {
+      const m = document.getElementById(id);
+      if (m) m.classList.remove('hidden');
+    }
+    function closeModal(id) {
+      const m = document.getElementById(id);
+      if (m) m.classList.add('hidden');
+      const f = document.getElementById(id === 'notificationModal' ? 'notificationForm' : 'requestForm');
+      if (f) f.reset();
+    }
+
+    document.getElementById('notificationForm')?.addEventListener('submit', function (e) {
+      e.preventDefault();
+      closeModal('notificationModal');
+      alert('Notification queued.');
+    });
+    document.getElementById('requestForm')?.addEventListener('submit', function (e) {
+      e.preventDefault();
+      closeModal('requestModal');
+      alert('Request submitted.');
+    });
+
+    /* ---------------- Document verification popup ---------------- */
+    // Delegated from document so it keeps working after a tab partial is
+    // swapped in over AJAX (inline <script> tags in the partial would not run).
+    (function () {
+      const backdrop = () => document.getElementById('docModalBackdrop');
+
+      // State for the document currently under review.
+      let catalog = null;
+      let activeGroup = null;
+      let docTypeLabel = '-';
+      let relatedKey;            // undefined = untouched, null = cleared, string = chosen
+      let related = { ref: '-', name: '-', type: '' };
+      let searchTimer = null;
+      let searchToken = 0;
+
+      const setField = (name, value) => {
+        document.querySelectorAll('[data-doc-field="' + name + '"]').forEach((el) => {
+          el.textContent = value || 'N/A';
+        });
+      };
+
+      const field = (trigger, attr) => trigger.getAttribute(attr) || '';
+
+      const formValue = (name) => {
+        const el = document.querySelector('[data-doc-form] [name="' + name + '"]');
+        return el ? el.value.trim() : '';
+      };
+
+      const decisionInput = () =>
+        document.querySelector('[data-doc-form] input[name="verification_decision"]:checked');
+
+      /* ---------------- checklist catalogue ---------------- */
+      // The definitions live in config/documentChecklists.js and are rendered
+      // into the modal as JSON, so the checks shown here are exactly the ones
+      // the save endpoint scores the decision against.
+      function loadCatalog() {
+        if (catalog) return catalog;
+        const node = document.querySelector('[data-checklist-catalog]');
+        try {
+          catalog = node ? JSON.parse(node.textContent) : { common: [], groups: [] };
+        } catch (err) {
+          catalog = { common: [], groups: [] };
+        }
+        if (!Array.isArray(catalog.common)) catalog.common = [];
+        if (!Array.isArray(catalog.groups)) catalog.groups = [];
+        return catalog;
+      }
+
+      // Mirrors resolveChecklist() on the server: match the stored document type
+      // first, then the display label, which is all an upload that has no
+      // documents-table row yet can offer.
+      function resolveGroup(typeKey, typeLabel) {
+        const data = loadCatalog();
+        const key = String(typeKey || '').trim().toLowerCase();
+        let group = data.groups.find((g) => (g.types || []).includes(key));
+        if (!group) {
+          const text = String(typeLabel || '').toLowerCase().replace(/[^a-z0-9/]+/g, ' ').trim();
+          if (text) group = data.groups.find((g) => (g.labelPatterns || []).some((p) => text.includes(p)));
+        }
+        return group || data.groups.find((g) => g.group === 'other') || null;
+      }
+
+      function renderChecks(listName, checks) {
+        const box = document.querySelector('[data-checklist-list="' + listName + '"]');
+        if (!box) return;
+        box.textContent = '';
+
+        checks.forEach((check) => {
+          const label = document.createElement('label');
+          label.className = 'flex items-start justify-between gap-2 cursor-pointer group';
+
+          const left = document.createElement('span');
+          left.className = 'flex items-start gap-2 text-slate-700';
+
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.className = 'mt-0.5 w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500';
+          input.setAttribute('data-checklist', '');
+          input.setAttribute('data-check-id', check.id);
+          input.setAttribute('data-check-label', check.label);
+          input.setAttribute('data-required', check.required ? 'true' : 'false');
+
+          const text = document.createElement('span');
+          text.className = 'leading-snug';
+          text.textContent = check.label;
+
+          if (!check.required) {
+            const optional = document.createElement('span');
+            optional.className = 'ml-1 align-middle text-[9px] font-semibold uppercase tracking-wide text-slate-400 border border-slate-200 rounded px-1 py-0.5';
+            optional.textContent = 'Optional';
+            text.appendChild(optional);
+          }
+
+          const icon = document.createElement('i');
+          icon.setAttribute('data-lucide', 'info');
+          icon.className = 'w-3.5 h-3.5 text-slate-300 group-hover:text-slate-400 shrink-0';
+
+          left.appendChild(input);
+          left.appendChild(text);
+          label.appendChild(left);
+          label.appendChild(icon);
+          box.appendChild(label);
+        });
+      }
+
+      function renderChecklist(trigger) {
+        activeGroup = resolveGroup(field(trigger, 'data-doc-type-key'), field(trigger, 'data-doc-type'));
+
+        renderChecks('common', loadCatalog().common);
+        renderChecks('specific', activeGroup ? activeGroup.checks : []);
+
+        const label = activeGroup ? activeGroup.label : 'Document';
+        document.querySelectorAll('[data-checklist-type]').forEach((el) => { el.textContent = label; });
+        document.querySelectorAll('[data-checklist-title]').forEach((el) => { el.textContent = label + ' Specific Checks'; });
+
+        updateChecklist();
+        if (window.lucide) lucide.createIcons();
+      }
+
+      function collectResults() {
+        const results = {};
+        document.querySelectorAll('[data-checklist][data-check-id]').forEach((el) => {
+          results[el.getAttribute('data-check-id')] = el.checked;
+        });
+        return results;
+      }
+
+      function scoreChecklist() {
+        const checks = [
+          ...document.querySelectorAll('[data-checklist-list="common"] [data-check-id]'),
+          ...document.querySelectorAll('[data-checklist-list="specific"] [data-check-id]'),
+        ].map((el) => ({
+          id: el.getAttribute('data-check-id'),
+          label: el.getAttribute('data-check-label') || '',
+          required: el.getAttribute('data-required') === 'true',
+        }));
+
+        const results = collectResults();
+        const required = checks.filter((c) => c.required);
+        const missing = required.filter((c) => !results[c.id]).map((c) => c.label);
+
+        return { results, requiredTotal: required.length, completedRequired: required.length - missing.length, missing };
+      }
+
+      /* ---------------- progress and decision gating ---------------- */
+      function updateChecklist() {
+        const score = scoreChecklist();
+        const pct = score.requiredTotal ? (score.completedRequired / score.requiredTotal) * 100 : 0;
+
+        document.querySelectorAll('[data-checklist-total]').forEach((el) => { el.textContent = score.completedRequired; });
+        document.querySelectorAll('[data-checklist-total-all]').forEach((el) => { el.textContent = score.requiredTotal; });
+        document.querySelectorAll('[data-checklist-bar]').forEach((el) => { el.style.width = pct + '%'; });
+
+        ['common', 'specific'].forEach((group) => {
+          const boxes = document.querySelectorAll('[data-checklist-list="' + group + '"] [data-check-id]');
+          let hits = 0;
+          boxes.forEach((el) => { if (el.checked) hits += 1; });
+          document.querySelectorAll('[data-checklist-group="' + group + '"]').forEach((el) => {
+            el.textContent = hits + '/' + boxes.length;
+          });
+        });
+
+        updateVerifiedAvailability();
+      }
+
+      // Verified is only selectable once every required applicable check is
+      // complete; Needs Correction and Rejected always stay available.
+      function updateVerifiedAvailability() {
+        const score = scoreChecklist();
+        const ready = score.missing.length === 0;
+        const radio = document.querySelector('[data-doc-form] input[name="verification_decision"][value="Verified"]');
+        const option = document.querySelector('[data-decision-option="Verified"]');
+        const hint = document.querySelector('[data-decision-hint="Verified"]');
+
+        if (radio) {
+          radio.disabled = !ready;
+          if (!ready && radio.checked) radio.checked = false;
+        }
+        if (option) {
+          option.classList.toggle('opacity-60', !ready);
+          option.classList.toggle('cursor-not-allowed', !ready);
+          option.classList.toggle('cursor-pointer', ready);
+        }
+        if (hint) {
+          hint.textContent = ready
+            ? 'All required checks are complete.'
+            : score.requiredTotal - score.completedRequired + ' required check(s) remaining.';
+        }
+      }
+
+      // Needs Correction reveals the correction details and the notification
+      // preview; Rejected makes the verification note mandatory.
+      function updateDecisionPanels() {
+        const decision = decisionInput();
+        const value = decision ? decision.value : '';
+
+        const correctionBox = document.querySelector('[data-correction-box]');
+        if (correctionBox) correctionBox.classList.toggle('hidden', value !== 'Needs Correction');
+
+        const notifyBox = document.querySelector('[data-notify-box]');
+        if (notifyBox) notifyBox.classList.toggle('hidden', value !== 'Needs Correction');
+
+        const noteLabel = document.querySelector('[data-note-optional]');
+        if (noteLabel) {
+          noteLabel.textContent = value === 'Rejected'
+            ? '(Required to reject)'
+            : '(Optional for Verified, required for Rejected)';
+        }
+
+        document.querySelectorAll('[data-decision-option]').forEach((option) => {
+          const chosen = option.getAttribute('data-decision-option') === value;
+          option.classList.toggle('border-blue-600', chosen);
+          option.classList.toggle('bg-blue-50/40', chosen);
+        });
+
+        syncNotificationPreview();
+      }
+
+      /* ---------------- customer notification preview ---------------- */
+      function syncNotificationPreview() {
+        const subjectEl = document.querySelector('[data-notify-subject]');
+        const messageEl = document.querySelector('[data-notify-message]');
+        if (!subjectEl || !messageEl) return;
+
+        const problem = formValue('problem');
+        const correction = formValue('correction');
+        const instructions = formValue('instructions');
+        const firstName = String(customerName || '').trim().split(/\s+/)[0] || 'Customer';
+
+        subjectEl.textContent = 'Action Required - ' + docTypeLabel + ' Correction Needed';
+
+        const lines = [
+          'Dear ' + firstName + ',',
+          '',
+          'We have reviewed the ' + docTypeLabel + ' you submitted, and it cannot be accepted in its current form.',
+          '',
+          'Problem with the document',
+          problem || '[Describe the problem above]',
+          '',
+          'Correction required',
+          correction || '[Describe the required correction above]',
+        ];
+        if (instructions) lines.push('', 'Additional instructions', instructions);
+        lines.push(
+          '',
+          'Please sign in to your Dazzling Shipping account and upload the corrected document. Any request or booking that depends on this document stays on hold until the corrected document is verified.',
+          '',
+          'Regards,',
+          'Dazzling Shipping',
+          'International Shipping & Logistics'
+        );
+
+        messageEl.textContent = lines.join('\n');
+      }
+
+      /* ---------------- related record search ---------------- */
+      function paintRelated(record) {
+        const box = document.querySelector('[data-related-selected]');
+        if (!box) return;
+        if (!record) {
+          box.classList.add('hidden');
+          return;
+        }
+        box.classList.remove('hidden');
+        const ref = box.querySelector('[data-related-ref]');
+        const name = box.querySelector('[data-related-name]');
+        if (ref) ref.textContent = record.ref;
+        if (name) name.textContent = record.type ? record.type + (record.name ? ' - ' + record.name : '') : (record.name || '-');
+      }
+
+      function renderResults(results, token) {
+        const list = document.querySelector('[data-related-results]');
+        const hint = document.querySelector('[data-related-hint]');
+        if (!list || token !== searchToken) return;
+
+        list.textContent = '';
+        if (!results.length) {
+          list.classList.add('hidden');
+          if (hint) hint.classList.remove('hidden');
+          return;
+        }
+        if (hint) hint.classList.add('hidden');
+
+        results.forEach((record) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.setAttribute('data-related-result', record.key);
+          button.className = 'w-full text-left px-2.5 py-2 hover:bg-blue-50/70 transition-colors flex items-center justify-between gap-2';
+
+          const main = document.createElement('div');
+          main.className = 'min-w-0';
+          const ref = document.createElement('div');
+          ref.className = 'font-mono text-[11px] font-bold text-slate-800 truncate';
+          ref.setAttribute('data-result-ref', '');
+          ref.textContent = record.ref;
+          const label = document.createElement('div');
+          label.className = 'text-[11px] text-slate-500 truncate';
+          label.setAttribute('data-result-label', '');
+          label.textContent = [record.type, record.label, record.sub].filter(Boolean).join(' - ');
+          main.appendChild(ref);
+          main.appendChild(label);
+
+          const status = document.createElement('span');
+          status.className = 'text-[10px] text-slate-400 shrink-0';
+          status.textContent = record.status || '';
+
+          button.appendChild(main);
+          button.appendChild(status);
+          list.appendChild(button);
+        });
+
+        list.classList.remove('hidden');
+      }
+
+      function runRelatedSearch() {
+        const input = document.querySelector('[data-related-search]');
+        if (!input) return;
+        const term = input.value.trim();
+
+        const token = ++searchToken;
+        fetch('/admin/customers/' + customerId + '/records/search?q=' + encodeURIComponent(term))
+          .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Search failed'))))
+          .then((data) => renderResults(data.results || [], token))
+          .catch(() => renderResults([], token));
+      }
+
+      /* ---------------- open / close ---------------- */
+      function openDocModal(trigger) {
+        const panel = backdrop();
+        if (!panel) return;
+
+        docTypeLabel = field(trigger, 'data-doc-type');
+        const docId = field(trigger, 'data-doc-id');
+        const fileUrl = field(trigger, 'data-file-url');
+
+        // The document being verified is kept on the panel, because the save
+        // handler and the table row that opened the modal are far apart.
+        panel.setAttribute('data-current-doc-id', field(trigger, 'data-raw-doc-id'));
+        // Only needed when the file has no documents-table row yet: the endpoint
+        // uses it to register the file before saving the decision.
+        panel.setAttribute('data-current-file-path', field(trigger, 'data-file-path'));
+
+        setField('customerId', field(trigger, 'data-customer-id'));
+        setField('customerName', field(trigger, 'data-customer-name'));
+        setField('docId', docId);
+        setField('docType', docTypeLabel);
+        setField('status', field(trigger, 'data-status'));
+        setField('fileName', field(trigger, 'data-file-name'));
+        setField('fileSize', field(trigger, 'data-file-size'));
+        setField('uploadedBy', field(trigger, 'data-uploaded-by'));
+        setField('uploadedAt', field(trigger, 'data-uploaded-at'));
+        setField('expiry', field(trigger, 'data-expiry'));
+
+        const fileNameEl = document.querySelector('[data-doc-field="fileName"]');
+        if (fileNameEl) fileNameEl.setAttribute('title', field(trigger, 'data-file-name'));
+
+        const openLink = document.querySelector('[data-preview-open]');
+        if (openLink) {
+          openLink.classList.remove('opacity-50', 'pointer-events-none');
+          if (fileUrl) openLink.href = fileUrl;
+          else { openLink.removeAttribute('href'); openLink.classList.add('opacity-50', 'pointer-events-none'); }
+        }
+
+        // Preview only when we actually have a fetchable file.
+        const img = panel.querySelector('[data-preview-img]');
+        const frame = panel.querySelector('[data-preview-frame]');
+        const empty = panel.querySelector('[data-preview-empty]');
+        [img, frame].forEach((el) => el && el.classList.add('hidden'));
+        empty && empty.classList.toggle('hidden', !!fileUrl);
+
+        if (fileUrl) {
+          const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileUrl);
+          if (isImage && img) {
+            img.src = fileUrl;
+            img.onerror = () => { img.classList.add('hidden'); empty && empty.classList.remove('hidden'); };
+            img.classList.remove('hidden');
+          } else if (frame) {
+            frame.src = fileUrl;
+            frame.classList.remove('hidden');
+          }
+        }
+
+        // Related Record: an existing link is shown so it can be kept, changed
+        // or cleared; the search writes a new selection on top of it.
+        relatedKey = undefined;
+        const searchInput = document.querySelector('[data-related-search]');
+        if (searchInput) searchInput.value = '';
+        const resultsList = document.querySelector('[data-related-results]');
+        if (resultsList) { resultsList.textContent = ''; resultsList.classList.add('hidden'); }
+        const searchHint = document.querySelector('[data-related-hint]');
+        if (searchHint) searchHint.classList.add('hidden');
+        const currentRelated = field(trigger, 'data-related-id');
+        paintRelated(currentRelated ? { ref: currentRelated, name: field(trigger, 'data-related-label'), type: field(trigger, 'data-related-type') } : null);
+
+        const form = panel.querySelector('[data-doc-form]');
+        if (form) form.reset();
+        document.querySelectorAll('[data-count-for]').forEach((el) => { el.textContent = '0'; });
+        clearError();
+
+        renderChecklist(trigger);
+
+        panel.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        updateDecisionPanels();
+        if (window.lucide) lucide.createIcons();
+      }
+
+      function closeDocModal() {
+        const panel = backdrop();
+        if (!panel) return;
+        // Cancel closes without saving: no status change, no notification and no
+        // verification history record.
+        panel.classList.add('hidden');
+        document.body.style.overflow = '';
+        searchToken += 1;
+      }
+
+      /* ---------------- save ---------------- */
+      const showError = (message) => {
+        const box = document.querySelector('[data-doc-error]');
+        if (!box) {
+          alert(message);
+          return;
+        }
+        box.textContent = message;
+        box.classList.remove('hidden');
+      };
+
+      const clearError = () => {
+        const box = document.querySelector('[data-doc-error]');
+        if (!box) return;
+        box.textContent = '';
+        box.classList.add('hidden');
+      };
+
+      function saveVerification(button) {
+        const panel = backdrop();
+        const docId = panel ? panel.getAttribute('data-current-doc-id') : '';
+        if (!docId) {
+          showError('No document selected.');
+          return;
+        }
+
+        const decision = decisionInput();
+        if (!decision) {
+          showError('Select a verification decision.');
+          return;
+        }
+
+        const score = scoreChecklist();
+        const payload = {
+          decision: decision.value,
+          note: formValue('note'),
+          problem: formValue('problem'),
+          correction: formValue('correction'),
+          instructions: formValue('instructions'),
+          checklist: score.results,
+        };
+
+        // An upload with no documents-table row is sent as "uploaded"; the
+        // endpoint registers the file from this path before saving.
+        if (docId === 'uploaded') {
+          const filePath = panel.getAttribute('data-current-file-path');
+          if (!filePath) {
+            showError('No file supplied to verify.');
+            return;
+          }
+          payload.filePath = filePath;
+        }
+
+        // Only send the Related Record when the reviewer actually touched it, so
+        // an untouched pre-populated link is preserved.
+        if (relatedKey !== undefined) payload.relatedRecordKey = relatedKey;
+
+        if (decision.value === 'Verified' && score.missing.length) {
+          showError('Complete all required checks before saving as Verified: ' + score.missing.join('; '));
+          return;
+        }
+        if (decision.value === 'Needs Correction' && (!payload.problem || !payload.correction)) {
+          showError('Problem with Document and Correction Required are both required for Needs Correction.');
+          return;
+        }
+        if (decision.value === 'Rejected' && !payload.note) {
+          showError('A rejection explanation is required in the Verification Note.');
+          return;
+        }
+
+        clearError();
+        button.disabled = true;
+        button.classList.add('opacity-60');
+
+        fetch('/admin/customers/' + customerId + '/documents/' + docId + '/verification', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+          .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+          .then(({ ok, data }) => {
+            if (!ok) throw new Error(data.error || 'Could not save the verification.');
+            closeDocModal();
+            // A Needs Correction decision queues the customer notification; the
+            // reviewer is told when delivery failed so it can be chased.
+            if (data.notification && data.notification.delivered === false) {
+              alert('Verification saved, but the customer notification could not be sent. Please send it manually.');
+            }
+            // Reload the tab so the table, counters and history all reflect the DB.
+            switchTab('verification');
+          })
+          .catch((err) => showError(err.message))
+          .finally(() => {
+            button.disabled = false;
+            button.classList.remove('opacity-60');
+          });
+      }
+
+      document.addEventListener('click', function (e) {
+        const opener = e.target.closest('[data-open-doc]');
+        if (opener) {
+          e.preventDefault();
+          openDocModal(opener);
+          return;
+        }
+
+        const action = e.target.closest('[data-doc-action]');
+        if (action) {
+          e.preventDefault();
+          const kind = action.getAttribute('data-doc-action');
+          if (kind === 'close') closeDocModal();
+          if (kind === 'save') saveVerification(action);
+          return;
+        }
+
+        // Related Record: pick a search result, or clear the current link.
+        const result = e.target.closest('[data-related-result]');
+        if (result) {
+          e.preventDefault();
+          // The row carries its reference and a "Type - detail" line; both go
+          // back into the selected chip.
+          const refEl = result.querySelector('[data-result-ref]');
+          const labelEl = result.querySelector('[data-result-label]');
+          const parts = labelEl ? String(labelEl.textContent || '').split(' - ') : [];
+          const picked = {
+            ref: refEl ? refEl.textContent : '-',
+            type: parts.shift() || '',
+            name: parts.join(' - ') || '-',
+          };
+
+          relatedKey = result.getAttribute('data-related-result');
+          paintRelated(picked);
+
+          const list = document.querySelector('[data-related-results]');
+          if (list) {
+            list.classList.add('hidden');
+            list.querySelectorAll('[data-related-result]').forEach((row) => row.classList.remove('bg-blue-50/70'));
+            result.classList.add('bg-blue-50/70');
+          }
+          return;
+        }
+
+        if (e.target.closest('[data-related-clear]')) {
+          e.preventDefault();
+          relatedKey = null;
+          paintRelated(null);
+          return;
+        }
+
+        // Click on the backdrop itself (but not the panel) closes the popup.
+        if (e.target.id === 'docModalBackdrop') closeDocModal();
+      });
+
+      document.addEventListener('change', function (e) {
+        if (e.target.matches('[data-checklist]')) updateChecklist();
+        if (e.target.name === 'verification_decision') updateDecisionPanels();
+      });
+
+      document.addEventListener('input', function (e) {
+        const counter = e.target.name && document.querySelector('[data-count-for="' + e.target.name + '"]');
+        if (counter) counter.textContent = e.target.value.length;
+        if (e.target.closest('[data-doc-form]')) syncNotificationPreview();
+
+        // Related Record search: debounced so typing does not fire a request per
+        // keystroke, and only when the reviewer is actually typing in the field.
+        if (e.target.matches('[data-related-search]')) {
+          clearTimeout(searchTimer);
+          searchTimer = setTimeout(runRelatedSearch, 250);
+        }
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeDocModal();
+      });
+    })();
+
+    /* ---------------- Document review details ---------------- */
+    // "Review Details" fills the Document Review Details card below the table.
+    (function () {
+      const STATUS_STYLES = {
+        'Pending': 'bg-amber-500/10 text-amber-400 border-amber-500/40',
+        'Needs Correction': 'bg-rose-500/10 text-rose-400 border-rose-500/40',
+        'Verified': 'bg-[#022c19] text-[#22c55e] border-[#15803d]',
+        'Rejected': 'bg-slate-500/10 text-slate-400 border-slate-500/40',
+      };
+
+      function setDetail(field, value) {
+        const el = document.querySelector('[data-detail="' + field + '"]');
+        if (el) el.textContent = value || '-';
+      }
+
+      document.addEventListener('click', function (e) {
+        const trigger = e.target.closest('[data-review-details]');
+        if (!trigger) return;
+        e.preventDefault();
+
+        setDetail('docId', trigger.getAttribute('data-doc-id'));
+        setDetail('docType', trigger.getAttribute('data-doc-type'));
+        setDetail('related', trigger.getAttribute('data-related'));
+        setDetail('reviewedBy', trigger.getAttribute('data-reviewed-by'));
+        setDetail('reviewedAt', trigger.getAttribute('data-reviewed-at'));
+        setDetail('reviewNote', trigger.getAttribute('data-review-note'));
+
+        const status = trigger.getAttribute('data-status');
+        const statusEl = document.querySelector('[data-detail="status"]');
+        if (statusEl) {
+          statusEl.textContent = status || '-';
+          statusEl.className = 'inline-block px-2 py-0.5 rounded text-[10px] font-medium border ' +
+            (STATUS_STYLES[status] || STATUS_STYLES['Pending']);
+        }
+
+        const card = document.querySelector('[data-detail="docId"]');
+        if (card) card.closest('.mt-4')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    })();
+
+
+    /* ---------------- Request information popup ---------------- */
+    // Delegated from document so it keeps working after a tab partial is
+    // swapped in over AJAX (inline <script> tags in the partial would not run).
+    (function () {
+      const panel = () => document.getElementById('reqInfoBackdrop');
+
+      // Option catalogue from config/informationRequests.js. Read back from the
+      // JSON block so the dropdowns always come from the same definitions the
+      // create endpoint validates against.
+      let catalog = null;
+
+      function readCatalog() {
+        if (catalog) return catalog;
+        const el = document.querySelector('[data-req-catalog]');
+        try {
+          catalog = el ? JSON.parse(el.textContent) : null;
+        } catch (err) {
+          catalog = null;
+        }
+        catalog = catalog || { informationTypes: [], specificInformation: {}, actionRequired: [], reasons: [], otherReason: 'Other', notificationChannels: [] };
+        return catalog;
+      }
+
+      const form = () => panel()?.querySelector('[data-req-form]');
+
+      const value = (name) => {
+        const el = form()?.querySelector('[name="' + name + '"]');
+        return el ? el.value.trim() : '';
+      };
+
+      const setField = (name, text) => {
+        document.querySelectorAll('[data-req-field="' + name + '"]').forEach((el) => {
+          el.textContent = text;
+        });
+      };
+
+      const channelIcons = {
+        Email: 'mail',
+        SMS: 'message-square',
+        'WhatsApp': 'phone',
+        'In-App Notification': 'bell',
+      };
+
+      function fillSelect(select, values, placeholder) {
+        if (!select) return;
+        select.innerHTML = '';
+        const blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = placeholder;
+        select.appendChild(blank);
+        values.forEach((v) => {
+          const option = document.createElement('option');
+          option.value = v;
+          option.textContent = v;
+          select.appendChild(option);
+        });
+      }
+
+      function renderSpecificOptions() {
+        const cat = readCatalog();
+        const select = form()?.querySelector('[name="specificInformation"]');
+        const typeSelect = form()?.querySelector('[name="informationType"]');
+        if (!select || !typeSelect) return;
+
+        const options = cat.specificInformation[typeSelect.value] || [];
+        if (!typeSelect.value) {
+          fillSelect(select, [], 'Select an information type first');
+          select.disabled = true;
+          return;
+        }
+        fillSelect(select, options, 'Select the specific information required');
+        select.disabled = false;
+      }
+
+// Mirrors buildInformationRequestNotification() in
+      // config/informationRequests.js so what staff review is what is sent.
+      function buildPreview() {
+        const informationType = value('informationType');
+        const specificInformation = value('specificInformation');
+        const actionRequired = value('actionRequired');
+        const requiredDetails = value('requiredDetails');
+        const reason = value('reason');
+        const reasonDetails = value('reasonDetails');
+        const additionalInstructions = value('additionalInstructions');
+
+        const subject = specificInformation && informationType
+          ? 'Action Required: ' + specificInformation + ' - ' + informationType
+          : '-';
+
+        const lines = [];
+        if (informationType && specificInformation && actionRequired && requiredDetails && reason) {
+          lines.push('Dear ' + customerName.split(/\s+/)[0] + ',', '');
+          lines.push('We need to update your ' + informationType.toLowerCase() + ' on our records.', '');
+          lines.push('Information required: ' + specificInformation);
+          lines.push('Action required: ' + actionRequired);
+          lines.push('', 'What we need from you');
+          lines.push(requiredDetails);
+          lines.push('', 'Reason: ' + reason);
+          if (reasonDetails) lines.push('Reason details: ' + reasonDetails);
+          if (additionalInstructions) lines.push('', 'Additional instructions', additionalInstructions);
+          lines.push('');
+          lines.push('Please sign in to your Dazzling Shipping account to provide the requested information. Any request or booking that depends on this information stays on hold until it has been received and verified.');
+          lines.push('', 'Regards,', 'Dazzling Shipping', 'International Shipping & Logistics');
+        } else {
+          lines.push('Complete the request details above to generate the message the customer will receive.');
+        }
+
+        setField('previewSubject', subject);
+        setField('previewMessage', lines.join('\n'));
+
+renderChannelSummary();
+      }
+
+      function selectedChannels() {
+        return Array.from(document.querySelectorAll('[data-req-form] [data-req-channel]:checked'))
+          .map((el) => el.value);
+      }
+
+      function renderChannelSummary() {
+        const wrap = panel()?.querySelector('[data-req-channel-summary]');
+        if (!wrap) return;
+        wrap.innerHTML = '';
+        const channels = selectedChannels();
+
+        if (!channels.length) {
+          const none = document.createElement('span');
+          none.className = 'text-[10px] text-slate-400';
+          none.textContent = 'No channel selected yet';
+          wrap.appendChild(none);
+          return;
+        }
+
+        channels.forEach((name) => {
+          const chip = document.createElement('span');
+          chip.className = 'inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700';
+          chip.innerHTML = '<i data-lucide="' + (channelIcons[name] || 'bell') + '" class="w-3 h-3"></i>';
+          chip.appendChild(document.createTextNode(name));
+          wrap.appendChild(chip);
+        });
+
+        if (window.lucide) lucide.createIcons();
+      }
+
+      function clearErrors() {
+        document.querySelectorAll('[data-req-error]').forEach((el) => {
+          el.textContent = '';
+          el.classList.add('hidden');
+        });
+        const summary = panel()?.querySelector('[data-req-error-summary]');
+        if (summary) {
+          summary.textContent = '';
+          summary.classList.add('hidden');
+        }
+// Only the text inputs and selects carry the error border; the channel
+        // checkboxes are grouped inside a tile that gets the highlight instead.
+        document.querySelectorAll('[data-req-form] select, [data-req-form] textarea').forEach((el) => {
+          el.classList.remove('border-rose-400');
+        });
+        document.querySelectorAll('[data-req-channels]').forEach((el) => {
+          el.classList.remove('border-rose-400', 'rounded-lg', 'p-2', '-m-2');
+        });
+      }
+
+      // Same rules as validateInformationRequest() on the server, so staff get
+      // the reason a submission was refused without a round trip.
+      function validate() {
+        const cat = readCatalog();
+        const errors = {};
+
+        const informationType = value('informationType');
+        if (!informationType) errors.informationType = 'Information Type is required.';
+
+        const specificInformation = value('specificInformation');
+        if (!specificInformation) {
+          errors.specificInformation = informationType
+            ? 'Specific Information Required is required.'
+            : 'Select an Information Type first.';
+        }
+
+        const actionRequired = value('actionRequired');
+        if (!actionRequired) errors.actionRequired = 'Action Required is required.';
+
+        const requiredDetails = value('requiredDetails');
+        if (!requiredDetails) errors.requiredDetails = 'Required Details is required and must describe exactly what is needed.';
+
+        const reason = value('reason');
+        if (!reason) errors.reason = 'Reason is required.';
+
+        if (reason === cat.otherReason && !value('reasonDetails')) {
+          errors.reasonDetails = 'Reason Details is required when Reason is Other.';
+        }
+
+        if (selectedChannels().length === 0) {
+          errors.notificationChannels = 'Select at least one notification channel.';
+        }
+
+        return errors;
+      }
+
+      function showErrors(errors) {
+        clearErrors();
+
+Object.entries(errors).forEach(([field, message]) => {
+          const el = panel()?.querySelector('[data-req-error="' + field + '"]');
+          if (el) {
+            el.textContent = message;
+            el.classList.remove('hidden');
+          }
+          if (field === 'notificationChannels') {
+            panel()?.querySelector('[data-req-channels]')?.classList.add('border-rose-400', 'rounded-lg', 'p-2', '-m-2');
+          } else {
+            const input = form()?.querySelector('[name="' + field + '"]');
+            if (input && input.classList) input.classList.add('border-rose-400');
+          }
+        });
+
+        const firstField = Object.keys(errors)[0];
+        const target = form()?.querySelector('[name="' + firstField + '"]');
+        if (target && target.focus) target.focus();
+
+        const summary = panel()?.querySelector('[data-req-error-summary]');
+        if (summary) {
+          const messages = Object.values(errors);
+          summary.textContent = messages.length === 1
+            ? messages[0]
+            : messages.length + ' fields need attention before this request can be sent.';
+          summary.classList.remove('hidden');
+        }
+      }
+
+      function openRequestModal() {
+        const box = panel();
+        if (!box) return;
+
+        const cat = readCatalog();
+        fillSelect(box.querySelector('[name="informationType"]'), cat.informationTypes, 'Select an information type');
+        fillSelect(box.querySelector('[name="actionRequired"]'), cat.actionRequired, 'Select an action');
+        fillSelect(box.querySelector('[name="reason"]'), cat.reasons, 'Select a reason');
+
+const formEl = form();
+        // form.reset() restores the channel checkboxes to the defaults the
+        // controller rendered from the customer's registered contact details.
+        if (formEl) formEl.reset();
+
+        renderSpecificOptions();
+        box.querySelector('[data-req-reason-details]')?.setAttribute('hidden', '');
+        clearErrors();
+        buildPreview();
+
+        box.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        if (window.lucide) lucide.createIcons();
+        box.querySelector('[name="informationType"]')?.focus();
+      }
+
+      function closeRequestModal() {
+        const box = panel();
+        if (!box) return;
+        box.classList.add('hidden');
+        document.body.style.overflow = '';
+        clearErrors();
+      }
+
+      async function sendRequest(button) {
+        const errors = validate();
+        if (Object.keys(errors).length) {
+          showErrors(errors);
+          return;
+        }
+
+        const payload = {
+          informationType: value('informationType'),
+          specificInformation: value('specificInformation'),
+          actionRequired: value('actionRequired'),
+          requiredDetails: value('requiredDetails'),
+          reason: value('reason'),
+          reasonDetails: value('reasonDetails'),
+          additionalInstructions: value('additionalInstructions'),
+          notificationChannels: selectedChannels(),
+        };
+
+        const original = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Sending...</span>';
+        if (window.lucide) lucide.createIcons();
+
+        try {
+          const res = await fetch(`/admin/customers/${customerId}/information-requests`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => ({}));
+
+          if (!res.ok || !data.success) {
+            const summary = panel()?.querySelector('[data-req-error-summary]');
+            if (summary) {
+              summary.textContent = data.error || 'The information request could not be sent. Please try again.';
+              summary.classList.remove('hidden');
+            }
+            return;
+          }
+
+          closeRequestModal();
+          alert('Information request ' + data.request.reference + ' sent to the customer.');
+        } catch (err) {
+          const summary = panel()?.querySelector('[data-req-error-summary]');
+          if (summary) {
+            summary.textContent = 'The information request could not be sent. Please check your connection and try again.';
+            summary.classList.remove('hidden');
+          }
+        } finally {
+          button.disabled = false;
+          button.innerHTML = original;
+          if (window.lucide) lucide.createIcons();
+        }
+      }
+
+      document.addEventListener('click', function (e) {
+        if (e.target.closest('[data-open-request]')) {
+          e.preventDefault();
+          openRequestModal();
+          return;
+        }
+
+        const action = e.target.closest('[data-req-action]');
+        if (action) {
+          e.preventDefault();
+          const kind = action.getAttribute('data-req-action');
+          if (kind === 'close') closeRequestModal();
+          if (kind === 'send') sendRequest(action);
+          return;
+        }
+
+        if (e.target.id === 'reqInfoBackdrop') closeRequestModal();
+      });
+
+      document.addEventListener('input', function (e) {
+        if (!e.target.closest('[data-req-form]')) return;
+        const counter = panel()?.querySelector('[data-req-count="' + e.target.name + '"]');
+        if (counter) counter.textContent = e.target.value.length;
+        buildPreview();
+      });
+
+      document.addEventListener('change', function (e) {
+        if (!e.target.closest('[data-req-form]')) return;
+
+        if (e.target.name === 'informationType') {
+          renderSpecificOptions();
+          clearErrors();
+        }
+
+        if (e.target.name === 'reason') {
+          const box = panel();
+          const isOther = e.target.value === readCatalog().otherReason;
+          box?.querySelector('[data-req-reason-details]')?.toggleAttribute('hidden', !isOther);
+          if (!isOther) {
+            const details = box?.querySelector('[name="reasonDetails"]');
+            if (details) details.value = '';
+            const error = box?.querySelector('[data-req-error="reasonDetails"]');
+            if (error) {
+              error.textContent = '';
+              error.classList.add('hidden');
+            }
+          }
+        }
+
+        if (e.target.hasAttribute('data-req-channel')) {
+          const error = panel()?.querySelector('[data-req-error="notificationChannels"]');
+          if (error) {
+            error.textContent = '';
+            error.classList.add('hidden');
+          }
+        }
+
+        const counter = panel()?.querySelector('[data-req-count="' + e.target.name + '"]');
+        if (counter && e.target.tagName === 'TEXTAREA') counter.textContent = e.target.value.length;
+
+        buildPreview();
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeRequestModal();
+      });
+    })();
+
+    /* ---------------- Shipments & related records filters ---------------- */
+    // Each summary card filters one table. Applying a card clears the other
+    // filters on that table and then sets the card's own filter.
+    (function () {
+      // The card predicates come from the controller that produced the counts,
+      // so a card can never highlight a row set that disagrees with its number.
+      // This tab is injected over AJAX, so the node only exists once its
+      // partial has landed: resolve on demand rather than at start-up.
+      let ruleCache = null;
+      function rules() {
+        if (ruleCache) return ruleCache;
+        ruleCache = { shipments: {}, requests: {}, claims: {}, returns: {} };
+        const node = document.querySelector('[data-record-rules]');
+        if (!node) return ruleCache;
+        try {
+          const parsed = JSON.parse(node.textContent) || {};
+          Object.keys(ruleCache).forEach((table) => {
+            ruleCache[table] = parsed[table] || {};
+          });
+        } catch (err) {
+          console.warn('Record filter rules unavailable', err);
+        }
+        return ruleCache;
+      }
+
+      const normalize = (s) => String(s == null ? '' : s).trim().toLowerCase();
+      const isExcluded = (status, list) =>
+        (list || []).some((s) => normalize(s) === normalize(status));
+
+      // Per-table filter state. `card` is the active summary card for that table.
+      const state = { requests: null, shipments: null, claims: null, returns: null };
+      let searchTerm = '';
+
+      const rowsOf = (table) => Array.from(document.querySelectorAll('[data-tbody="' + table + '"] tr[data-status]'));
+
+      // Does this row pass the card filter for its table?
+      function passesCard(table, mode, row) {
+        if (!mode) return true;
+        const status = row.getAttribute('data-status');
+        const kind = row.getAttribute('data-kind');
+        const EXCLUDED = rules();
+        switch (mode) {
+          case 'all':
+            return true;
+          case 'active':
+            if (table === 'shipments') return !isExcluded(status, EXCLUDED.shipments.active);
+            if (table === 'requests') return !isExcluded(status, EXCLUDED.requests.active);
+            if (table === 'claims') return !isExcluded(status, EXCLUDED.claims.open);
+            if (table === 'returns') return kind === 'return' && !isExcluded(status, EXCLUDED.returns.open);
+            return true;
+          case 'delivered':
+            return normalize(status) === 'delivered';
+          case 'open':
+            if (table === 'claims') return !isExcluded(status, EXCLUDED.claims.open);
+            if (table === 'returns') return kind === 'return' && !isExcluded(status, EXCLUDED.returns.open);
+            return true;
+          case 'rto':
+            return kind === 'rto' && !isExcluded(status, EXCLUDED.returns.rto);
+          default: return true;
+        }
+      }
+
+      const CARD_LABELS = {
+        total: 'Total Shipments',
+        active: 'Active Shipments',
+        delivered: 'Delivered Shipments',
+        requests: 'Active Requests & Bookings',
+        claims: 'Open Claims',
+        returns: 'Open Returns',
+        rto: 'Active RTO Cases',
+      };
+
+      function apply() {
+        ['requests', 'shipments', 'claims', 'returns'].forEach((table) => {
+          const mode = state[table];
+          let visible = 0;
+          rowsOf(table).forEach((row) => {
+            const haystack = row.getAttribute('data-search') || '';
+            const okMode = passesCard(table, mode, row);
+            const okSearch = !searchTerm || haystack.includes(searchTerm);
+            const show = okMode && okSearch;
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
+          });
+
+          const counter = document.querySelector('[data-table-count="' + table + '"]');
+          if (counter) {
+            const total = rowsOf(table).length;
+            counter.textContent = (mode || searchTerm) && visible !== total
+              ? visible + ' of ' + total
+              : total + (total === 1 ? ' record' : ' records');
+          }
+        });
+
+        // Which cards are active?
+        document.querySelectorAll('[data-record-filter]').forEach((card) => {
+          const key = card.getAttribute('data-record-filter');
+          const table = card.getAttribute('data-table');
+          const mode = card.getAttribute('data-mode');
+          // A card is selected when its table is showing that card's filter.
+          // This must match the test used for the indicator below, or the
+          // Active / Delivered / Open / RTO cards light up no filter applied.
+          const active = state[table] === mode;
+          card.classList.toggle('border-amber-500', active);
+          card.classList.toggle('bg-[#0f1c31]', active);
+          card.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+
+        const activeCards = Array.from(document.querySelectorAll('[data-record-filter]'))
+          .filter((c) => state[c.getAttribute('data-table')] === c.getAttribute('data-mode'));
+        const indicator = document.querySelector('[data-filter-indicator]');
+        if (indicator) {
+          indicator.classList.toggle('hidden', activeCards.length === 0);
+          indicator.classList.toggle('flex', activeCards.length > 0);
+          const text = document.querySelector('[data-filter-text]');
+          if (text) {
+            text.textContent = activeCards.map((c) => CARD_LABELS[c.getAttribute('data-record-filter')]).join(' + ');
+          }
+        }
+      }
+
+      document.addEventListener('click', function (e) {
+        const card = e.target.closest('[data-record-filter]');
+        if (card) {
+          const table = card.getAttribute('data-table');
+          const mode = card.getAttribute('data-mode');
+          // Clicking the active card clears that table's filters.
+          state[table] = state[table] === mode ? null : mode;
+          searchTerm = '';
+          const input = document.querySelector('[data-record-search]');
+          if (input) input.value = '';
+          apply();
+          return;
+        }
+
+        if (e.target.closest('[data-clear-filters]')) {
+          state.requests = state.shipments = state.claims = state.returns = null;
+          searchTerm = '';
+          const input = document.querySelector('[data-record-search]');
+          if (input) input.value = '';
+          apply();
+        }
+      });
+
+      document.addEventListener('input', function (e) {
+        if (!e.target.matches('[data-record-search]')) return;
+        searchTerm = e.target.value.trim().toLowerCase();
+        apply();
+      });
+    })();
+
+    /* ---------------- Compliance profile popup ---------------- */
+    // compliance-modal.ejs ships its own open/close functions. Prefer those so
+    // the file stays the single owner of the modal, and fall back to showing the
+    // container directly if the function is not on window.
+    (function () {
+      const openExisting = () => {
+        const fn = window.openComplianceModal || window.openAccountActionModal;
+        if (typeof fn === 'function') {
+          fn();
+          return;
+        }
+        const box = document.getElementById('complianceModalContainer') || document.getElementById('accountActionModalContainer');
+        if (!box) return;
+        box.classList.remove('hidden');
+        box.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        if (window.lucide) lucide.createIcons();
+      };
+
+      document.addEventListener('click', function (e) {
+        if (e.target.closest('[data-open-compliance]')) {
+          e.preventDefault();
+          openExisting();
+        }
+      });
+    })();
+
+
+    if (window.lucide) lucide.createIcons();
+    window.addEventListener('pageshow', function (e) { if (window.lucide) lucide.createIcons(); });
+  </script>
+</body>
+</html>

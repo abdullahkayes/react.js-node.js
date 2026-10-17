@@ -1,0 +1,620 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Upload Document Modal - Manage Shipment, Documents tab
+   *
+   * Everything on this form is either read from the database for the shipment
+   * being managed or chosen by staff; nothing that identifies the uploader is
+   * typed in. The uploader is the signed-in staff account, and the document is
+   * stored Pending because the person who uploaded a file cannot also have
+   * decided it is acceptable.
+   *
+   * The notification channels reproduce the Select Channel design from the Send
+   * Notification modal on the Customer Details page, so choosing where to tell a
+   * customer looks and reads the same however the staff member got here.
+   * ------------------------------------------------------------------------- */
+
+  const V = (typeof shipment !== 'undefined' && shipment) ? shipment : null;
+
+  const shipmentRef = (V && V.shipmentId) ? V.shipmentId : '';
+  const customer = (V && V.user) ? V.user : null;
+  const customerId = (customer && customer.id) ? customer.id : (V && V.userId) ? V.userId : null;
+
+  /* The registration form stores the customer class in account_type, and the
+     name column holds whichever name that account registered: a company name for
+     a commercial account, a personal name for an individual. There is no second
+     name column to read, so one value is labelled according to the class rather
+     than two fields being invented. */
+  const COMMERCIAL_ACCOUNT_TYPES = ['ecommerce_merchant', 'commercial_import', 'fcommerce_merchant'];
+  const accountType = customer && customer.account_type ? String(customer.account_type).trim() : '';
+  const isCommercial = COMMERCIAL_ACCOUNT_TYPES.includes(accountType);
+  const customerNameLabel = isCommercial ? 'Company Name' : 'Customer Name';
+  const customerName = customer && customer.name ? customer.name : '—';
+  const accountTypeLabel = accountType
+    ? accountType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    : 'Not set';
+
+  /* The document types this form offers, and the value each stores. The mapping
+     is the single definition the server validates against, so staff are never
+     offered something the upload endpoint would refuse. */
+  const DOCUMENT_TYPES = [
+    { value: 'nid', label: 'NID' },
+    { value: 'trade_license', label: 'Trade License/Business Document' },
+    { value: 'invoice', label: 'Invoice' },
+    { value: 'receipt', label: 'Receipt' },
+    { value: 'source_document', label: 'Source Document' },
+    { value: 'packing_list', label: 'Packing List' },
+    { value: 'return_label', label: 'Return Label' },
+    { value: 'rma_document', label: 'RMA Document' },
+    { value: 'claim_photo', label: 'Claim Photo' },
+    { value: 'awb', label: 'AWB' },
+    { value: 'bill_of_lading', label: 'B/L' },
+    { value: 'delivery_order', label: 'Delivery Order' },
+    { value: 'customs_document', label: 'Customs Document' },
+    { value: 'other', label: 'Other' },
+  ];
+
+  /* The Item IDs the form offers are the source request items, which is where
+     the item records for this shipment actually live. They carry a name so a
+     staff member choosing between them sees what each one is, not just a number.
+
+     Read through both paths: the AJAX tab switch renders this modal inside the
+     partial's context, where the items arrive nested on the shipment, while the
+     initial page render also passes them at the top level. An empty nested list
+     means there genuinely are none, so it only then falls back to the other. */
+  const nestedItems = (V && Array.isArray(V.sourceRequestItems)) ? V.sourceRequestItems : [];
+  const topLevelItems = (typeof sourceRequestItems !== 'undefined' && Array.isArray(sourceRequestItems))
+    ? sourceRequestItems
+    : [];
+  const submittedItems = nestedItems.length ? nestedItems : topLevelItems;
+  const itemOptions = submittedItems.map((item, index) => ({
+    id: item.id,
+    ref: 'ITM-' + String(item.id).padStart(7, '0'),
+    label: item.productName || item.productDescription || `Item ${index + 1}`,
+  }));
+
+  /* Verification after upload is Pending, always. Shown as a static field so no
+     one is offered the chance to choose anything else. */
+  const verificationAfterUpload = 'Pending';
+
+  /* The signed-in staff member. Read from the session, never entered. */
+  const staffName = (typeof user !== 'undefined' && user && (user.name || user.username))
+    ? (user.name || user.username)
+    : (typeof user !== 'undefined' && user && user.email ? user.email : '—');
+
+  /* What the file chooser accepts, stated on both sides of the same rule. */
+  const ACCEPTED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
+  const MAX_FILE_MB = 10;
+  const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
+%>
+
+<!-- Popup Modal Backdrop (hidden so it never opens on its own) -->
+<div id="uploadDocModal"
+     data-shipment-ref="<%= shipmentRef %>"
+     class="hidden fixed inset-0 z-[60] bg-[#020712]/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+     role="dialog" aria-modal="true" aria-labelledby="uploadDocModalTitle">
+
+  <div class="bg-[#071122] border border-[#182945] rounded-xl shadow-2xl w-full max-w-3xl my-auto overflow-hidden text-slate-200 font-sans text-[11.5px] antialiased">
+
+    <!-- Header -->
+    <div class="px-6 pt-5 pb-4 border-b border-[#132238]">
+      <div class="text-[10.5px] text-slate-400 mb-2 font-medium">
+        Manage Shipment <span class="mx-1 text-slate-600">/</span> Documents <span class="mx-1 text-slate-600">/</span> <span class="text-slate-300">Upload Document</span>
+      </div>
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h2 id="uploadDocModalTitle" class="text-xl font-bold text-white tracking-tight">Upload Document</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5">Attach a document to this shipment or to specific items on it.</p>
+        </div>
+        <button type="button" data-close-upload-doc class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-[#12213a] transition-colors shrink-0" aria-label="Close">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Shipment and customer context, read from the database -->
+      <div class="mt-4 bg-[#050c18] border border-[#13223b] rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <span class="block text-[10px] text-slate-400 font-medium">Shipment ID</span>
+          <span class="text-xs font-bold text-white font-mono mt-0.5 block"><%= shipmentRef || '—' %></span>
+        </div>
+        <div>
+          <span class="block text-[10px] text-slate-400 font-medium">Customer ID</span>
+          <span class="text-xs font-bold text-white font-mono mt-0.5 block"><%= customerId === null ? '—' : '#' + customerId %></span>
+        </div>
+        <div class="sm:col-span-2">
+          <span class="block text-[10px] text-slate-400 font-medium"><%= customerNameLabel %></span>
+          <span class="text-xs font-semibold text-white mt-0.5 block"><%= customerName %></span>
+          <span class="text-[10px] text-slate-500"><%= customerNameLabel === 'Company Name' ? 'E-Commerce/F-Commerce or Commercial account' : 'Individual account' %> &middot; <%= accountTypeLabel %></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <form id="uploadDocForm" novalidate class="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+
+      <!-- Document Type -->
+      <div class="space-y-1.5">
+        <label for="uploadDocType" class="block font-bold text-white text-[11px]">Document Type <span class="text-[#f87171]">*</span></label>
+        <div class="relative">
+          <select id="uploadDocType" name="documentType"
+                  class="w-full bg-[#050b18] border border-[#1b2b48] text-slate-200 text-[11px] rounded px-2.5 py-1.5 focus:outline-none focus:border-[#f97316] appearance-none cursor-pointer pr-8">
+            <option value="" disabled selected>Select document type</option>
+            <% DOCUMENT_TYPES.forEach((t) => { %>
+              <option value="<%= t.value %>"><%= t.label %></option>
+            <% }); %>
+          </select>
+          <svg class="w-4 h-4 text-slate-500 absolute right-2.5 top-2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Applies To -->
+      <div class="space-y-1.5">
+        <span class="block font-bold text-white text-[11px]">Applies To <span class="text-[#f87171]">*</span></span>
+        <div class="flex items-center gap-5">
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="radio" name="appliesTo" value="whole_shipment" checked
+                   class="w-3.5 h-3.5 text-[#f97316] border-[#23385d] focus:ring-[#f97316] cursor-pointer" />
+            <span class="text-[11px] text-slate-200 font-medium">Whole Shipment</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="radio" name="appliesTo" value="selected_items"
+                   class="w-3.5 h-3.5 text-[#f97316] border-[#23385d] focus:ring-[#f97316] cursor-pointer" />
+            <span class="text-[11px] text-slate-200 font-medium">Selected Items</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Item IDs. Only when the document applies to specific items. -->
+      <div id="uploadDocItemsSection" class="hidden space-y-1.5">
+        <label for="uploadDocItems" class="block font-bold text-white text-[11px]">
+          Item IDs <span class="text-[#f87171]">*</span>
+          <span class="text-[10px] text-slate-400 font-normal ml-1">Hold Ctrl (Cmd on Mac) to select more than one</span>
+        </label>
+        <% if (itemOptions.length === 0) { %>
+          <p class="text-[11px] text-slate-400 bg-[#050b18] border border-[#1b2b48] rounded px-2.5 py-2">
+            No item records are linked to this shipment, so a document can only be attached to the whole shipment.
+          </p>
+        <% } else { %>
+          <select id="uploadDocItems" name="itemIds" multiple size="4"
+                  class="w-full bg-[#050b18] border border-[#1b2b48] text-slate-200 text-[11px] rounded px-2 py-1.5 focus:outline-none focus:border-[#f97316]">
+            <% itemOptions.forEach((it) => { %>
+              <option value="<%= it.id %>"><%= it.ref %> &middot; <%= it.label %></option>
+            <% }); %>
+          </select>
+          <p class="text-[10px] text-slate-500">At least one Item ID must be selected. The document is stored once per selected item and shown against each of them.</p>
+        <% } %>
+      </div>
+
+      <!-- Document File -->
+      <div class="space-y-1.5">
+        <span class="block font-bold text-white text-[11px]">Document File <span class="text-[#f87171]">*</span></span>
+
+        <!-- Drop zone. The file input is hidden behind it: dragging a file onto
+             the zone and pressing Choose File are the same action. -->
+        <div id="uploadDocDropZone"
+             class="border-2 border-dashed border-[#23385d] rounded-lg bg-[#050b18] px-4 py-6 text-center cursor-pointer hover:border-[#f97316]/60 transition-colors">
+          <svg class="w-7 h-7 mx-auto text-slate-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+          </svg>
+          <p class="text-[11px] text-slate-300 font-medium">Drag &amp; drop your document here</p>
+          <p class="text-[10px] text-slate-500 mt-0.5">or</p>
+          <span class="inline-block mt-1.5 px-3 py-1 bg-[#0e1e38] hover:bg-[#152746] border border-[#23385d] text-slate-200 text-[11px] font-medium rounded transition-colors">
+            Choose File
+          </span>
+          <p class="text-[10px] text-slate-500 mt-2">Accepted: PDF, JPG, JPEG, PNG &middot; Maximum <%= MAX_FILE_MB %> MB</p>
+          <input type="file" id="uploadDocFile" name="documentFile"
+                 accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                 class="hidden" />
+        </div>
+
+        <!-- The chosen file. One only: choosing another replaces it, because the
+             endpoint stores a single file per upload. -->
+        <div id="uploadDocFileCard" class="hidden bg-[#08111f] border border-[#16243d] rounded-lg p-2.5 flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded bg-[#12213a] border border-[#20365c] flex items-center justify-center text-[#60a5fa] shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+            </div>
+            <div class="min-w-0">
+              <div id="uploadDocFileName" class="text-[11px] text-white font-medium truncate">—</div>
+              <div id="uploadDocFileMeta" class="text-[10px] text-slate-400">—</div>
+            </div>
+          </div>
+          <button type="button" id="uploadDocFileRemove" class="text-slate-400 hover:text-[#f87171] p-1 rounded hover:bg-[#12213a] transition-colors shrink-0" title="Remove file">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <p id="uploadDocFileError" class="hidden text-[10.5px] text-[#f87171]"></p>
+      </div>
+
+      <!-- Verification Status After Upload. Static: always Pending. -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="space-y-1.5">
+          <span class="block font-bold text-white text-[11px]">Verification Status After Upload</span>
+          <div class="bg-[#050b18] border border-[#1b2b48] rounded px-2.5 py-1.5 flex items-center gap-2">
+            <span id="uploadDocVerificationStatus" class="px-2 py-0.5 rounded-full bg-[#78350f]/80 text-[#fbbf24] font-semibold text-[10px] border border-[#d97706]/40"><%= verificationAfterUpload %></span>
+            <span class="text-[10px] text-slate-500">Set automatically on upload</span>
+          </div>
+        </div>
+
+        <!-- Uploaded By. Captured from the signed-in account, never entered. -->
+        <div class="space-y-1.5">
+          <span class="block font-bold text-white text-[11px]">Uploaded By</span>
+          <div class="bg-[#050b18] border border-[#1b2b48] rounded px-2.5 py-1.5 flex items-center gap-2">
+            <svg class="w-3.5 h-3.5 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+            </svg>
+            <span id="uploadDocUploadedBy" class="text-[11px] text-slate-200 font-medium truncate"><%= staffName %></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Send Notification. Optional: no channel does not stop an upload. The
+           layout is the Select Channel design from the Send Notification modal. -->
+      <div class="border-t border-[#132238] pt-4">
+        <div class="flex items-center gap-2 mb-2.5">
+          <h3 class="text-sm font-bold text-white">Send Notification</h3>
+          <span class="text-[10px] text-slate-500 font-medium">Optional</span>
+        </div>
+
+        <p class="text-[11px] text-slate-400 mb-3">
+          Tell the customer a new document has been uploaded to their shipment. Leave every channel unselected to upload without notifying anyone.
+        </p>
+
+        <h4 class="font-bold text-slate-900 text-xs mb-2">Select Channels</h4>
+
+        <div class="space-y-2">
+          <label class="cursor-pointer bg-white border border-slate-200 rounded-xl p-3 flex items-start justify-between transition-colors hover:border-blue-300">
+            <div class="flex items-start gap-3">
+              <div class="p-2 rounded-lg bg-blue-50 text-blue-600 shrink-0 mt-0.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+              </div>
+              <div>
+                <span class="font-bold text-slate-900 text-xs">Email</span>
+                <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Sent to the customer's registered email address</p>
+                <p class="text-[9px] text-slate-300 mt-0.5 leading-tight">Subject: New Document Uploaded &ndash; [Type] &ndash; [Shipment ID]</p>
+              </div>
+            </div>
+            <input type="checkbox" name="channels" value="Email" class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer mt-1" />
+          </label>
+
+          <label class="cursor-pointer bg-white border border-slate-200 rounded-xl p-3 flex items-start justify-between transition-colors hover:border-blue-300">
+            <div class="flex items-start gap-3">
+              <div class="p-2 rounded-lg bg-emerald-50 text-emerald-600 shrink-0 mt-0.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-4 4v-4z"/>
+                </svg>
+              </div>
+              <div>
+                <span class="font-bold text-slate-900 text-xs">SMS</span>
+                <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Sent to the customer's registered mobile number</p>
+                <p class="text-[9px] text-slate-300 mt-0.5 leading-tight">Provider confirmation</p>
+              </div>
+            </div>
+            <input type="checkbox" name="channels" value="SMS" class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer mt-1" />
+          </label>
+
+          <label class="cursor-pointer bg-white border border-slate-200 rounded-xl p-3 flex items-start justify-between transition-colors hover:border-blue-300">
+            <div class="flex items-start gap-3">
+              <div class="p-2 rounded-lg bg-emerald-50 text-emerald-600 shrink-0 mt-0.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 21l1.8-4A7.7 7.7 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+              </div>
+              <div>
+                <span class="font-bold text-slate-900 text-xs">WhatsApp</span>
+                <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Sent to the customer via WhatsApp</p>
+                <p class="text-[9px] text-slate-300 mt-0.5 leading-tight">Provider confirmation</p>
+              </div>
+            </div>
+            <input type="checkbox" name="channels" value="WhatsApp" class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer mt-1" />
+          </label>
+
+          <label class="cursor-pointer bg-white border border-slate-200 rounded-xl p-3 flex items-start justify-between transition-colors hover:border-blue-300">
+            <div class="flex items-start gap-3">
+              <div class="p-2 rounded-lg bg-purple-50 text-purple-600 shrink-0 mt-0.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+              </div>
+              <div>
+                <span class="font-bold text-slate-900 text-xs">In-App Notification</span>
+                <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Shown in the customer's dashboard notifications</p>
+                <p class="text-[9px] text-slate-300 mt-0.5 leading-tight">Becomes Viewed when the customer opens it</p>
+              </div>
+            </div>
+            <input type="checkbox" name="channels" value="Dashboard" class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer mt-1" />
+          </label>
+        </div>
+      </div>
+
+      <!-- Server-side refusal, reported in place rather than as an alert. -->
+      <div id="uploadDocError" class="hidden bg-[#450a0a] border border-[#b91c1c] rounded-lg px-3 py-2 text-[11px] text-[#fca5a5]"></div>
+
+    </form>
+
+    <!-- Footer -->
+    <div class="px-6 py-4 bg-[#0a142a] border-t border-[#132238] flex items-center justify-end gap-2.5">
+      <button type="button" data-close-upload-doc class="px-4 py-2 bg-[#0e1f3b] hover:bg-[#152a4e] border border-[#22406d] text-slate-300 text-[11px] font-semibold rounded transition-colors">
+        Cancel
+      </button>
+      <button type="submit" form="uploadDocForm" id="uploadDocSubmit"
+              class="px-4 py-2 bg-[#f97316] hover:bg-[#ea580c] text-white text-[11px] font-semibold rounded shadow transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+        </svg>
+        <span id="uploadDocSubmitLabel">Upload Document</span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    const modal = document.getElementById('uploadDocModal');
+    if (!modal) return;
+
+    const form = document.getElementById('uploadDocForm');
+    const typeSelect = document.getElementById('uploadDocType');
+    const itemsSection = document.getElementById('uploadDocItemsSection');
+    const itemsSelect = document.getElementById('uploadDocItems');
+    const appliesRadios = Array.from(modal.querySelectorAll('input[name="appliesTo"]'));
+    const dropZone = document.getElementById('uploadDocDropZone');
+    const fileInput = document.getElementById('uploadDocFile');
+    const fileCard = document.getElementById('uploadDocFileCard');
+    const fileName = document.getElementById('uploadDocFileName');
+    const fileMeta = document.getElementById('uploadDocFileMeta');
+    const fileRemove = document.getElementById('uploadDocFileRemove');
+    const fileError = document.getElementById('uploadDocFileError');
+    const errorBox = document.getElementById('uploadDocError');
+    const submit = document.getElementById('uploadDocSubmit');
+    const submitLabel = document.getElementById('uploadDocSubmitLabel');
+
+    const ACCEPTED = ['pdf', 'jpg', 'jpeg', 'png'];
+    const MAX_BYTES = 10 * 1024 * 1024;
+
+    /** The one file the form holds. Replaced, never accumulated. */
+    let chosen = null;
+
+    const setError = (message) => {
+      if (!errorBox) return;
+      errorBox.textContent = message || '';
+      errorBox.classList.toggle('hidden', !message);
+    };
+
+    const setFileError = (message) => {
+      if (!fileError) return;
+      fileError.textContent = message || '';
+      fileError.classList.toggle('hidden', !message);
+    };
+
+    const humanSize = (bytes) => {
+      if (bytes >= 1048576) return (bytes / 1048576).toFixed(2) + ' MB';
+      return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+    };
+
+    const showFile = (file) => {
+      if (!fileCard || !fileName || !fileMeta) return;
+      fileName.textContent = file.name;
+      fileMeta.textContent = `${humanSize(file.size)} &middot; ${(file.name.split('.').pop() || '').toUpperCase()}`;
+      fileCard.classList.remove('hidden');
+    };
+
+    const clearFile = () => {
+      chosen = null;
+      if (fileInput) fileInput.value = '';
+      if (fileCard) fileCard.classList.add('hidden');
+      setFileError('');
+      refreshSubmit();
+    };
+
+    /**
+     * Validates the extension and the size here as well as on the server, so an
+     * obviously wrong file never costs a round trip. The server re-checks both
+     * because the stored record is the source of truth.
+     */
+    const acceptFile = (file) => {
+      if (!file) return;
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      if (!ACCEPTED.includes(ext)) {
+        setFileError(`Only PDF, JPG, JPEG and PNG files can be uploaded. "${file.name}" is not one of those.`);
+        clearFile();
+        return;
+      }
+      if (file.size > MAX_BYTES) {
+        setFileError(`${file.name} is ${humanSize(file.size)}, which is over the 10 MB limit.`);
+        clearFile();
+        return;
+      }
+      setFileError('');
+      chosen = file;
+      showFile(file);
+      refreshSubmit();
+    };
+
+    /* Applies To decides whether the Item IDs section exists at all. */
+    const isItemsMode = () => {
+      const picked = appliesRadios.find((r) => r.checked);
+      return picked ? picked.value === 'selected_items' : false;
+    };
+
+    const syncItemsSection = () => {
+      const itemsMode = isItemsMode();
+      if (itemsSection) itemsSection.classList.toggle('hidden', !itemsMode);
+      if (!itemsMode && itemsSelect) {
+        Array.from(itemsSelect.options).forEach((o) => { o.selected = false; });
+      }
+      refreshSubmit();
+    };
+
+    /**
+     * Every mandatory field, checked on each change so the button is never
+     * enabled half-finished:
+     *   - a document type,
+     *   - the file,
+     *   - when Applies To is Selected Items, at least one Item ID.
+     * No notification channel is required.
+     */
+    const isComplete = () => {
+      if (!typeSelect || !typeSelect.value) return false;
+      if (!chosen) return false;
+      if (isItemsMode()) {
+        if (!itemsSelect) return false;
+        return Array.from(itemsSelect.selectedOptions).some((o) => o.value);
+      }
+      return true;
+    };
+
+    function refreshSubmit() {
+      if (submit) submit.disabled = !isComplete();
+    }
+
+    /* ---- Wiring ------------------------------------------------------- */
+    appliesRadios.forEach((r) => r.addEventListener('change', syncItemsSection));
+    typeSelect?.addEventListener('change', refreshSubmit);
+    itemsSelect?.addEventListener('change', refreshSubmit);
+
+    if (dropZone) {
+      dropZone.addEventListener('click', (e) => {
+        // The remove button inside the card sits above the zone in the DOM, so
+        // guard against it bubbling up and reopening the chooser.
+        if (e.target.closest('#uploadDocFileRemove')) return;
+        fileInput?.click();
+      });
+      ['dragenter', 'dragover'].forEach((type) => {
+        dropZone.addEventListener(type, (e) => {
+          e.preventDefault();
+          dropZone.classList.add('border-[#f97316]', 'bg-[#0b1426]');
+        });
+      });
+      ['dragleave', 'drop'].forEach((type) => {
+        dropZone.addEventListener(type, (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('border-[#f97316]', 'bg-[#0b1426]');
+        });
+      });
+      dropZone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer && e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+        if (!files.length) return;
+        // One file per upload: the first is taken and the rest ignored.
+        acceptFile(files[0]);
+      });
+    }
+
+    fileInput?.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files.length) acceptFile(fileInput.files[0]);
+    });
+
+    fileRemove?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearFile();
+    });
+
+    /* ---- Open / close ------------------------------------------------- */
+    window.openUploadDocModal = function () {
+      setError('');
+      // A reopened modal starts from nothing: a previous upload must never be
+      // one keystroke away from being submitted again.
+      if (typeSelect) typeSelect.value = '';
+      appliesRadios.forEach((r) => { r.checked = r.value === 'whole_shipment'; });
+      clearFile();
+      syncItemsSection();
+      refreshSubmit();
+      modal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    };
+
+    window.closeUploadDocModal = function () {
+      // Cancel discards the form: nothing staged here is saved.
+      setError('');
+      if (typeSelect) typeSelect.value = '';
+      appliesRadios.forEach((r) => { r.checked = r.value === 'whole_shipment'; });
+      clearFile();
+      modal.classList.add('hidden');
+      document.body.style.overflow = '';
+    };
+
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('[data-open-upload-doc]')) {
+        e.preventDefault();
+        window.openUploadDocModal();
+      }
+      if (e.target === modal) window.closeUploadDocModal();
+    });
+
+    modal.querySelectorAll('[data-close-upload-doc]').forEach((btn) => {
+      btn.addEventListener('click', window.closeUploadDocModal);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) window.closeUploadDocModal();
+    });
+
+    /* ---- Submit ------------------------------------------------------- */
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      setError('');
+
+      if (!isComplete()) {
+        setError('Complete the mandatory fields: Document Type, and a file. Choose at least one Item ID when the document applies to Selected Items.');
+        refreshSubmit();
+        return;
+      }
+      if (!chosen) {
+        setError('Choose a document file to upload.');
+        return;
+      }
+
+      const selectedItems = isItemsMode() && itemsSelect
+        ? Array.from(itemsSelect.selectedOptions).map((o) => o.value)
+        : [];
+      const selectedChannels = Array.from(modal.querySelectorAll('input[name="channels"]:checked')).map((c) => c.value);
+
+      const payload = new FormData();
+      payload.append('documentFile', chosen);
+      payload.append('documentType', typeSelect.value);
+      payload.append('appliesTo', isItemsMode() ? 'selected_items' : 'whole_shipment');
+      if (isItemsMode()) selectedItems.forEach((id) => payload.append('itemIds', id));
+      selectedChannels.forEach((c) => payload.append('channels', c));
+
+      submit.disabled = true;
+      if (submitLabel) submitLabel.textContent = 'Uploading…';
+
+      try {
+        const ref = modal.getAttribute('data-shipment-ref');
+        const res = await fetch(`/admin/shipments/${encodeURIComponent(ref)}/documents`, {
+          method: 'POST',
+          body: payload,
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok || !body.success) {
+          throw new Error(body.error || `Upload failed (${res.status})`);
+        }
+
+        // The tab is re-read from the database rather than patched client-side,
+        // so the new row, its Linked Record and the refreshed card counts all
+        // come from what was actually stored.
+        if (typeof window.onDocumentUploaded === 'function') {
+          window.onDocumentUploaded(body);
+        } else {
+          window.location.reload();
+        }
+        window.closeUploadDocModal();
+      } catch (err) {
+        setError(err.message || 'The document could not be uploaded.');
+        submit.disabled = false;
+        if (submitLabel) submitLabel.textContent = 'Upload Document';
+      }
+    });
+  })();
+</script>

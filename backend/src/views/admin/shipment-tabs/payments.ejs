@@ -1,0 +1,470 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Manage Shipment - Payments Tab
+   *
+   * Every figure on this tab is read from the database for the shipment being
+   * managed: the summary cards add up the invoices and payments that are
+   * actually stored, the table lists the payments linked to this shipment, and
+   * the Linked Invoice section reads the invoice of whichever payment is
+   * selected. Nothing here falls back to an invented number, so an empty
+   * shipment reads as zero rather than as a plausible-looking example.
+   * ------------------------------------------------------------------------- */
+
+  const shipments = (typeof shipment !== 'undefined' && shipment) ? shipment : null;
+
+  const invoices = (shipments && Array.isArray(shipments.invoices))
+    ? shipments.invoices
+    : [];
+
+  const payments = (shipments && Array.isArray(shipments.payments))
+    ? shipments.payments
+    : [];
+
+  /* The statuses that count as money the customer has actually paid. A payment
+     still pending never has, and a failed one never arrived; a reversed or
+     partially refunded one does count, because the amount was collected before
+     being handed back - unwinding it is what the returns workflow records, not
+     something this total decides. */
+  const PAID_STATUSES = ['completed', 'refunded', 'partially_refunded'];
+
+  const sumOf = (rows, pick) => rows.reduce(
+    (total, row) => total + (Number(pick(row)) || 0),
+    0
+  );
+
+  const totalInvoiced = sumOf(invoices, (inv) => inv.total);
+  const totalPaid = sumOf(
+    payments.filter((pay) => PAID_STATUSES.includes(String(pay.status || '').toLowerCase())),
+    (pay) => pay.amount
+  );
+  const totalOutstanding = totalInvoiced - totalPaid;
+
+  // A shipment can carry invoices in more than one currency, so the figures the
+  // cards show are labelled with whichever currency the shipment's own records
+  // report rather than assuming one. Absent any record, USD is the default the
+  // rest of the platform quotes in.
+  const primaryCurrency =
+    (invoices.find((inv) => inv.currency) || {}).currency
+    || (payments.find((pay) => pay.currency) || {}).currency
+    || 'USD';
+
+  const money = (value) => `${Number(value || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+  const currencyMoney = (value, currency) => `${currency || primaryCurrency} ${money(value)}`;
+
+  /* Payment status wording. The stored values are the payment gateway's own
+     vocabulary; the badge shows them readable without changing what was
+     recorded. */
+  const payStatusLabel = (value) => String(value || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const isPaidStatus = (value) => PAID_STATUSES.includes(String(value || '').toLowerCase());
+
+  const PAY_STATUS_STYLES = {
+    completed: 'bg-[#064e3b]/80 text-[#34d399] border-[#059669]/40',
+    refunded: 'bg-[#3b2f0b]/80 text-[#fbbf24] border-[#a16207]/40',
+    partially_refunded: 'bg-[#3b2f0b]/80 text-[#fbbf24] border-[#a16207]/40',
+    pending: 'bg-[#1e3a8a]/80 text-[#93c5fd] border-[#1d4ed8]/40',
+    failed: 'bg-[#450a0a]/80 text-[#fca5a5] border-[#b91c1c]/40',
+    reversed: 'bg-[#450a0a]/80 text-[#fca5a5] border-[#b91c1c]/40',
+    under_review: 'bg-[#3b2f0b]/80 text-[#fbbf24] border-[#a16207]/40',
+  };
+
+  const payStatusClass = (value) => PAY_STATUS_STYLES[String(value || '').toLowerCase()]
+    || 'bg-slate-800 text-slate-300 border-slate-700';
+
+  /* Invoice payment status, shown in the Record Payment modal's list. Kept
+     out of the Payments tab itself: the instructions remove Invoice Status from
+     the tab because the payment records already say what has been settled. */
+  const invoicePaymentStatusClass = (value) => {
+    const key = String(value || '').toLowerCase();
+    if (key === 'paid' || key === 'completed') return 'bg-[#064e3b]/80 text-[#34d399] border-[#059669]/40';
+    if (key === 'partially paid' || key === 'partially refunded' || key === 'under review') return 'bg-[#3b2f0b]/80 text-[#fbbf24] border-[#a16207]/40';
+    if (key === 'failed' || key === 'refunded' || key === 'reversed') return 'bg-[#450a0a]/80 text-[#fca5a5] border-[#b91c1c]/40';
+    return 'bg-[#1e3a8a]/80 text-[#93c5fd] border-[#1d4ed8]/40';
+  };
+
+  /* Display form of a payment: its own public reference, and the invoice it
+     settles. A payment's public id is its row id in the DOC-style form used by
+     every other record on this panel, so a payment read off the payments list
+     links to the same row the Payments tab shows. */
+  const payRef = (pay) => `PAY-${String(pay.id).padStart(7, '0')}`;
+
+  const invoiceRef = (invoice) => (invoice && invoice.invoiceId)
+    ? invoice.invoiceId
+    : (invoice ? `INV-${String(invoice.id).padStart(7, '0')}` : '—');
+
+  /* Method wording. The stored value is the provider's slug; the table shows
+     what a reader recognises. */
+  const METHOD_LABELS = {
+    bank_transfer: 'Bank Transfer',
+    cash: 'Cash',
+    card: 'Card',
+    mobile_banking: 'Mobile Banking',
+    cheque: 'Cheque',
+    stripe: 'Card',
+    bkash: 'bKash',
+    nagad: 'Nagad',
+    wallet: 'Wallet',
+    other: 'Other',
+  };
+  const methodLabel = (value) => METHOD_LABELS[String(value || '').toLowerCase()]
+    || String(value || '—').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+  /* The transactions reference a payment is known by: the gateway's own
+     reference, falling back to the note staff recorded against it. */
+  const transactionRef = (pay) => pay.providerRef || pay.notes || '—';
+
+  /* Newest first, so the most recent payment is the one already selected when
+     the tab opens. */
+  const orderedPayments = [...payments].sort(
+    (a, b) => new Date(b.paidAt || b.createdAt || 0) - new Date(a.paidAt || a.createdAt || 0)
+  );
+
+  const selectedPayment = orderedPayments[0] || null;
+  const selectedInvoice = selectedPayment ? selectedPayment.invoice || null : null;
+
+  /* Invoices the Record Payment modal offers: the ones whose settlement
+     is still open. An invoice reads as payable while its Payment Status
+     is Pending, Reversed or Failed - a Failed attempt never collected
+     anything, so the invoice is offered again. Completed, Refunded,
+     Partially Refunded and Under Review invoices are left out, because
+     none of them can take another payment. */
+  const PAYABLE_INVOICE_STATUSES = ['pending', 'reversed', 'failed'];
+  const payableInvoices = invoices.filter((inv) =>
+    PAYABLE_INVOICE_STATUSES.includes(String(inv.paymentStatus || '').trim().toLowerCase())
+  );
+
+  const refOf = (pay) => encodeURIComponent(typeof shipment !== 'undefined' && shipment && shipment.shipmentId ? shipment.shipmentId : '');
+%>
+
+<div id="payments-tab-container" class="space-y-4 text-slate-200 font-sans text-[12px] antialiased">
+
+  <!-- Top Title & Action Bar -->
+  <div class="flex items-center justify-between gap-4 pb-1">
+    <div>
+      <h1 class="text-xl font-bold text-white tracking-tight">Payments</h1>
+      <p class="text-[11px] text-slate-400 mt-0.5">Payment and settlement records linked to this shipment and its invoices.</p>
+    </div>
+
+    <button type="button" data-open-payment-modal class="px-3.5 py-1.5 bg-[#f97316] hover:bg-[#ea580c] text-white text-[11px] font-semibold rounded shadow transition-colors">
+      Record Payment
+    </button>
+  </div>
+
+  <!-- Summary Cards Strip (3 Columns). Not clickable: they are totals, not
+       filters, and clicking a total does not narrow the records below it. -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <!-- Total Invoiced: the sum of every invoice linked to this shipment. -->
+    <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-3.5">
+      <div class="text-[10px] text-slate-400 font-medium">Total Invoiced</div>
+      <div class="text-lg font-bold text-white mt-1"><%= currencyMoney(totalInvoiced) %></div>
+      <div class="text-[10px] text-slate-500 mt-0.5"><%= invoices.length %> invoice<%= invoices.length === 1 ? '' : 's' %> linked to this shipment</div>
+    </div>
+
+    <!-- Total Paid: what the customer has actually paid, historically. -->
+    <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-3.5">
+      <div class="text-[10px] text-slate-400 font-medium">Total Paid</div>
+      <div class="text-lg font-bold text-[#22c55e] mt-1"><%= currencyMoney(totalPaid) %></div>
+      <div class="text-[10px] text-slate-500 mt-0.5">Completed, Refunded and Partially Refunded payments</div>
+    </div>
+
+    <!-- Outstanding: what is invoiced but not yet paid. -->
+    <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-3.5">
+      <div class="text-[10px] text-slate-400 font-medium">Outstanding</div>
+      <div class="text-lg font-bold mt-1 <%= totalOutstanding > 0 ? 'text-[#f87171]' : 'text-white' %>"><%= currencyMoney(totalOutstanding) %></div>
+      <div class="text-[10px] text-slate-500 mt-0.5">Total Invoiced &minus; Total Paid</div>
+    </div>
+  </div>
+
+  <!-- Payment Records Table Panel -->
+  <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+    <div class="flex items-center justify-between pb-1">
+      <h2 class="text-sm font-bold text-white">Payment Records</h2>
+      <span class="text-[10px] text-slate-400">Amounts remain separated by currency.</span>
+    </div>
+
+    <% if (orderedPayments.length === 0) { %>
+      <p class="text-[11px] text-slate-400 bg-[#050b18] border border-[#1b2b48] rounded px-3 py-3">
+        No payment has been recorded against this shipment yet. Use Record Payment to record one against an invoice.
+      </p>
+    <% } else { %>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-[11px]">
+          <thead>
+            <tr class="border-b border-[#1b2b48] text-slate-400 text-[10.5px]">
+              <th class="py-2 pr-2 font-medium">Payment ID</th>
+              <th class="py-2 px-2 font-medium">Invoice ID</th>
+              <th class="py-2 px-2 font-medium">Due Date</th>
+              <th class="py-2 px-2 font-medium">Purpose</th>
+              <th class="py-2 px-2 font-medium">Method</th>
+              <th class="py-2 px-2 font-medium">Amount</th>
+              <th class="py-2 px-2 font-medium">Status</th>
+              <th class="py-2 px-2 font-medium">Transaction Reference</th>
+              <th class="py-2 px-2 font-medium">Paid At</th>
+              <th class="py-2 px-2 font-medium">Recorded By</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[#16243d]/60 text-slate-300">
+            <% orderedPayments.forEach((pay) => { %>
+              <tr class="hover:bg-[#0f1d35]/50 transition-colors <%= selectedPayment && selectedPayment.id === pay.id ? 'bg-[#0f1d35]/70' : '' %>"
+                  data-payment-row="<%= pay.id %>">
+                <!-- Payment ID selects this payment for the Linked Invoice section
+                     below. It is a button rather than a link: nothing navigates. -->
+                <td class="py-2.5 pr-2">
+                  <button type="button" data-select-payment="<%= pay.id %>"
+                          class="font-mono font-medium text-[#60a5fa] hover:text-white hover:underline transition-colors">
+                    <%= payRef(pay) %>
+                  </button>
+                </td>
+                <td class="py-2.5 px-2 font-mono text-slate-300">
+                  <%= pay.invoice ? invoiceRef(pay.invoice) : '—' %>
+                </td>
+                <!-- Due Date comes from the invoice this payment settles. -->
+                <td class="py-2.5 px-2 text-slate-300">
+                  <%= pay.invoice && pay.invoice.dueDate ? fmtDate(pay.invoice.dueDate) : '—' %>
+                </td>
+                <td class="py-2.5 px-2 text-slate-300"><%= pay.invoice && pay.invoice.invoiceType ? titleCase(pay.invoice.invoiceType) : 'Shipment Invoice' %></td>
+                <td class="py-2.5 px-2 text-slate-300"><%= methodLabel(pay.provider) %></td>
+                <td class="py-2.5 px-2 font-medium text-white"><%= currencyMoney(pay.amount, pay.currency) %></td>
+                <td class="py-2.5 px-2">
+                  <span class="px-2 py-0.5 rounded-full border text-[9.5px] font-medium <%= payStatusClass(pay.status) %>">
+                    <%= payStatusLabel(pay.status) %>
+                  </span>
+                </td>
+                <td class="py-2.5 px-2 text-slate-300 font-mono"><%= transactionRef(pay) %></td>
+                <td class="py-2.5 px-2 text-slate-300"><%= pay.paidAt ? fmtDateTime(pay.paidAt) : fmtDateTime(pay.createdAt) %></td>
+                <td class="py-2.5 px-2">
+                  <% if (pay.createdBy) { %>
+                    <span class="font-mono text-[#60a5fa]">STF-<%= String(pay.createdBy).padStart(6, '0') %></span>
+                  <% } else { %>
+                    <span class="text-slate-500">—</span>
+                  <% } %>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </div>
+
+  <!-- Linked Invoice. Everything here is read from the invoice of the payment
+       selected above, through the invoice id the payment stores. -->
+  <div id="linkedInvoicePanel" class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+    <div class="flex items-center justify-between pb-2 border-b border-[#1b2b48]">
+      <h2 class="text-sm font-bold text-white">Linked Invoice</h2>
+      <% if (selectedPayment) { %>
+        <span id="linkedInvoiceNote" class="text-[10px] text-slate-400">
+          Showing invoice <span class="font-mono text-slate-300"><%= selectedInvoice ? invoiceRef(selectedInvoice) : '—' %></span>
+          for payment <span class="font-mono text-slate-300"><%= payRef(selectedPayment) %></span>
+        </span>
+      <% } else { %>
+        <span id="linkedInvoiceNote" class="text-[10px] text-slate-400"></span>
+      <% } %>
+    </div>
+
+    <p data-linked-empty class="hidden text-[11px] text-slate-400 bg-[#050b18] border border-[#1b2b48] rounded px-3 py-3"></p>
+
+    <% if (!selectedPayment) { %>
+      <p class="text-[11px] text-slate-400 bg-[#050b18] border border-[#1b2b48] rounded px-3 py-3">
+        No payment is selected, so there is no linked invoice to show.
+      </p>
+    <% } else if (!selectedInvoice) { %>
+      <p class="text-[11px] text-slate-400 bg-[#050b18] border border-[#1b2b48] rounded px-3 py-3">
+        Payment <span class="font-mono text-slate-300"><%= payRef(selectedPayment) %></span> has no invoice linked to it.
+      </p>
+    <% } else { %>
+      <div data-linked-body class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-2.5 gap-x-4 text-[11px] pt-1">
+        <div>
+          <span class="text-slate-400 block font-medium">Invoice Type</span>
+          <span class="text-white font-bold mt-0.5 block"><%= selectedInvoice.invoiceType ? titleCase(selectedInvoice.invoiceType) : '—' %></span>
+        </div>
+
+        <div>
+          <span class="text-slate-400 block font-medium">Invoice ID</span>
+          <span class="text-white font-bold mt-0.5 block font-mono"><%= invoiceRef(selectedInvoice) %></span>
+        </div>
+
+        <div>
+          <span class="text-slate-400 block font-medium">Due Date</span>
+          <span class="text-white font-bold mt-0.5 block"><%= selectedInvoice.dueDate ? fmtDate(selectedInvoice.dueDate) : '—' %></span>
+        </div>
+
+        <div>
+          <span class="text-slate-400 block font-medium">Issued</span>
+          <span class="text-white font-bold mt-0.5 block"><%= selectedInvoice.issuedAt ? fmtDate(selectedInvoice.issuedAt) : '—' %></span>
+        </div>
+
+        <!-- Renamed from Paid to Payment Date: the date the payment was made,
+             read from the payment table rather than the invoice's own date. -->
+        <div>
+          <span class="text-slate-400 block font-medium">Payment Date</span>
+          <span class="text-white font-bold mt-0.5 block"><%= selectedPayment.paidAt ? fmtDateTime(selectedPayment.paidAt) : '—' %></span>
+        </div>
+
+        <div>
+          <span class="text-slate-400 block font-medium">Invoice Total</span>
+          <span class="text-white font-bold mt-0.5 block"><%= currencyMoney(selectedInvoice.total, selectedInvoice.currency) %></span>
+        </div>
+
+        <!-- Payment Total is what the customer actually paid on this payment,
+             read from the payment table. It is shown next to the invoice total
+             so a part payment is visible as a gap between the two. -->
+        <div>
+          <span class="text-slate-400 block font-medium">Payment Total</span>
+          <span class="text-white font-bold mt-0.5 block"><%= currencyMoney(selectedPayment.amount, selectedPayment.currency) %></span>
+        </div>
+
+        <div>
+          <span class="text-slate-400 block font-medium">Payment Status</span>
+          <span class="mt-0.5 block">
+            <span class="px-2 py-0.5 rounded-full border text-[9.5px] font-medium <%= payStatusClass(selectedPayment.status) %>">
+              <%= payStatusLabel(selectedPayment.status) %>
+            </span>
+          </span>
+        </div>
+
+        <div>
+          <span class="text-slate-400 block font-medium">Payment Method</span>
+          <span class="text-white font-bold mt-0.5 block"><%= methodLabel(selectedPayment.provider) %></span>
+        </div>
+      </div>
+    <% } %>
+  </div>
+
+</div>
+
+<%- include('./record-payment-modal', { payableInvoices }) %>
+
+<script>
+  (function () {
+    const container = document.getElementById('payments-tab-container');
+    if (!container) return;
+
+    /* Selecting a payment swaps the Linked Invoice section to that payment's
+       invoice. The server has already sent every payment with its invoice, so
+       switching is a local read rather than a second request: the section
+       always shows what the database holds for that payment's invoice id. */
+    const PAYMENTS_INVOICE = <%- JSON.stringify(
+      orderedPayments.map((pay) => ({
+        id: pay.id,
+        ref: payRef(pay),
+        invoice: pay.invoice
+          ? {
+              invoiceId: invoiceRef(pay.invoice),
+              invoiceType: pay.invoice.invoiceType ? titleCase(pay.invoice.invoiceType) : '—',
+              dueDate: pay.invoice.dueDate ? fmtDate(pay.invoice.dueDate) : '—',
+              issuedAt: pay.invoice.issuedAt ? fmtDate(pay.invoice.issuedAt) : '—',
+              total: currencyMoney(pay.invoice.total, pay.invoice.currency),
+            }
+          : null,
+        paidAt: pay.paidAt ? fmtDate(pay.paidAt) : '—',
+        amount: currencyMoney(pay.amount, pay.currency),
+        provider: methodLabel(pay.provider),
+        status: payStatusLabel(pay.status),
+      }))
+    ) %>;
+
+    const linkedPanel = document.getElementById('linkedInvoicePanel');
+    const linkedHeaderNote = document.getElementById('linkedInvoiceNote');
+
+    const rows = Array.from(container.querySelectorAll('[data-payment-row]'));
+    const buttons = Array.from(container.querySelectorAll('[data-select-payment]'));
+
+    const setActiveRow = (id) => {
+      rows.forEach((row) => {
+        row.classList.toggle('bg-[#0f1d35]/70', String(row.getAttribute('data-payment-row')) === String(id));
+      });
+    };
+
+    const renderLinked = (id) => {
+      const payment = PAYMENTS_INVOICE.find((p) => String(p.id) === String(id));
+      if (!payment || !linkedPanel) return;
+
+      const invoice = payment.invoice;
+      if (linkedHeaderNote) linkedHeaderNote.textContent = `Showing invoice ${invoice ? invoice.invoiceId : '—'} for payment ${payment.ref}`;
+
+      const body = linkedPanel.querySelector('[data-linked-body]');
+      const empty = linkedPanel.querySelector('[data-linked-empty]');
+      if (!body) return;
+
+      if (!invoice) {
+        body.classList.add('hidden');
+        if (empty) {
+          empty.classList.remove('hidden');
+          empty.innerHTML = `Payment <span class="font-mono text-slate-300">${payment.ref}</span> has no invoice linked to it.`;
+        }
+        return;
+      }
+
+      if (empty) empty.classList.add('hidden');
+      body.classList.remove('hidden');
+      body.innerHTML = `
+        <div>
+          <span class="text-slate-400 block font-medium">Invoice Type</span>
+          <span class="text-white font-bold mt-0.5 block">${invoice.invoiceType}</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block font-medium">Invoice ID</span>
+          <span class="text-white font-bold mt-0.5 block font-mono">${invoice.invoiceId}</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block font-medium">Due Date</span>
+          <span class="text-white font-bold mt-0.5 block">${invoice.dueDate}</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block font-medium">Issued</span>
+          <span class="text-white font-bold mt-0.5 block">${invoice.issuedAt}</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block font-medium">Payment Date</span>
+          <span class="text-white font-bold mt-0.5 block">${payment.paidAt}</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block font-medium">Invoice Total</span>
+          <span class="text-white font-bold mt-0.5 block">${invoice.total}</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block font-medium">Payment Total</span>
+          <span class="text-white font-bold mt-0.5 block">${payment.amount}</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block font-medium">Payment Status</span>
+          <span class="mt-0.5 block"><span class="px-2 py-0.5 rounded-full border text-[9.5px] font-medium ${payStatusClassOf(payment.status)}">${payment.status}</span></span>
+        </div>
+        <div>
+          <span class="text-slate-400 block font-medium">Payment Method</span>
+          <span class="text-white font-bold mt-0.5 block">${payment.provider}</span>
+        </div>
+      `;
+    };
+
+    function payStatusClassOf(label) {
+      const PAY_STATUS_STYLES = {
+        'Completed': 'bg-[#064e3b]/80 text-[#34d399] border-[#059669]/40',
+        'Refunded': 'bg-[#3b2f0b]/80 text-[#fbbf24] border-[#a16207]/40',
+        'Partially Refunded': 'bg-[#3b2f0b]/80 text-[#fbbf24] border-[#a16207]/40',
+        'Pending': 'bg-[#1e3a8a]/80 text-[#93c5fd] border-[#1d4ed8]/40',
+        'Failed': 'bg-[#450a0a]/80 text-[#fca5a5] border-[#b91c1c]/40',
+        'Reversed': 'bg-[#450a0a]/80 text-[#fca5a5] border-[#b91c1c]/40',
+        'Under Review': 'bg-[#3b2f0b]/80 text-[#fbbf24] border-[#a16207]/40',
+      };
+      return PAY_STATUS_STYLES[label] || 'bg-slate-800 text-slate-300 border-slate-700';
+    }
+
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-select-payment');
+        setActiveRow(id);
+        renderLinked(id);
+      });
+    });
+
+    window.renderLinkedInvoice = renderLinked;
+  })();
+</script>

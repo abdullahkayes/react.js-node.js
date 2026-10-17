@@ -1,0 +1,35 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * The customer hover card shown on a Shipments table row.
+   *
+   * One definition, included once per row, so every row's card is identical by
+   * construction rather than by seven copies of the same markup staying in step.
+   *
+   * The row supplies the customer it belongs to, so hovering a row shows that
+   * row's customer rather than one hardcoded example.
+   *
+   * It is hidden until its cell is hovered or something inside it takes focus.
+   * The focus path matters: a hover-only card cannot be opened without a pointer,
+   * so the cell's name carries tabindex and the card also answers
+   * group-focus-within.
+   *
+   * Every field falls back to a dash, so a row that omits one renders an em dash
+   * instead of the word "undefined".
+   * ------------------------------------------------------------------------- */
+  const field = (value) => (value === undefined || value === null || String(value).trim() === '' ? '—' : value);
+%>
+<div class="hidden group-hover:block group-focus-within:block absolute left-0 top-full mt-1 z-20 w-64 bg-[#0d1c33] border border-[#1c335a] rounded-lg p-3.5 shadow-2xl space-y-2">
+  <div class="flex items-center justify-between border-b border-[#1c335a] pb-2">
+    <div class="min-w-0">
+      <div class="text-xs font-bold text-white truncate"><%= field(name) %></div>
+      <div class="text-[10px] text-blue-400 font-mono"><%= field(code) %></div>
+    </div>
+    <span class="px-2 py-0.5 rounded text-[9px] font-medium bg-emerald-950/90 text-emerald-400 border border-emerald-600/50 shrink-0 ml-2"><%= field(status) %></span>
+  </div>
+  <div class="text-[10px] space-y-1 text-slate-300">
+    <div class="flex justify-between gap-2"><span class="text-slate-400 shrink-0">Customer type</span> <span class="font-medium text-white text-right truncate"><%= field(customerType) %></span></div>
+    <div class="flex justify-between gap-2"><span class="text-slate-400 shrink-0">CL</span> <span class="font-medium text-white text-right truncate"><%= field(customerLogin) %></span></div>
+    <div class="flex justify-between gap-2"><span class="text-slate-400 shrink-0">Email</span> <span class="font-medium text-white text-right truncate"><%= field(email) %></span></div>
+    <div class="flex justify-between gap-2"><span class="text-slate-400 shrink-0">Phone</span> <span class="font-medium text-white text-right truncate"><%= field(phone) %></span></div>
+  </div>
+</div>

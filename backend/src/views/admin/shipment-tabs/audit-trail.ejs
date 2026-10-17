@@ -1,0 +1,196 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Manage Shipment - Audit Trail Tab
+   *
+   * Read-only, and read from the same rows the rest of the page summarises:
+   * the trail is derived from what is actually stored rather than kept in a
+   * second place that could disagree with it. Document uploads, document
+   * removals, payments, invoices, tracking updates and return cases all appear
+   * here because they each leave a row behind.
+   *
+   * The removing staff member is recorded on the document row, which is what
+   * makes a removal show up here at all: nothing was deleted, so the decision
+   * is still evidenced.
+   * ------------------------------------------------------------------------- */
+
+  const logs = (typeof auditTrail !== 'undefined' && Array.isArray(auditTrail)) ? auditTrail : [];
+  const stats = (typeof auditStats !== 'undefined' && auditStats) ? auditStats : {};
+
+  const fmtWhen = (value) => {
+    if (!value) return { day: '—', time: '' };
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return { day: '—', time: '' };
+    return {
+      day: d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+    };
+  };
+
+  /* The filter options are the values the trail actually contains, so a filter
+     can never offer an option that selects nothing. */
+  const distinct = (key) => [...new Set(logs.map((l) => l[key]).filter(Boolean))].sort();
+
+  const actionTypes = distinct('action');
+  const entityTypes = distinct('entityType');
+  const actorNames = distinct('actor');
+
+  const total = logs.length;
+%>
+
+<div id="audit-trail-container" class="space-y-4 text-slate-200 font-sans text-[11.5px] antialiased">
+
+  <!-- Header Section -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-bold text-white tracking-tight">Audit Trail</h1>
+      <p class="text-[11px] text-slate-400 mt-0.5">Read-only record of significant shipment, item, document, payment and decision activity.</p>
+    </div>
+    <div>
+      <span class="px-2.5 py-1 rounded bg-[#101c33] border border-[#1d2d4a] text-slate-400 text-[10.5px] font-medium">
+        Immutable History
+      </span>
+    </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 bg-[#081225] border border-[#1b2b48] rounded-md p-2.5" data-audit-filters>
+    <div>
+      <select data-audit-filter="action" class="w-full bg-[#050b18] border border-[#1b2b48] text-slate-400 text-[11px] rounded px-2.5 py-1.5 focus:outline-none focus:border-blue-500">
+        <option value="">Action Type</option>
+        <% actionTypes.forEach((a) => { %><option value="<%= a %>"><%= a %></option><% }); %>
+      </select>
+    </div>
+    <div>
+      <select data-audit-filter="entityType" class="w-full bg-[#050b18] border border-[#1b2b48] text-slate-400 text-[11px] rounded px-2.5 py-1.5 focus:outline-none focus:border-blue-500">
+        <option value="">Entity Type</option>
+        <% entityTypes.forEach((e) => { %><option value="<%= e %>"><%= e %></option><% }); %>
+      </select>
+    </div>
+    <div>
+      <select data-audit-filter="actor" class="w-full bg-[#050b18] border border-[#1b2b48] text-slate-400 text-[11px] rounded px-2.5 py-1.5 focus:outline-none focus:border-blue-500">
+        <option value="">Actor</option>
+        <% actorNames.forEach((a) => { %><option value="<%= a %>"><%= a %></option><% }); %>
+      </select>
+    </div>
+    <div>
+      <input type="text" data-audit-filter="query" placeholder="Search summary or ID"
+             class="w-full bg-[#050b18] border border-[#1b2b48] text-slate-400 text-[11px] rounded px-2.5 py-1.5 focus:outline-none focus:border-blue-500" />
+    </div>
+    <div>
+      <button type="button" data-audit-clear class="w-full bg-[#0e1e38] hover:bg-[#152746] border border-[#23385d] text-slate-300 text-[11px] font-medium rounded py-1.5 transition-colors">
+        Clear Filters
+      </button>
+    </div>
+  </div>
+
+  <!-- Recorded Actions Table Panel -->
+  <div class="bg-[#081225] border border-[#1b2b48] rounded-md p-4 space-y-3">
+    <div class="flex items-center justify-between border-b border-[#16243d] pb-3">
+      <h2 class="text-sm font-bold text-white">Recorded Actions</h2>
+      <span class="text-[10.5px] text-slate-400">Latest first – Showing <%= total %> entr<%= total === 1 ? 'y' : 'ies' %></span>
+    </div>
+
+    <% if (logs.length === 0) { %>
+      <div class="py-10 text-center text-slate-400 text-[11px]">
+        No audit activity has been recorded for this shipment yet.
+      </div>
+    <% } else { %>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse" data-audit-table>
+          <thead>
+            <tr class="border-b border-[#1b2b48] text-slate-400 text-[10.5px]">
+              <th class="py-2 pr-2 font-medium">Date &amp; Time</th>
+              <th class="py-2 px-2 font-medium">Actor</th>
+              <th class="py-2 px-2 font-medium">Action</th>
+              <th class="py-2 px-2 font-medium">Entity Type</th>
+              <th class="py-2 px-2 font-medium">Entity ID</th>
+              <th class="py-2 pl-2 font-medium">Change Summary</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[#16243d]/60 text-slate-300 text-[11px]">
+            <% logs.forEach((log) => { %>
+              <% const when = fmtWhen(log.occurredAt); %>
+              <tr class="hover:bg-[#0f1d35]/50 transition-colors"
+                  data-action="<%= log.action %>"
+                  data-entity-type="<%= log.entityType %>"
+                  data-actor="<%= log.actor %>"
+                  data-summary="<%= log.changeSummary %> <%= log.entityId %>">
+                <td class="py-3 pr-2 whitespace-pre-line text-slate-200 leading-snug"><%= when.day %><% if (when.time) { %><br /><span class="text-[10px] text-slate-400"><%= when.time %></span><% } %></td>
+
+                <td class="py-3 px-2">
+                  <div class="font-medium text-slate-200"><%= log.actor %></div>
+                </td>
+
+                <td class="py-3 px-2">
+                  <span class="text-[#f97316] font-medium"><%= log.action %></span>
+                </td>
+
+                <td class="py-3 px-2 text-slate-300"><%= log.entityType %></td>
+
+                <td class="py-3 px-2 font-mono text-slate-300 text-[10.5px]"><%= log.entityId %></td>
+
+                <td class="py-3 pl-2 text-slate-300 max-w-sm leading-relaxed"><%= log.changeSummary %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </div>
+
+  <!-- Footer Informational Banner -->
+  <div class="bg-[#0b1426] border-l-2 border-[#f97316] border-y border-r border-[#1b2b48] p-2.5 px-3 rounded-r text-[10.5px] text-slate-400">
+    Audit entries are created automatically for important status changes, approvals, rejections, document verification, document removals, payments, refunds, claim decisions, return decisions and account actions.
+  </div>
+
+</div>
+
+<script>
+  (function () {
+    const wrap = document.querySelector('[data-audit-filters]');
+    const table = document.querySelector('[data-audit-table]');
+    if (!wrap || !table) return;
+
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const selects = Array.from(wrap.querySelectorAll('[data-audit-filter]'));
+    const search = wrap.querySelector('[data-audit-filter="query"]');
+
+    const apply = () => {
+      const by = {};
+      selects.forEach((s) => {
+        const kind = s.getAttribute('data-audit-filter');
+        if (kind !== 'query') by[kind] = s.value;
+      });
+      const query = (search && search.value || '').trim().toLowerCase();
+
+      let shown = 0;
+      rows.forEach((row) => {
+        let keep = true;
+        if (by.entityType && row.getAttribute('data-entity-type') !== by.entityType) keep = false;
+        if (keep && by.action && !row.getAttribute('data-action').startsWith(by.action)) keep = false;
+        if (keep && by.actor && row.getAttribute('data-actor') !== by.actor) keep = false;
+        if (keep && query) {
+          const hay = (row.getAttribute('data-summary') || '').toLowerCase();
+          if (!hay.includes(query)) keep = false;
+        }
+        row.style.display = keep ? '' : 'none';
+        if (keep) shown++;
+      });
+
+      const count = wrap.parentElement.querySelector('[data-audit-count]');
+      if (count) count.textContent = String(shown);
+    };
+
+    selects.forEach((s) => s.addEventListener('change', apply));
+    if (search) search.addEventListener('input', apply);
+
+    const clear = wrap.querySelector('[data-audit-clear]');
+    if (clear) {
+      clear.addEventListener('click', () => {
+        selects.forEach((s) => { s.value = ''; });
+        if (search) search.value = '';
+        apply();
+      });
+    }
+  })();
+</script>

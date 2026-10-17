@@ -1,0 +1,170 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * The behaviour shared by all three request-details pages.
+   *
+   * Approving, rejecting and verifying all post to an endpoint the controller
+   * built for this request, and all reload afterwards: the shipment reference, the
+   * request status, the item badges and the Linked Shipment card all change
+   * together and are only correct when read back from the database.
+   * ------------------------------------------------------------------------- */
+%>
+<!-- Configuration for the page's actions. Kept as data so the script carries no
+     literal endpoint or id, and the same script serves all three request types. -->
+<script type="application/json" data-request-detail-config>
+  <%- JSON.stringify({
+    endpoints: endpoints,
+    requestId: record.id,
+    requestRef: row.requestRef,
+    documents: endpoints.verifyDocument.replace(':documentId', '__documentId__'),
+    registerDocument: endpoints.registerDocument,
+  }) %>
+</script>
+
+<script>
+  (function () {
+    var config = JSON.parse(document.querySelector('[data-request-detail-config]').textContent);
+
+    function send(method, url, body) {
+      return fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+      }).then(function (response) {
+        return response.json().catch(function () { return {}; }).then(function (data) {
+          return { ok: response.ok, status: response.status, data: data };
+        });
+      });
+    }
+
+    var result = document.querySelector('[data-request-decision-result]');
+
+    function showResult(message, tone) {
+      result.textContent = message;
+      result.classList.remove('hidden', 'text-[#34D399]', 'text-[#F87171]', 'text-[#F59E0B]');
+      result.classList.add(tone === 'ok' ? 'text-[#34D399]' : tone === 'warn' ? 'text-[#F59E0B]' : 'text-[#F87171]');
+      result.classList.remove('hidden');
+    }
+
+    /* ----------------------------------------------------------------
+     * Approve.
+     *
+     * The server re-checks that every item is accepted before it creates
+     * anything, so a disabled button here is a convenience rather than the
+     * guarantee.
+     * ---------------------------------------------------------------- */
+    var approve = document.querySelector('[data-approve-request]');
+    if (approve) {
+      approve.addEventListener('click', function () {
+        if (approve.disabled) return;
+        approve.disabled = true;
+        showResult('Approving and assigning a shipment ID...', 'warn');
+
+        send('POST', config.endpoints.approve).then(function (response) {
+          if (!response.ok) {
+            approve.disabled = false;
+            showResult(response.data.error || 'Could not approve this request.', 'error');
+            return;
+          }
+          var reference = response.data.shipment && response.data.shipment.ref;
+          showResult(
+            (response.data.alreadyConverted
+              ? 'Already converted - reusing shipment '
+              : 'Approved. Shipment ') + (reference || '') + ' created.',
+            'ok'
+          );
+          setTimeout(function () { window.location.reload(); }, 900);
+        }).catch(function () {
+          approve.disabled = false;
+          showResult('Could not reach the server. Nothing was changed.', 'error');
+        });
+      });
+    }
+
+    /* ----------------------------------------------------------------
+     * Reject.
+     *
+     * A rejection needs a reason the customer can act on, so one is asked
+     * for rather than assumed, and nothing is sent until it is given. A
+     * cancelled prompt is not a rejection and sends nothing.
+     * ---------------------------------------------------------------- */
+    var reject = document.querySelector('[data-reject-request]');
+    if (reject) {
+      reject.addEventListener('click', function () {
+        if (reject.disabled) return;
+
+        var reason = window.prompt(
+          'Reason for rejecting ' + config.requestRef + '. This is recorded against the request.',
+          ''
+        );
+        if (reason === null) return;
+        if (!reason.trim()) {
+          showResult('A reason is required to reject a request.', 'error');
+          return;
+        }
+
+        reject.disabled = true;
+        showResult('Rejecting...', 'warn');
+
+        send('POST', config.endpoints.reject, { note: reason.trim() }).then(function (response) {
+          if (!response.ok) {
+            reject.disabled = false;
+            showResult(response.data.error || 'Could not reject this request.', 'error');
+            return;
+          }
+          showResult('Request rejected.', 'ok');
+          setTimeout(function () { window.location.reload(); }, 900);
+        }).catch(function () {
+          reject.disabled = false;
+          showResult('Could not reach the server. Nothing was changed.', 'error');
+        });
+      });
+    }
+
+    /* ----------------------------------------------------------------
+     * Verify a document.
+     *
+     * The first verification of an uploaded file registers it in the documents
+     * table, so that decision posts to the register endpoint with the file's
+     * stored path. A file that already has a row posts to its own endpoint.
+     * The decision itself is the server's either way, which applies the same
+     * checklist rules as the customer record page.
+     * ---------------------------------------------------------------- */
+    document.querySelectorAll('[data-verify-document]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var documentId = button.getAttribute('data-document-id');
+        var filePath = button.getAttribute('data-file-path');
+        var label = button.getAttribute('data-label');
+
+        var decision = window.prompt(
+          'Verification decision for "' + label + '".\n\n' +
+          'Enter one of: Verified, Rejected, Needs Correction, Pending\n' +
+          'A note is required when rejecting.',
+          'Verified'
+        );
+        if (decision === null) return;
+
+        var body = { decision: decision.trim() };
+        if (filePath) body.filePath = filePath;
+
+        var url = documentId === 'uploaded'
+          ? config.registerDocument
+          : config.documents.replace('__documentId__', documentId);
+
+        button.disabled = true;
+        send('PUT', url, body).then(function (response) {
+          if (!response.ok) {
+            button.disabled = false;
+            showResult(response.data.error || 'Could not save that verification.', 'error');
+            return;
+          }
+          window.location.reload();
+        }).catch(function () {
+          button.disabled = false;
+          showResult('Could not reach the server. Nothing was changed.', 'error');
+        });
+      });
+    });
+
+    if (window.lucide) lucide.createIcons();
+  })();
+</script>

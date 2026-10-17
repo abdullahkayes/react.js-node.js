@@ -1,0 +1,190 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Confirm Remove Document - shared by every document table
+   *
+   * One dialog for the whole admin area rather than one per page: the
+   * confirmation asks the same question, carries the same two answers, and
+   * hands the confirmed document id to one shared handler, so a document cannot
+   * be removable from one page and not from another because the two pages
+   * disagreed about what removing means.
+   *
+   * Hidden by default and opened by any element carrying
+   * data-open-remove-document with a data-document-id, which is what the Remove
+   * button on each row supplies.
+   * ------------------------------------------------------------------------- */
+%>
+
+<!-- Popup Modal Backdrop (HIDDEN by default so it never opens automatically) -->
+<div id="confirmRemoveDocumentModal" class="hidden fixed inset-0 z-[60] bg-[#020712]/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="confirmRemoveDocumentTitle">
+
+  <!-- Modal Card -->
+  <div class="bg-[#071122] border border-[#182945] rounded-xl shadow-2xl w-full max-w-md my-auto overflow-hidden text-slate-200 font-sans text-[11.5px] antialiased">
+
+    <!-- Header -->
+    <div class="px-6 pt-5 pb-4 border-b border-[#132238]">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex items-start gap-3">
+          <div class="w-9 h-9 rounded-full bg-[#7f1d1d]/30 border border-[#b91c1c]/50 flex items-center justify-center text-[#f87171] shrink-0">
+            <svg class="w-4.5 h-4.5" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            </svg>
+          </div>
+          <div>
+            <h2 id="confirmRemoveDocumentTitle" class="text-base font-bold text-white tracking-tight">Remove Document</h2>
+            <p class="text-[11px] text-slate-400 mt-0.5">This cannot be undone.</p>
+          </div>
+        </div>
+        <button type="button" data-close-remove-document class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-[#12213a] transition-colors" aria-label="Close">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="px-6 py-5 space-y-3">
+      <p id="confirmRemoveDocumentQuestion" class="text-[12px] text-slate-200 leading-relaxed">
+        Are you sure you want to remove this document?
+      </p>
+
+      <!-- The document being asked about, filled in when the dialog opens. -->
+      <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-3 space-y-1.5">
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-[10px] text-slate-400 font-medium shrink-0">Document ID</span>
+          <span id="confirmRemoveDocumentId" class="text-[11px] text-white font-mono truncate">—</span>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-[10px] text-slate-400 font-medium shrink-0">File</span>
+          <span id="confirmRemoveDocumentFile" class="text-[11px] text-slate-200 truncate">—</span>
+        </div>
+      </div>
+
+      <p class="text-[10.5px] text-slate-400 leading-relaxed">
+        The document is removed from every list it appears in and the removal is recorded in the Audit Trail.
+      </p>
+    </div>
+
+    <!-- Footer: the two answers the confirmation offers -->
+    <div class="px-6 py-4 bg-[#040914] border-t border-[#132238] flex items-center justify-end gap-3">
+      <button type="button" data-close-remove-document class="px-4 py-1.5 bg-[#0e1f3b] hover:bg-[#152a4e] border border-[#22406d] text-slate-300 text-[11px] font-medium rounded transition-colors">
+        No
+      </button>
+      <button type="button" id="confirmRemoveDocumentYes" class="px-4 py-1.5 bg-[#b91c1c] hover:bg-[#991b1b] text-white text-[11px] font-semibold rounded shadow transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+        Yes
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    /* One instance, one pending document. Opening the dialog for a second row
+       replaces the first rather than stacking, so a staff member cannot confirm
+       a removal they did not just ask for. */
+    const modal = document.getElementById('confirmRemoveDocumentModal');
+    if (!modal || modal.dataset.bound === '1') return;
+    modal.dataset.bound = '1';
+
+    const idLabel = document.getElementById('confirmRemoveDocumentId');
+    const fileLabel = document.getElementById('confirmRemoveDocumentFile');
+    const yesBtn = document.getElementById('confirmRemoveDocumentYes');
+
+    let pending = null; // { documentId, label, file, trigger }
+
+    const close = () => {
+      modal.classList.add('hidden');
+      pending = null;
+      yesBtn.disabled = false;
+      yesBtn.textContent = 'Yes';
+    };
+
+    window.openRemoveDocumentModal = function (payload) {
+      if (!payload || payload.documentId === undefined || payload.documentId === null || payload.documentId === '') return;
+      pending = payload;
+      idLabel.textContent = payload.label || `DOC-${payload.documentId}`;
+      fileLabel.textContent = payload.file || '—';
+      yesBtn.disabled = false;
+      yesBtn.textContent = 'Yes';
+      modal.classList.remove('hidden');
+    };
+
+    /* Any button can open it, so the page author only has to carry the two
+       attributes. A button with neither is ignored rather than opening an
+       empty confirmation. */
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-open-remove-document]');
+      if (!btn) return;
+      e.preventDefault();
+      const raw = btn.getAttribute('data-document-id');
+      if (!raw) return;
+      window.openRemoveDocumentModal({
+        documentId: raw,
+        label: btn.getAttribute('data-document-label') || '',
+        file: btn.getAttribute('data-document-file') || '',
+        trigger: btn,
+      });
+    });
+
+    modal.querySelectorAll('[data-close-remove-document]').forEach((btn) => {
+      btn.addEventListener('click', close);
+    });
+
+    /* Clicking the backdrop is a "No": nothing changes. */
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
+    });
+
+    /* Yes: the one place a document is actually removed. Shared by every page,
+       so there is a single definition of removal and a single endpoint. */
+    if (yesBtn) {
+      yesBtn.addEventListener('click', async () => {
+        if (!pending) return close();
+        const target = pending;
+        yesBtn.disabled = true;
+        yesBtn.textContent = 'Removing…';
+
+        try {
+          const res = await fetch(`/admin/documents/${encodeURIComponent(target.documentId)}`, {
+            method: 'DELETE',
+            headers: { 'Accept': 'application/json' },
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok || !body.success) {
+            throw new Error(body.error || `Removal failed (${res.status})`);
+          }
+
+          /* The row is already gone from the server; re-rendering the page is
+             what keeps the table, the summary cards and the audit trail in step
+             with it, on every page this dialog is used from. */
+          if (typeof window.onDocumentRemoved === 'function') {
+            window.onDocumentRemoved(body);
+          } else {
+            window.location.reload();
+          }
+          close();
+        } catch (err) {
+          yesBtn.disabled = false;
+          yesBtn.textContent = 'Yes';
+          alert(err.message || 'The document could not be removed.');
+        }
+      });
+    }
+
+    /* Default reaction: drop the row in place and leave the rest of the page
+       alone, so a removal does not scroll the reader back to the top. A page
+       can override this by defining window.onDocumentRemoved first. */
+    if (typeof window.onDocumentRemoved !== 'function') {
+      window.onDocumentRemoved = function (body) {
+        const id = body && body.document ? body.document.id : null;
+        if (id === null || id === undefined) return;
+        document.querySelectorAll(`[data-document-row-id="${id}"]`).forEach((row) => row.remove());
+      };
+    }
+  })();
+</script>

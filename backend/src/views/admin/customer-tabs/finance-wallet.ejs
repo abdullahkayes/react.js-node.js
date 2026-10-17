@@ -1,0 +1,479 @@
+<%
+  // Every amount on this tab comes from the payment and invoice tables. Wallet
+  // buckets are derived from the payment status rather than stored, so the
+  // cards and the transaction table always agree.
+  const fmtDateTime = (d) => d
+    ? new Date(d).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : 'N/A';
+  const PAYMENT_STATUS_STYLE = {
+    completed: 'text-emerald-400',
+    refunded: 'text-sky-400',
+    partially_refunded: 'text-sky-400',
+    pending: 'text-amber-400',
+    under_review: 'text-amber-400',
+    failed: 'text-rose-400',
+    reversed: 'text-slate-400',
+  };
+  const paymentStatusStyle = (s) => PAYMENT_STATUS_STYLE[String(s || '').toLowerCase()] || 'text-slate-300';
+  const INVOICE_STATUS_STYLE = {
+    paid: 'text-emerald-400 font-medium',
+    issued: 'text-blue-400 font-medium',
+    draft: 'text-slate-300 font-medium',
+    cancelled: 'text-rose-400 font-medium',
+  };
+  const invoiceStatusStyle = (s) => INVOICE_STATUS_STYLE[String(s || '').toLowerCase()] || 'text-slate-300';
+  const countLabel = (n, word) => n + (n === 1 ? ' ' + word : ' ' + word + 's');
+%>
+
+<!-- Finance & Wallet Tab Content -->
+<div class="space-y-5 bg-[#030914] text-slate-200 p-6 rounded-xl font-sans antialiased">
+
+  <!-- Header Section -->
+  <div class="space-y-1">
+    <h2 class="text-2xl font-bold text-white tracking-tight">Finance &amp; Wallet</h2>
+    <p class="text-xs text-slate-400">Review separated wallet balances and the customer's financial records.</p>
+    <div class="flex items-center gap-1.5 text-xs text-emerald-400 pt-1 font-medium">
+      <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+      <span>Authorized Finance Access</span>
+    </div>
+  </div>
+
+  <!-- Top 3 Balance Cards: derived from the payment ledger -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+    <% [
+      { key: 'available', label: 'Available Balance', icon: 'wallet', value: wallet.availableBalance },
+      { key: 'refund', label: 'Refund Balance', icon: 'rotate-ccw', value: wallet.refundBalance },
+      { key: 'hold', label: 'Hold Balance', icon: 'lock', value: wallet.holdBalance },
+    ].forEach(card => { %>
+      <div class="bg-[#071325] border border-[#11233f] rounded-lg p-4 space-y-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full border border-amber-500/30 bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
+            <i data-lucide="<%= card.icon %>" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="text-xs text-slate-400"><%= card.label %></div>
+            <div class="text-2xl font-bold text-white tracking-tight"><%= card.value.toFixed(2) %> <span class="text-sm font-medium text-slate-400"><%= walletTransactions[0] ? walletTransactions[0].currency : '' %></span></div>
+          </div>
+        </div>
+        <div class="pt-2 border-t border-[#11233f]/60 flex items-center justify-between text-xs">
+          <span class="text-slate-400">Account Status:</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-600/40"><%= customer.accountStatus %></span>
+        </div>
+      </div>
+    <% }); %>
+
+  </div>
+
+  <!-- Financial Records Section Container -->
+  <div class="bg-[#071325] border border-[#11233f] rounded-lg p-5 space-y-4">
+    <h3 class="text-base font-bold text-white">Financial Records</h3>
+
+    <!-- Search & Filter Controls Bar -->
+    <div class="flex flex-wrap items-center gap-2.5 pt-1">
+      <!-- Search Box -->
+      <div class="relative flex-1 min-w-[240px]">
+        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+        <input
+          type="text"
+          data-finance-search
+          placeholder="Search by Transaction ID or related record"
+          class="w-full bg-[#030914] border border-[#152a4a] rounded-md pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+        />
+      </div>
+
+      <!-- Wallet Bucket Filter -->
+      <div class="relative">
+        <select data-finance-filter="bucket" class="appearance-none bg-[#030914] border border-[#152a4a] rounded-md px-3 py-1.5 pr-8 text-xs text-slate-300 focus:outline-none focus:border-amber-500 cursor-pointer">
+          <option value="">Wallet Bucket: All</option>
+          <% ['Available Balance', 'Refund Balance', 'Hold Balance'].forEach(b => { %>
+            <option value="<%= b %>"><%= b %></option>
+          <% }); %>
+        </select>
+        <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none"></i>
+      </div>
+
+      <!-- Transaction Type Filter -->
+      <div class="relative">
+        <select data-finance-filter="type" class="appearance-none bg-[#030914] border border-[#152a4a] rounded-md px-3 py-1.5 pr-8 text-xs text-slate-300 focus:outline-none focus:border-amber-500 cursor-pointer">
+          <option value="">Transaction Type: All</option>
+          <option value="Payment">Payment</option>
+          <option value="Refund">Refund</option>
+          <option value="Compensation">Compensation</option>
+        </select>
+        <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none"></i>
+      </div>
+    </div>
+
+    <!-- Main Wallet Activity Table -->
+    <div class="overflow-x-auto pt-2">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#11233f] font-semibold">
+            <th class="py-2.5 px-2">Transaction ID</th>
+            <th class="py-2.5 px-2">Wallet Bucket</th>
+            <th class="py-2.5 px-2">Transaction Type</th>
+            <th class="py-2.5 px-2">Direction</th>
+            <th class="py-2.5 px-2">Amount</th>
+            <th class="py-2.5 px-2">Related Record</th>
+            <th class="py-2.5 px-2">Payment Method</th>
+            <th class="py-2.5 px-2 text-right">Date</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#11233f]/60 text-slate-300">
+          <% if (walletTransactions.length > 0) { %>
+            <% walletTransactions.forEach(t => { %>
+              <tr class="hover:bg-[#0b1b33]/50 transition-colors" data-finance-row
+                  data-bucket="<%= t.bucket %>" data-type="<%= t.type %>"
+                  data-search="<%= [t.recordId, t.shipmentRef, t.invoiceRef, t.method].filter(Boolean).join(' ').toLowerCase() %>">
+                <td class="py-2.5 px-2 font-mono text-slate-200"><%= t.recordId %></td>
+                <td class="py-2.5 px-2"><%= t.bucket %></td>
+                <td class="py-2.5 px-2"><%= t.type %></td>
+                <td class="py-2.5 px-2 font-medium <%= t.direction === 'Credit' ? 'text-emerald-400' : 'text-amber-500' %>"><%= t.direction %></td>
+                <td class="py-2.5 px-2 font-mono"><%= t.currency %> <%= t.amountText %></td>
+                <td class="py-2.5 px-2">
+                  <% if (t.shipmentRef) { %>
+                    <span class="text-blue-400 font-mono"><%= t.shipmentRef %></span>
+                  <% } else { %>
+                    <span class="text-slate-400">N/A</span>
+                  <% } %>
+                </td>
+                <td class="py-2.5 px-2"><%= t.method || 'N/A' %></td>
+                <td class="py-2.5 px-2 text-slate-400 text-right"><%= fmtDate(t.occurredAt) %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="8" class="py-8 text-center text-slate-500">No wallet transactions recorded for this customer.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Table Footer -->
+    <div class="flex items-center justify-between pt-2 text-xs text-slate-400">
+      <span data-finance-count>Showing <%= countLabel(walletTransactions.length, 'transaction') %></span>
+    </div>
+  </div>
+
+  <!-- Latest Reconciliation Card -->
+  <div class="bg-[#071325] border border-[#11233f] rounded-lg p-5 space-y-4">
+    <h3 class="text-base font-bold text-white">Latest Reconciliation</h3>
+
+    <% if (latestReconciliation) { %>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-8 text-xs">
+        <!-- Left Column -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between border-b border-[#11233f]/60 pb-1.5">
+            <span class="text-slate-400">Last Reconciled:</span>
+            <span class="text-slate-200 font-medium"><%= fmtDateTime(latestReconciliation.reconciledAt) %></span>
+          </div>
+          <div class="flex items-center justify-between border-b border-[#11233f]/60 pb-1.5">
+            <span class="text-slate-400">Recorded Total:</span>
+            <span class="text-slate-200 font-mono font-medium"><%= latestReconciliation.recordedBalance %></span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">Ledger Total:</span>
+            <span class="text-slate-200 font-mono font-medium"><%= latestReconciliation.ledgerBalance %></span>
+          </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between border-b border-[#11233f]/60 pb-1.5">
+            <span class="text-slate-400">Difference:</span>
+            <span class="text-slate-200 font-mono font-medium"><%= latestReconciliation.difference %></span>
+          </div>
+          <div class="flex items-center justify-between border-b border-[#11233f]/60 pb-1.5">
+            <span class="text-slate-400">Status:</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-600/40"><%= latestReconciliation.status %></span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">Reconciled By:</span>
+            <span class="text-slate-200 font-medium"><%= latestReconciliation.reconciledBy %></span>
+          </div>
+        </div>
+      </div>
+    <% } else { %>
+      <p class="text-xs text-slate-500">No reconciliation has been run because this customer has no wallet transactions yet.</p>
+    <% } %>
+  </div>
+
+  <!-- Quotations Card -->
+  <div class="bg-[#071325] border border-[#11233f] rounded-lg p-5 space-y-3">
+    <h3 class="text-base font-bold text-white">Quotations</h3>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#11233f] font-semibold">
+            <th class="py-2.5 px-2">Quotation ID</th>
+            <th class="py-2.5 px-2">Shipment ID</th>
+            <th class="py-2.5 px-2">Quotation Type</th>
+            <th class="py-2.5 px-2">Estimated Total</th>
+            <th class="py-2.5 px-2">Status</th>
+            <th class="py-2.5 px-2 text-right">Valid Until</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#11233f]/60 text-slate-300">
+          <% if (quotations.length > 0) { %>
+            <% quotations.forEach(q => { %>
+              <tr class="hover:bg-[#0b1b33]/50 transition-colors">
+                <td class="py-2.5 px-2 font-mono text-slate-200"><%= q.recordId %></td>
+                <td class="py-2.5 px-2"><span class="text-blue-400 font-mono"><%= q.shipmentRef || 'N/A' %></span></td>
+                <td class="py-2.5 px-2"><%= q.type %></td>
+                <td class="py-2.5 px-2 font-mono"><%= q.totalText %></td>
+                <td class="py-2.5 px-2"><%= q.status %></td>
+                <td class="py-2.5 px-2 text-slate-400 text-right"><%= q.validUntil ? fmtDate(q.validUntil) : 'N/A' %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="6" class="py-6 text-center text-slate-500">No quotations recorded for this customer.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Invoices Card -->
+  <div class="bg-[#071325] border border-[#11233f] rounded-lg p-5 space-y-3">
+    <h3 class="text-base font-bold text-white">Invoices</h3>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#11233f] font-semibold">
+            <th class="py-2.5 px-2">Invoice ID</th>
+            <th class="py-2.5 px-2">Shipment ID</th>
+            <th class="py-2.5 px-2">Invoice Type</th>
+            <th class="py-2.5 px-2">Total Amount</th>
+            <th class="py-2.5 px-2">Status</th>
+            <th class="py-2.5 px-2">Issued At</th>
+            <th class="py-2.5 px-2 text-right">Due At</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#11233f]/60 text-slate-300">
+          <% if (financeInvoices.length > 0) { %>
+            <% financeInvoices.forEach(i => { %>
+              <tr class="hover:bg-[#0b1b33]/50 transition-colors">
+                <td class="py-2.5 px-2 text-blue-400 font-mono"><%= i.recordId %></td>
+                <td class="py-2.5 px-2"><span class="text-blue-400 font-mono"><%= i.shipmentRef || 'N/A' %></span></td>
+                <td class="py-2.5 px-2"><%= i.invoiceType %></td>
+                <td class="py-2.5 px-2 font-mono"><%= i.currency %> <%= i.totalText %></td>
+                <td class="py-2.5 px-2 <%= invoiceStatusStyle(i.status) %>"><%= i.status %></td>
+                <td class="py-2.5 px-2 text-slate-400"><%= i.issuedAt ? fmtDate(i.issuedAt) : 'N/A' %></td>
+                <td class="py-2.5 px-2 text-slate-400 text-right"><%= i.dueAt ? fmtDate(i.dueAt) : 'N/A' %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="7" class="py-6 text-center text-slate-500">No invoices issued to this customer.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Payments Card -->
+  <div class="bg-[#071325] border border-[#11233f] rounded-lg p-5 space-y-3">
+    <h3 class="text-base font-bold text-white">Payments</h3>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#11233f] font-semibold">
+            <th class="py-2.5 px-2">Payment ID</th>
+            <th class="py-2.5 px-2">Invoice ID</th>
+            <th class="py-2.5 px-2">Purpose</th>
+            <th class="py-2.5 px-2">Method</th>
+            <th class="py-2.5 px-2">Amount</th>
+            <th class="py-2.5 px-2">Status</th>
+            <th class="py-2.5 px-2 text-right">Paid At</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#11233f]/60 text-slate-300">
+          <% if (paymentRows.length > 0) { %>
+            <% paymentRows.forEach(p => { %>
+              <tr class="hover:bg-[#0b1b33]/50 transition-colors">
+                <td class="py-2.5 px-2 text-blue-400 font-mono"><%= p.recordId %></td>
+                <td class="py-2.5 px-2 text-slate-400"><%= p.invoiceRef || 'N/A' %></td>
+                <td class="py-2.5 px-2"><%= p.purpose %></td>
+                <td class="py-2.5 px-2"><%= p.method || 'N/A' %></td>
+                <td class="py-2.5 px-2 font-mono"><%= p.currency %> <%= p.amountText %></td>
+                <td class="py-2.5 px-2 <%= paymentStatusStyle(p.status) %> font-medium"><%= p.status %></td>
+                <td class="py-2.5 px-2 text-slate-400 text-right"><%= p.occurredAt ? fmtDate(p.occurredAt) : 'N/A' %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="7" class="py-6 text-center text-slate-500">No payments recorded for this customer.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Refunds Card -->
+  <div class="bg-[#071325] border border-[#11233f] rounded-lg p-5 space-y-3">
+    <h3 class="text-base font-bold text-white">Refunds</h3>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#11233f] font-semibold">
+            <th class="py-2.5 px-2">Payment ID</th>
+            <th class="py-2.5 px-2">Shipment ID</th>
+            <th class="py-2.5 px-2">Invoice ID</th>
+            <th class="py-2.5 px-2">Method</th>
+            <th class="py-2.5 px-2">Amount</th>
+            <th class="py-2.5 px-2">Status</th>
+            <th class="py-2.5 px-2 text-right">Paid At</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#11233f]/60 text-slate-300">
+          <% if (refundRows.length > 0) { %>
+            <% refundRows.forEach(p => { %>
+              <tr class="hover:bg-[#0b1b33]/50 transition-colors">
+                <td class="py-2.5 px-2 text-blue-400 font-mono"><%= p.recordId %></td>
+                <td class="py-2.5 px-2"><span class="text-blue-400 font-mono"><%= p.shipmentRef || 'N/A' %></span></td>
+                <td class="py-2.5 px-2 text-slate-400"><%= p.invoiceRef || 'N/A' %></td>
+                <td class="py-2.5 px-2"><%= p.method || 'N/A' %></td>
+                <td class="py-2.5 px-2 font-mono"><%= p.currency %> <%= p.amountText %></td>
+                <td class="py-2.5 px-2 <%= paymentStatusStyle(p.status) %> font-medium"><%= p.status %></td>
+                <td class="py-2.5 px-2 text-slate-400 text-right"><%= p.occurredAt ? fmtDate(p.occurredAt) : 'N/A' %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="7" class="py-6 text-center text-slate-500">No refunds issued to this customer.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Claim Compensation Card -->
+  <div class="bg-[#071325] border border-[#11233f] rounded-lg p-5 space-y-3">
+    <h3 class="text-base font-bold text-white">Claim Compensation</h3>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#11233f] font-semibold">
+            <th class="py-2.5 px-2">Wallet Transaction ID</th>
+            <th class="py-2.5 px-2">Claim ID</th>
+            <th class="py-2.5 px-2">Shipment ID</th>
+            <th class="py-2.5 px-2">Wallet Bucket</th>
+            <th class="py-2.5 px-2">Amount</th>
+            <th class="py-2.5 px-2 text-right">Date</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#11233f]/60 text-slate-300">
+          <% if (claimCompensation.length > 0) { %>
+            <% claimCompensation.forEach(c => { %>
+              <tr class="hover:bg-[#0b1b33]/50 transition-colors">
+                <td class="py-2.5 px-2 font-mono text-slate-200"><%= c.walletTransactionId %></td>
+                <td class="py-2.5 px-2 text-blue-400 font-mono"><%= c.claimId %></td>
+                <td class="py-2.5 px-2"><span class="text-blue-400 font-mono"><%= c.shipmentRef || 'N/A' %></span></td>
+                <td class="py-2.5 px-2"><%= c.walletBucket %></td>
+                <td class="py-2.5 px-2 font-mono"><%= c.currency %> <%= c.amountText %></td>
+                <td class="py-2.5 px-2 text-slate-400 text-right"><%= fmtDate(c.occurredAt) %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="6" class="py-6 text-center text-slate-500">No claim compensation recorded for this customer.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Reconciliation History Card -->
+  <div class="bg-[#071325] border border-[#11233f] rounded-lg p-5 space-y-3">
+    <h3 class="text-base font-bold text-white">Reconciliation History</h3>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#11233f] font-semibold">
+            <th class="py-2.5 px-2">Reconciliation ID</th>
+            <th class="py-2.5 px-2">Wallet Account</th>
+            <th class="py-2.5 px-2">Recorded Balance</th>
+            <th class="py-2.5 px-2">Ledger Balance</th>
+            <th class="py-2.5 px-2">Difference</th>
+            <th class="py-2.5 px-2">Status</th>
+            <th class="py-2.5 px-2">Reconciled By</th>
+            <th class="py-2.5 px-2 text-right">Date</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#11233f]/60 text-slate-300">
+          <% if (reconciliation.length > 0) { %>
+            <% reconciliation.forEach(r => { %>
+              <tr class="hover:bg-[#0b1b33]/50 transition-colors">
+                <td class="py-2.5 px-2 font-mono text-slate-200"><%= r.recordId %></td>
+                <td class="py-2.5 px-2"><%= r.walletAccount %></td>
+                <td class="py-2.5 px-2 font-mono"><%= r.recordedBalance %></td>
+                <td class="py-2.5 px-2 font-mono"><%= r.ledgerBalance %></td>
+                <td class="py-2.5 px-2 font-mono"><%= r.difference %></td>
+                <td class="py-2.5 px-2 text-emerald-400 font-medium"><%= r.status %></td>
+                <td class="py-2.5 px-2"><%= r.reconciledBy %></td>
+                <td class="py-2.5 px-2 text-slate-400 text-right"><%= fmtDate(r.reconciledAt) %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="8" class="py-6 text-center text-slate-500">No reconciliation history available for this customer.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Wallet table filters. Delegated from document because the tab is injected
+  // through innerHTML, which does not run its own inline scripts on load.
+  (function () {
+    function applyFinanceFilters() {
+      const term = (document.querySelector('[data-finance-search]')?.value || '').trim().toLowerCase();
+      const bucket = document.querySelector('[data-finance-filter="bucket"]')?.value || '';
+      const type = document.querySelector('[data-finance-filter="type"]')?.value || '';
+
+      const rows = Array.from(document.querySelectorAll('[data-finance-row]'));
+      let visible = 0;
+      rows.forEach((row) => {
+        const okBucket = !bucket || row.getAttribute('data-bucket') === bucket;
+        const okType = !type || row.getAttribute('data-type') === type;
+        const okSearch = !term || (row.getAttribute('data-search') || '').includes(term);
+        const show = okBucket && okType && okSearch;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+
+      const counter = document.querySelector('[data-finance-count]');
+      if (counter) {
+        const total = rows.length;
+        counter.textContent = (bucket || type || term) && visible !== total
+          ? 'Showing ' + visible + ' of ' + total + ' transactions'
+          : 'Showing ' + total + (total === 1 ? ' transaction' : ' transactions');
+      }
+    }
+
+    document.addEventListener('input', function (e) {
+      if (e.target.matches('[data-finance-search]')) applyFinanceFilters();
+    });
+    document.addEventListener('change', function (e) {
+      if (e.target.matches('[data-finance-filter]')) applyFinanceFilters();
+    });
+  })();
+</script>

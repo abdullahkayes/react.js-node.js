@@ -1,0 +1,144 @@
+<%
+  // Contact verification statuses come straight from the customer row. Only
+  // these four values exist, so anything unexpected falls back to
+  // 'Not Required' rather than rendering an unknown badge.
+  const CONTACT_STATUSES = ['Not Required', 'Pending', 'Verified', 'Rejected'];
+  const contactStatus = (value) => CONTACT_STATUSES.includes(value) ? value : 'Not Required';
+  const contactStatusStyle = (value) => {
+    const v = contactStatus(value);
+    if (v === 'Verified') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400';
+    if (v === 'Pending') return 'border-amber-500/30 bg-amber-500/10 text-amber-400';
+    if (v === 'Rejected') return 'border-rose-500/30 bg-rose-500/10 text-rose-400';
+    return 'border-gray-600/40 bg-gray-500/10 text-gray-300';
+  };
+  const contactStatusIcon = (value) => {
+    const v = contactStatus(value);
+    if (v === 'Verified') return 'check-circle-2';
+    if (v === 'Rejected') return 'x-circle';
+    if (v === 'Pending') return 'clock';
+    return 'minus-circle';
+  };
+  const fmtDateTime = (d) => d
+    ? new Date(d).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : 'N/A';
+%>
+
+<!-- Contacts & Addresses Tab Content -->
+<div class="space-y-6">
+
+  <!-- Section Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <h2 class="text-xl font-bold text-white tracking-tight">Contacts &amp; Addresses</h2>
+      <p class="text-xs text-gray-400 mt-1">Review registered contact details, verification status and customer-provided addresses.</p>
+    </div>
+    <button data-open-request class="flex items-center gap-2 px-3.5 py-1.5 bg-transparent border border-sky-500/30 hover:border-sky-500/60 text-sky-200 text-xs font-medium rounded-lg transition-colors shrink-0">
+      <i data-lucide="info" class="w-4 h-4 text-sky-400"></i>
+      <span>Request Information</span>
+    </button>
+  </div>
+
+  <!-- Contact Details Card -->
+  <div class="bg-[#0e1626] border border-[#1b273a] rounded-xl p-5 space-y-4">
+    <!-- Header Icon & Title -->
+    <div class="flex items-center gap-2.5">
+      <i data-lucide="user" class="w-5 h-5 text-orange-500"></i>
+      <h3 class="text-base font-semibold text-white">Contact Details</h3>
+    </div>
+
+    <!-- Contact Details Table -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="text-gray-400 font-medium border-b border-[#1b273a]">
+          <tr>
+            <th class="pb-3 pt-1 px-3 font-normal">Contact Type</th>
+            <th class="pb-3 pt-1 px-3 font-normal">Contact Details</th>
+            <th class="pb-3 pt-1 px-3 font-normal">Primary</th>
+            <th class="pb-3 pt-1 px-3 font-normal">Verification Required</th>
+            <th class="pb-3 pt-1 px-3 font-normal">Verification Status</th>
+            <th class="pb-3 pt-1 px-3 font-normal">Verified At</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#1b273a]/60 text-gray-200">
+          <% contactRows.forEach(c => { %>
+            <tr class="hover:bg-[#152033]/40 transition-colors">
+              <td class="py-3.5 px-3"><%= c.contactType %></td>
+              <td class="py-3.5 px-3 font-mono text-gray-300 break-all"><%= c.contactValue || 'Not provided' %></td>
+              <td class="py-3.5 px-3"><%= c.isPrimary ? 'Yes' : 'No' %></td>
+              <td class="py-3.5 px-3"><%= c.verificationRequired ? 'Yes' : 'No' %></td>
+              <td class="py-3.5 px-3">
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded border text-[11px] font-medium <%= contactStatusStyle(c.verificationStatus) %>">
+                  <i data-lucide="<%= contactStatusIcon(c.verificationStatus) %>" class="w-3.5 h-3.5"></i>
+                  <%= contactStatus(c.verificationStatus) %>
+                </span>
+              </td>
+              <td class="py-3.5 px-3 text-gray-400"><%= c.verifiedAt ? fmtDateTime(c.verifiedAt) : 'N/A' %></td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Registered Addresses Card -->
+  <div class="bg-[#0e1626] border border-[#1b273a] rounded-xl p-5 space-y-4">
+    <!-- Header Icon & Title -->
+    <div class="flex items-center gap-2.5">
+      <i data-lucide="map-pin" class="w-5 h-5 text-orange-500"></i>
+      <h3 class="text-base font-semibold text-white">Registered Addresses</h3>
+    </div>
+
+    <!-- Address Cards Grid -->
+    <% const filledAddresses = registeredAddresses.filter(a => a.value); %>
+    <% if (filledAddresses.length > 0) { %>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <% filledAddresses.forEach(a => { %>
+          <div class="bg-[#0b111e] border border-[#1b273a] rounded-xl p-5 flex items-start gap-4">
+            <div class="w-10 h-10 rounded-full border border-sky-500/30 bg-sky-500/5 flex items-center justify-center text-sky-400 shrink-0 mt-0.5">
+              <i data-lucide="map-pin" class="w-5 h-5"></i>
+            </div>
+            <div class="space-y-1 text-xs">
+              <h4 class="text-sm font-semibold text-white"><%= a.title %></h4>
+              <p class="text-gray-300 leading-relaxed pt-1 whitespace-pre-line break-words"><%= a.value %></p>
+              <p class="text-gray-500 pt-2 text-[11px]"><%= a.source %></p>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    <% } else { %>
+      <p class="text-xs text-gray-500">No addresses were provided during registration for this customer.</p>
+    <% } %>
+
+    <!-- Shipment addresses used by this customer's shipments -->
+    <% const shipmentAddressList = (addresses || []); %>
+    <% if (shipmentAddressList.length > 0) { %>
+      <div class="pt-4 border-t border-[#1b273a] space-y-3">
+        <div class="flex items-center gap-2 text-xs font-semibold text-white">
+          <i data-lucide="truck" class="w-3.5 h-3.5 text-orange-500"></i>
+          <span>Shipment Addresses</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <% shipmentAddressList.forEach(a => { %>
+            <div class="bg-[#0b111e] border border-[#1b273a] rounded-lg p-3.5 space-y-1 text-xs">
+              <div class="flex items-center gap-2">
+                <span class="text-gray-200 font-medium"><%= a.label || 'Address' %></span>
+                <span class="ml-auto text-[10px] text-gray-500 font-mono">#<%= a.id %></span>
+              </div>
+              <p class="text-gray-300"><%= a.fullName %></p>
+              <p class="text-gray-400 font-mono"><%= a.phone || 'N/A' %></p>
+              <p class="text-gray-400 leading-relaxed break-words">
+                <%= a.addressLine1 %><% if (a.addressLine2) { %>, <%= a.addressLine2 %><% } %><br />
+                <%= a.city %><% if (a.state) { %>, <%= a.state %><% } %> <%= a.postalCode || '' %><br />
+                <%= a.country %>
+              </p>
+            </div>
+          <% }); %>
+        </div>
+      </div>
+    <% } %>
+  </div>
+
+</div>
+
+<!-- Request information popup, opened from the button above. -->
+<%- include('./request-info-modal') %>

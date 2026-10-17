@@ -1,0 +1,374 @@
+<%
+  // Display helpers. Document types are stored as machine keys; this map is the
+  // single place the label is turned into text.
+  const DOC_TYPE_LABELS = {
+    trade_license: 'Trade License/Business document',
+    national_id: 'National ID',
+    invoice: 'Invoice',
+    packing_list: 'Packing List',
+    bill_of_lading: 'Bill of Lading',
+    customs_declaration: 'Customs Declaration',
+    insurance_certificate: 'Insurance Certificate',
+    commercial_invoice: 'Commercial Invoice',
+    certificate_of_origin: 'Certificate of Origin',
+    shipping_instructions: 'Shipping Instructions',
+    delivery_proof: 'Proof of Delivery',
+    return_authorization: 'Return Authorization',
+    rto_document: 'RTO Document',
+    insurance_claim: 'Insurance Claim',
+    other: 'Other',
+  };
+  const docTypeLabel = (t) => DOC_TYPE_LABELS[t] || t || 'Other';
+
+  // Verification status colours. Pending and Needs Correction are the two
+  // states that put a document into "Documents Requiring Review" and show the
+  // Verify action; Verified and Rejected are terminal and show View.
+  const STATUS_STYLES = {
+    'Pending': 'bg-amber-500/10 text-amber-400 border-amber-500/40',
+    'Needs Correction': 'bg-rose-500/10 text-rose-400 border-rose-500/40',
+    'Verified': 'bg-[#022c19] text-[#22c55e] border-[#15803d]',
+    'Rejected': 'bg-slate-500/10 text-slate-400 border-slate-500/40',
+  };
+  const statusStyle = (s) => STATUS_STYLES[s] || STATUS_STYLES['Pending'];
+  const isVerified = (s) => s === 'Verified' || s === 'Rejected';
+
+  const fmtDateTime = (d) => d
+    ? new Date(d).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : 'N/A';
+
+  const fileSize = (bytes) => {
+    if (!bytes) return 'N/A';
+    return bytes >= 1048576 ? (bytes / 1048576).toFixed(2) + ' MB' : Math.round(bytes / 1024) + ' KB';
+  };
+
+  const verificationRecords = (typeof verificationHistory !== 'undefined' && verificationHistory) ? verificationHistory : [];
+  // Registered document rows plus the customer's real uploaded files, resolved
+  // by the controller into one list so this table is never empty.
+  const accountDocs = (typeof customerDocuments !== 'undefined' && customerDocuments) ? customerDocuments : [];
+  const vStats = (typeof verificationStats !== 'undefined' && verificationStats) ? verificationStats : {};
+
+  /* The signed-in staff member. A staff member cannot verify a document they
+     uploaded themselves, so every Verify affordance below is withheld from the
+     uploader - the same rule the shipment Documents tab and the request
+     documents apply. */
+  const staffId = (typeof user !== 'undefined' && user && user.id !== undefined && user.id !== null)
+    ? user.id
+    : null;
+  const uploadedByCurrentStaff = (doc) => (
+    staffId !== null
+    && doc.uploadedBy !== null && doc.uploadedBy !== undefined
+    && Number(doc.uploadedBy) === Number(staffId)
+  );
+%>
+
+<div class="space-y-5 bg-[#030814] text-slate-200 p-6 rounded-xl border border-[#0d182e] font-sans antialiased">
+
+  <!-- Header Section -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <h2 class="text-xl font-semibold text-white tracking-tight">Verification &amp; Documents</h2>
+      <p class="text-xs text-slate-400 mt-1">Review contact-verification records and customer account documents.</p>
+    </div>
+    <button data-open-request class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#1e2f4d] bg-[#081226] text-xs text-slate-200 hover:text-white hover:bg-[#0e1d3d] transition">
+      <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+      <span>Request Information</span>
+    </button>
+  </div>
+
+  <!-- Summary Cards. Unclickable: read-only counters, not navigation. -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+    <!-- Email Verification Card: current status from the database -->
+    <div class="bg-[#050e21] border border-[#0e1d38] rounded-lg p-4 flex items-center justify-between select-none">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full border border-amber-500/50 bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
+          <i data-lucide="mail" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-white">Email Verification</p>
+          <div class="mt-1">
+            <span class="inline-block px-2 py-0.5 rounded text-[10px] font-medium border <%= customer.emailVerificationStatus === 'Verified' ? 'bg-[#022c19] text-[#22c55e] border-[#15803d]' : customer.emailVerificationStatus === 'Pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/40' : 'bg-[#162032] text-slate-300 border-[#233149]' %>">
+              <%= customer.emailVerificationStatus %>
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1.5"><%= customer.emailVerifiedAt ? fmtDateTime(customer.emailVerifiedAt) : 'Not completed' %></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phone Verification Card: current status from the database -->
+    <div class="bg-[#050e21] border border-[#0e1d38] rounded-lg p-4 flex items-center justify-between select-none">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full border border-amber-500/50 bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
+          <i data-lucide="phone" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-white">Phone Verification</p>
+          <div class="mt-1">
+            <span class="inline-block px-2 py-0.5 rounded text-[10px] font-medium border <%= customer.phoneVerificationStatus === 'Verified' ? 'bg-[#022c19] text-[#22c55e] border-[#15803d]' : customer.phoneVerificationStatus === 'Pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/40' : 'bg-[#162032] text-slate-300 border-[#233149]' %>">
+              <%= customer.phoneVerificationStatus %>
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1.5"><%= customer.phoneVerifiedAt ? fmtDateTime(customer.phoneVerifiedAt) : 'Not completed' %></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Documents Requiring Review Card: account documents Pending or Needs Correction -->
+    <div class="bg-[#050e21] border border-[#0e1d38] rounded-lg p-4 flex items-center justify-between select-none">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full border border-amber-500/50 bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
+          <i data-lucide="file-text" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-white">Documents Requiring Review</p>
+          <p class="text-2xl font-bold text-white mt-1"><%= vStats.documentsRequiringReview || 0 %></p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Trade License/Business document gate notice -->
+  <% if (vStats.tradeLicenseRequired) { %>
+    <div class="border-l-2 <%= vStats.tradeLicenseVerified ? 'border-emerald-500' : 'border-amber-500' %> bg-[#050e21] rounded-r-lg border border-[#0e1d38] border-l-0 p-3.5 flex items-start gap-3">
+      <i data-lucide="<%= vStats.tradeLicenseVerified ? 'shield-check' : 'shield-alert' %>" class="w-4 h-4 <%= vStats.tradeLicenseVerified ? 'text-emerald-400' : 'text-amber-500' %> shrink-0 mt-0.5"></i>
+      <p class="text-xs <%= vStats.tradeLicenseVerified ? 'text-slate-300' : 'text-amber-200' %> leading-relaxed">
+        <% if (vStats.tradeLicenseVerified) { %>
+          Trade License/Business document is verified. This customer can submit requests and bookings.
+        <% } else { %>
+          A Trade License/Business document must be verified before this customer can submit any request or booking.
+          Current status: <strong><%= vStats.tradeLicenseStatus || 'Not uploaded' %></strong>.
+        <% } %>
+      </p>
+    </div>
+  <% } %>
+
+  <!-- Contact Verification History Container -->
+  <div class="border border-[#0e1d38] rounded-lg p-4 space-y-3 bg-[#050e21]">
+    <div class="flex items-center gap-2 text-white font-semibold text-xs">
+      <i data-lucide="shield-check" class="w-4 h-4 text-amber-500"></i>
+      <h3>Contact Verification History</h3>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#0e1d38]">
+            <th class="pb-2.5 font-normal">Verification Type</th>
+            <th class="pb-2.5 font-normal">Contact</th>
+            <th class="pb-2.5 font-normal">Status</th>
+            <th class="pb-2.5 font-normal">Requested At</th>
+            <th class="pb-2.5 font-normal">Completed At</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#0e1d38]/60">
+          <% if (verificationRecords.length > 0) { %>
+            <% verificationRecords.forEach(rec => { %>
+              <tr class="hover:bg-[#08152e]/50 transition-colors">
+                <td class="py-2.5 text-slate-200"><%= rec.contactType %> Verification</td>
+                <td class="py-2.5 text-slate-300 font-mono break-all"><%= rec.contactValue || 'N/A' %></td>
+                <td class="py-2.5">
+                  <span class="inline-block px-2 py-0.5 rounded text-[10px] font-medium border <%= rec.status === 'Verified' ? 'bg-[#022c19] text-[#22c55e] border-[#15803d]' : rec.status === 'Pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/40' : rec.status === 'Rejected' ? 'bg-slate-500/10 text-slate-400 border-slate-500/40' : 'bg-[#162032] text-slate-300 border-[#233149]' %>">
+                    <%= rec.status %>
+                  </span>
+                </td>
+                <td class="py-2.5 text-slate-400"><%= fmtDateTime(rec.requestedAt) %></td>
+                <td class="py-2.5 text-slate-400"><%= rec.completedAt ? fmtDateTime(rec.completedAt) : 'N/A' %></td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="5" class="py-5 text-slate-500 text-center">No contact verification records for this customer.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Customer Account Documents Container -->
+  <div class="border border-[#0e1d38] rounded-lg p-4 space-y-3 bg-[#050e21]">
+    <div class="flex items-center gap-2 text-white font-semibold text-xs">
+      <i data-lucide="file-text" class="w-4 h-4 text-amber-500"></i>
+      <h3>Customer Account Documents</h3>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="text-slate-400 border-b border-[#0e1d38]">
+            <th class="pb-2.5 font-normal">Document ID</th>
+            <th class="pb-2.5 font-normal">Document Type</th>
+            <th class="pb-2.5 font-normal">Related Record</th>
+            <th class="pb-2.5 font-normal">Expiry Date</th>
+            <th class="pb-2.5 font-normal">Verification Status</th>
+            <th class="pb-2.5 font-normal">Uploaded At</th>
+            <th class="pb-2.5 font-normal text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#0e1d38]/60">
+          <% if (accountDocs.length > 0) { %>
+            <% accountDocs.forEach(doc => { %>
+              <%
+                // fileExists/fileUrl are resolved by the controller, which checks
+                // the uploads folder so we never render a dead View link.
+                const fileUrl = doc.fileUrl || '';
+              %>
+              <tr class="hover:bg-[#08152e]/50 transition-colors" data-doc-row data-document-row-id="<%= doc.id || '' %>">
+                <td class="py-2.5 text-slate-200 font-mono">
+                  <% if (doc.id) { %>DOC-<%= doc.id %><% } else { %><span class="text-slate-500">N/A</span><% } %>
+                </td>
+                <td class="py-2.5 text-slate-200"><%= doc.documentTypeLabel || docTypeLabel(doc.documentType) %></td>
+                <td class="py-2.5 text-slate-300"><%= doc.relatedRecord || 'Customer Account' %></td>
+                <td class="py-2.5 text-slate-300"><%= doc.expiryDate ? fmtDateTime(doc.expiryDate) : 'N/A' %></td>
+                <td class="py-2.5">
+                  <span class="inline-block px-2 py-0.5 rounded text-[10px] font-medium border <%= statusStyle(doc.verificationStatus) %>">
+                    <%= doc.verificationStatus %>
+                  </span>
+                  <% if (doc.uploadedOnly) { %>
+                    <span class="block mt-1 text-[10px] text-slate-500" title="Uploaded by the customer; verifying it registers it as an account document">Uploaded, not yet reviewed</span>
+                  <% } %>
+                </td>
+                <td class="py-2.5 text-slate-400"><%= fmtDateTime(doc.createdAt) %></td>
+                <td class="py-2.5">
+                  <div class="flex items-center justify-end gap-3">
+                    <!-- Review Details: always available
+                    <button type="button" data-review-details
+                      data-doc-id="<%= doc.id ? 'DOC-' + doc.id : (doc.fileName || 'Uploaded file') %>"
+                      data-raw-doc-id="<%= doc.id || '' %>"
+                      data-doc-type="<%= doc.documentTypeLabel || docTypeLabel(doc.documentType) %>"
+                      data-related="<%= doc.relatedRecord || 'Customer Account' %>"
+                      data-status="<%= doc.verificationStatus %>"
+                      data-file-name="<%= doc.fileName %>"
+                      data-file-size="<%= fileSize(doc.fileSize) %>"
+                      data-expiry="<%= doc.expiryDate ? fmtDateTime(doc.expiryDate) : 'N/A' %>"
+                      data-uploaded-at="<%= fmtDateTime(doc.createdAt) %>"
+                      data-reviewed-by="<%= doc.reviewedBy || 'Not reviewed yet' %>"
+                      data-reviewed-at="<%= doc.reviewedAt ? fmtDateTime(doc.reviewedAt) : 'Not reviewed yet' %>"
+                      data-review-note="<%= doc.reviewNote || 'No review note has been recorded for this document yet.' %>"
+                      class="text-sky-400 hover:text-sky-300 hover:underline transition">Review Details</button> -->
+
+                    <% if (isVerified(doc.verificationStatus)) { %>
+                      <!-- Verified / Rejected: open the file when it is on disk -->
+                      <% if (doc.fileExists) { %>
+                        <a href="<%= fileUrl %>" target="_blank" rel="noopener" data-view-doc
+                           data-doc-id="DOC-<%= doc.id %>"
+                           class="text-emerald-400 hover:text-emerald-300 hover:underline transition">View</a>
+                      <% } else { %>
+                        <span class="text-slate-500" title="The stored file is missing from the uploads folder">File missing</span>
+                      <% } %>
+                    <% } else if (uploadedByCurrentStaff(doc)) { %>
+                      <!-- The uploader cannot verify their own upload. -->
+                      <span class="text-slate-500" title="You uploaded this document, so you cannot verify it.">Awaiting another reviewer</span>
+                    <% } else { %>
+                      <!-- Pending / Needs Correction: open the verification modal.
+                           An upload with no documents-table row is sent with the
+                           "uploaded" placeholder so the endpoint registers it
+                           before saving the decision. -->
+                           
+                      <a href="#" role="button" data-open-doc
+                         data-customer-id="<%= customer.id %>"
+                         data-customer-name="<%= customer.name %>"
+                         data-doc-id="<%= doc.id ? 'DOC-' + doc.id : (doc.fileName || 'Uploaded file') %>"
+                         data-raw-doc-id="<%= doc.id || 'uploaded' %>"
+                         data-file-path="<%= doc.filePath || '' %>"
+                         data-doc-type="<%= doc.documentTypeLabel || docTypeLabel(doc.documentType) %>"
+                         data-doc-type-key="<%= doc.documentType %>"
+                         data-related-id="<%= doc.relatedRecord || 'Customer Account' %>"
+                         data-related-label="<%= doc.relatedRecordType || doc.source || 'Customer Account' %>"
+                         data-related-type="<%= doc.relatedRecordType || '' %>"
+                         data-expiry="<%= doc.expiryDate ? fmtDateTime(doc.expiryDate) : 'N/A' %>"
+                         data-status="<%= doc.verificationStatus %>"
+                         data-file-name="<%= doc.fileName %>"
+                         data-file-size="<%= fileSize(doc.fileSize) %>"
+                         data-uploaded-by="<%= doc.uploadedBy && String(doc.uploadedBy) === String(customer.id) ? 'Customer Account #' + customer.id : (doc.uploadedBy ? 'Staff Account #' + doc.uploadedBy : 'Unknown') %>"
+                         data-uploaded-at="<%= fmtDateTime(doc.createdAt) %>"
+                         data-file-url="<%= fileUrl %>"
+                         class="text-sky-400 hover:text-sky-300 hover:underline transition">Verify</a>
+                    <% } %>
+
+                    <!-- Remove: always available for registered documents. -->
+                    <% if (doc.id) { %>
+                      <button type="button" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 border border-rose-500 text-white text-[10.5px] font-semibold rounded shadow transition"
+                              data-open-remove-document
+                              data-document-id="<%= doc.id %>"
+                              data-document-label="DOC-<%= doc.id %>"
+                              data-document-file="<%= doc.fileName %>">Remove</button>
+                    <% } %>
+                  </div>
+                </td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="7" class="py-5 text-slate-500 text-center">No customer account documents on file.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Document Review Details Callout Card: populated by Review Details -->
+    <div class="mt-4 border-l-2 border-amber-500 bg-[#040a17] border-t border-r border-b border-t-[#0e1d38] border-r-[#0e1d38] border-b-[#0e1d38] rounded-r-lg p-4 space-y-3">
+      <div class="flex items-center gap-2 text-white font-semibold text-xs">
+        <i data-lucide="file-text" class="w-4 h-4 text-amber-500"></i>
+        <h3>Document Review Details</h3>
+      </div>
+
+      <div class="space-y-2.5 text-xs">
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 py-1 border-b border-[#0e1d38]/60">
+          <span class="text-slate-400">Document ID:</span>
+          <span class="sm:col-span-3 text-slate-200 font-mono" data-detail="docId">Select a document using Review Details.</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 py-1 border-b border-[#0e1d38]/60">
+          <span class="text-slate-400">Document Type:</span>
+          <span class="sm:col-span-3 text-slate-200" data-detail="docType">-</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 py-1 border-b border-[#0e1d38]/60">
+          <span class="text-slate-400">Related Record:</span>
+          <span class="sm:col-span-3 text-slate-200" data-detail="related">-</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 py-1 border-b border-[#0e1d38]/60">
+          <span class="text-slate-400">Verification Status:</span>
+          <span class="sm:col-span-3" data-detail="statusWrap"><span data-detail="status">-</span></span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 py-1 border-b border-[#0e1d38]/60">
+          <span class="text-slate-400">Reviewed By:</span>
+          <span class="sm:col-span-3 text-slate-200" data-detail="reviewedBy">-</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 py-1 border-b border-[#0e1d38]/60">
+          <span class="text-slate-400">Reviewed At:</span>
+          <span class="sm:col-span-3 text-slate-200" data-detail="reviewedAt">-</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 py-1">
+          <span class="text-slate-400">Review Note:</span>
+          <span class="sm:col-span-3 text-slate-300 leading-relaxed whitespace-pre-line" data-detail="reviewNote">-</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom Info Footer -->
+  <div class="flex items-center gap-1.5 text-[11px] text-slate-400 pt-1">
+    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+    <span>Service-specific documents appear here only when linked to this customer and the relevant service record.</span>
+  </div>
+
+</div>
+
+<!-- Document verification popup, opened from any "Verify" link above. -->
+<%- include('./document-modal') %>
+
+<!-- Remove-document confirmation, shared with every other document table. -->
+<%- include('../partials/confirm-remove-document') %>
+
+<!-- Request information popup, opened from the "Request Information" button above. -->
+<%- include('./request-info-modal') %>

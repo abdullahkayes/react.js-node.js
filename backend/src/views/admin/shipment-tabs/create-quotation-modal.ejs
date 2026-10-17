@@ -1,0 +1,677 @@
+<%
+  /* ---------------------------------------------------------------------------
+   * Create Quotation Modal - Quotations & Invoices Tab
+   *
+   * Shipment and customer data is pulled from the database and is read-only:
+   * staff edit only the quotation itself. The monetary figures are held in both
+   * BDT and USD and kept in step by a single exchange rate imported from the
+   * API, which staff never type. The quotation is saved with its items, the
+   * discount and additional charge descriptions, the totals, the rate, the
+   * dates, and the notification channels.
+   * ------------------------------------------------------------------------- */
+  const shipmentId = (typeof shipment !== 'undefined' && shipment && shipment.shipmentId)
+    ? shipment.shipmentId
+    : 'SHP-2024-00125';
+  const shipmentRowId = (typeof shipment !== 'undefined' && shipment && shipment.id)
+    ? shipment.id
+    : '';
+  const customerId = (typeof shipment !== 'undefined' && shipment && shipment.customerId)
+    ? shipment.customerId
+    : ((typeof shipment !== 'undefined' && shipment && shipment.userId) ? `C-${shipment.userId}` : 'C-10045');
+  const customer = (typeof shipment !== 'undefined' && shipment && shipment.customer) ? shipment.customer : null;
+
+  /* An individual customer is greeted by name; a business by its business name,
+     so the label follows the account type. */
+  const customerType = customer ? customer.customerType : 'Business';
+  const customerName = customer
+    ? (customer.customerType === 'Individual'
+        ? (customer.fullName || customer.name)
+        : (customer.businessName || customer.name || 'Customer'))
+    : 'ABC Trading Ltd.';
+
+  const serviceMode = (typeof shipment !== 'undefined' && shipment && shipment.serviceMode)
+    ? shipment.serviceMode
+    : 'Import';
+  const freightMode = (typeof shipment !== 'undefined' && shipment && shipment.freightMode)
+    ? shipment.freightMode
+    : 'Air';
+  const isExport = serviceMode === 'Export';
+
+  /* Import shipments carry a purchase type; export shipments have none. */
+  const purchaseType = isExport
+    ? 'N/A'
+    : ((typeof shipment !== 'undefined' && shipment && shipment.purchaseType)
+        ? shipment.purchaseType
+        : 'Assisted Purchase');
+
+  /* The exchange rate is imported, never typed. It falls back to the platform
+     default only while the API value is still loading. */
+  const exchangeRate = (typeof shipment !== 'undefined' && shipment && shipment.exchangeRate && shipment.exchangeRate.usdToBdt)
+    ? parseFloat(shipment.exchangeRate.usdToBdt)
+    : 103.5;
+%>
+
+<!-- Popup Modal Backdrop (Hidden by default so it never opens automatically) -->
+<div id="createQuotationModal" class="hidden fixed inset-0 z-50 bg-[#020712]/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+
+  <!-- Modal Card Dialog -->
+  <div class="bg-[#071122] border border-[#182945] rounded-xl shadow-2xl w-full max-w-6xl my-auto overflow-hidden text-slate-200 font-sans text-[11.5px] antialiased">
+
+    <!-- Modal Header -->
+    <div class="px-6 pt-5 pb-4 border-b border-[#132238] flex items-center justify-between">
+      <div>
+        <h2 class="text-xl font-bold text-white tracking-tight">Create Quotation</h2>
+        <p class="text-[11px] text-slate-400 mt-0.5">Create a quotation for the selected shipment.</p>
+      </div>
+      <button type="button" data-close-quotation-modal class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-[#12213a] transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Modal Form Body -->
+    <form id="createQuotationForm" class="p-6 space-y-5 max-h-[80vh] overflow-y-auto" novalidate>
+
+      <!-- The shipment this quotation is raised against. The row's own id is
+           used rather than its public reference, because a shipment can carry
+           a blank reference and the id never can. The page URL is preferred at
+           submit time, so this is the fallback. -->
+      <input type="hidden" id="quotationShipmentRef" name="shipmentRef" value="<%= shipmentRowId %>" />
+
+      <!-- ================= Section 1: Shipment Information ================= -->
+      <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-bold text-white uppercase tracking-wider">Shipment Information</h3>
+          <span class="text-[10px] text-slate-500">Pulled from the database. Staff cannot edit.</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-[10.5px] text-slate-400 mb-1">Shipment ID</label>
+            <input type="text" readonly value="<%= shipmentId %>" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-300 rounded px-3 py-1.5 text-[11px] font-mono opacity-70 cursor-not-allowed" />
+          </div>
+          <div>
+            <label class="block text-[10.5px] text-slate-400 mb-1">Customer ID</label>
+            <input type="text" readonly value="<%= customerId %>" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-300 rounded px-3 py-1.5 text-[11px] font-mono opacity-70 cursor-not-allowed" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-[10.5px] text-slate-400 mb-1">
+              <%= customerType === 'Individual' ? 'Customer Name' : 'Business Name' %>
+            </label>
+            <input type="text" readonly value="<%= customerName %>" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-300 rounded px-3 py-1.5 text-[11px] opacity-70 cursor-not-allowed" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-1">
+          <div>
+            <label class="block text-[10.5px] text-slate-400 mb-1">Service Mode</label>
+            <input type="text" readonly value="<%= serviceMode %>" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-300 rounded px-3 py-1.5 text-[11px] opacity-70 cursor-not-allowed" />
+          </div>
+          <div>
+            <label class="block text-[10.5px] text-slate-400 mb-1">Freight Mode</label>
+            <input type="text" readonly value="<%= freightMode %>" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-300 rounded px-3 py-1.5 text-[11px] opacity-70 cursor-not-allowed" />
+          </div>
+          <div>
+            <label class="block text-[10.5px] text-slate-400 mb-1">Purchase Type</label>
+            <input type="text" readonly value="<%= purchaseType %>" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-300 rounded px-3 py-1.5 text-[11px] opacity-70 cursor-not-allowed" />
+          </div>
+          <div>
+            <label class="block text-[10.5px] text-slate-400 mb-1">Quotation Date</label>
+            <input type="text" id="quotationDateDisplay" readonly class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-3 py-1.5 text-[11px] opacity-70 cursor-not-allowed" />
+          </div>
+          <div>
+            <label class="block text-[10.5px] text-slate-400 mb-1">Valid Until <span class="text-[#f97316]">*</span></label>
+            <input type="date" id="validUntil" name="validUntil" required class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-3 py-1.5 text-[11px] focus:outline-none focus:border-[#f97316]" />
+          </div>
+        </div>
+
+        <!-- Quotation Type Selector -->
+        <div class="pt-1">
+          <label class="block text-[10.5px] text-slate-400 mb-1">Quotation Type <span class="text-[#f97316]">*</span></label>
+          <select id="quotationType" name="quotationType" required class="w-full sm:w-1/2 bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-3 py-1.5 text-[11px] focus:outline-none focus:border-[#f97316]">
+            <option value="" disabled selected>Select quotation type</option>
+            <option value="Assisted Purchase Quotation">Assisted Purchase Quotation</option>
+            <option value="Shipment Estimate">Shipment Estimate</option>
+            <option value="Export Review Quotation">Export Review Quotation</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- ================= Section 2: Quotation Details ================= -->
+      <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-bold text-white uppercase tracking-wider">Quotation Details</h3>
+          <span class="text-[10px] text-slate-500">Enter a unit price in BDT or USD; the other is filled in automatically.</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table id="quotationItemsTable" class="w-full text-left border-collapse text-[11px]">
+            <thead>
+              <tr class="border-b border-[#162846] text-slate-400 text-[10px]">
+                <th class="py-2 pr-2 font-medium w-12 text-center">SL</th>
+                <th class="py-2 px-2 font-medium">Description <span class="text-[#f97316]">*</span></th>
+                <th class="py-2 px-2 font-medium w-24">Quantity <span class="text-[#f97316]">*</span></th>
+                <th class="py-2 px-2 font-medium w-24">Unit</th>
+                <th class="py-2 px-2 font-medium w-44">Unit Price (BDT / USD) <span class="text-[#f97316]">*</span></th>
+                <th class="py-2 px-2 font-medium w-40">Amount (BDT / USD)</th>
+                <th class="py-2 pl-2 font-medium w-12 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[#13223b]/60">
+              <!-- Rows are rendered by JavaScript; one empty row is shown initially. -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <button type="button" id="addLineBtn" class="px-3 py-1.5 bg-[#0e1d38] hover:bg-[#152a4d] border border-[#233a63] text-blue-400 text-[11px] font-semibold rounded transition-colors flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <span>+ Add Line</span>
+          </button>
+          <span class="text-[10px] text-slate-500">Exchange rate: 1 USD = <span id="exchangeRateDisplay" class="font-mono text-slate-300"><%= exchangeRate.toFixed(2) %></span> BDT</span>
+        </div>
+      </div>
+
+      <!-- ================= Section 3: Discount & Additional Charge ================= -->
+      <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-4 space-y-4">
+        <h3 class="text-xs font-bold text-white uppercase tracking-wider">Discount &amp; Additional Charge</h3>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <!-- Discount -->
+          <div class="bg-[#08111f] border border-[#16243c] rounded-md p-3 space-y-2">
+            <label class="block text-[10.5px] text-slate-400">Discount</label>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] text-slate-400 w-7">BDT</span>
+                <input type="text" id="discountBdt" inputmode="decimal" placeholder="0.00" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-2.5 py-1 text-[11px] font-mono" />
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] text-slate-400 w-7">USD</span>
+                <input type="text" id="discountUsd" inputmode="decimal" placeholder="0.00" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-2.5 py-1 text-[11px] font-mono" />
+              </div>
+            </div>
+            <textarea id="discountDescription" rows="2" placeholder="What the discount refers to (optional)" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-300 rounded px-2.5 py-1 text-[11px] resize-none"></textarea>
+          </div>
+
+          <!-- Additional Charge -->
+          <div class="bg-[#08111f] border border-[#16243c] rounded-md p-3 space-y-2">
+            <label class="block text-[10.5px] text-slate-400">Additional Charge</label>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] text-slate-400 w-7">BDT</span>
+                <input type="text" id="additionalBdt" inputmode="decimal" placeholder="0.00" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-2.5 py-1 text-[11px] font-mono" />
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] text-slate-400 w-7">USD</span>
+                <input type="text" id="additionalUsd" inputmode="decimal" placeholder="0.00" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-2.5 py-1 text-[11px] font-mono" />
+              </div>
+            </div>
+            <textarea id="additionalDescription" rows="2" placeholder="What the additional charge refers to (optional)" class="w-full bg-[#0b162a] border border-[#1b2b48] text-slate-300 rounded px-2.5 py-1 text-[11px] resize-none"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= Section 4: Quotation Total ================= -->
+      <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-4 space-y-2">
+        <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-2">Quotation Total</h3>
+
+        <div class="flex justify-between py-1 text-slate-300 border-b border-[#13223b]/50">
+          <span>Subtotal</span>
+          <div class="space-x-4">
+            <span>BDT <span id="subtotalBdt" class="font-mono">0.00</span></span>
+            <span>USD <span id="subtotalUsd" class="font-mono">0.00</span></span>
+          </div>
+        </div>
+        <div class="flex justify-between py-1 text-slate-300 border-b border-[#13223b]/50">
+          <span>Discount</span>
+          <div class="space-x-4">
+            <span>-BDT <span id="discountTotalBdt" class="font-mono">0.00</span></span>
+            <span>-USD <span id="discountTotalUsd" class="font-mono">0.00</span></span>
+          </div>
+        </div>
+        <div class="flex justify-between py-1 text-slate-300 border-b border-[#13223b]/50">
+          <span>Additional Charge</span>
+          <div class="space-x-4">
+            <span>BDT <span id="additionalTotalBdt" class="font-mono">0.00</span></span>
+            <span>USD <span id="additionalTotalUsd" class="font-mono">0.00</span></span>
+          </div>
+        </div>
+        <div class="flex justify-between py-2 text-white font-bold bg-[#0d203f] px-3 rounded border border-[#1e3b6d]">
+          <span>Total Quotation Amount</span>
+          <div class="space-x-4 text-blue-400">
+            <span>BDT <span id="totalBdt" class="font-mono">0.00</span></span>
+            <span>USD <span id="totalUsd" class="font-mono">0.00</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= Section 5: Notification ================= -->
+      <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-4 space-y-3">
+        <h3 class="text-xs font-bold text-white uppercase tracking-wider">Send Notification</h3>
+        <div>
+          <label class="block text-[10.5px] text-slate-400 mb-1">Select Channels <span class="text-[#f97316]">*</span></label>
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1.5 text-slate-300">
+            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="notificationChannel" value="Email" class="accent-[#f97316]" /> Email</label>
+            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="notificationChannel" value="SMS" class="accent-[#f97316]" /> SMS</label>
+            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="notificationChannel" value="WhatsApp" class="accent-[#f97316]" /> WhatsApp</label>
+            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" name="notificationChannel" value="In-App" class="accent-[#f97316]" /> In-App Notification</label>
+          </div>
+          <span class="text-[10px] text-slate-500 mt-1 block">At least one channel must be selected. The notification text is system-generated.</span>
+        </div>
+      </div>
+
+      <!-- ================= Section 6: Quotation Summary ================= -->
+      <div class="bg-[#050c18] border border-[#13223b] rounded-lg p-4 space-y-2">
+        <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-2">Quotation Summary</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-y-1.5 gap-x-6 text-[11px] text-slate-300">
+          <div class="flex justify-between"><span class="text-slate-400">Shipment ID:</span> <span class="font-mono text-white"><%= shipmentId %></span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Quotation Type:</span> <span id="summaryQuotationType" class="text-white">—</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Customer:</span> <span class="text-white"><%= customerId %> - <%= customerName %></span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Quotation Date:</span> <span id="summaryQuotationDate" class="text-white">—</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Service Mode:</span> <span class="text-white"><%= serviceMode %></span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Valid Until:</span> <span id="summaryValidUntil" class="text-white">—</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Freight Mode:</span> <span class="text-white"><%= freightMode %></span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Subtotal:</span> <span id="summarySubtotal" class="text-white font-mono">BDT 0.00 / USD 0.00</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Purchase Type:</span> <span class="text-white"><%= purchaseType %></span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Discount:</span> <span id="summaryDiscount" class="text-white font-mono">BDT 0.00 / USD 0.00</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Channels:</span> <span id="summaryChannels" class="text-white">—</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Additional Charge:</span> <span id="summaryAdditional" class="text-white font-mono">BDT 0.00 / USD 0.00</span></div>
+        </div>
+        <div class="pt-2 border-t border-[#13223b] flex justify-between items-center text-xs font-bold text-white">
+          <span>Total Quotation Amount</span>
+          <span id="summaryTotal" class="text-blue-400 font-mono">BDT 0.00 / USD 0.00</span>
+        </div>
+      </div>
+
+    </form>
+
+    <!-- Modal Footer Actions -->
+    <div class="px-6 py-4 bg-[#040914] border-t border-[#132238] flex items-center justify-end gap-3">
+      <button type="button" data-close-quotation-modal class="px-4 py-1.5 bg-[#0e1f3b] hover:bg-[#152a4e] border border-[#22406d] text-slate-300 text-[11px] font-medium rounded-md transition-colors">
+        Cancel
+      </button>
+      <button type="submit" form="createQuotationForm" id="generateQuotationBtn" disabled class="px-4 py-1.5 bg-[#f97316] hover:bg-[#ea580c] text-white text-[11px] font-semibold rounded-md shadow transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#f97316]">
+        Generate Quotation
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    const modal = document.getElementById('createQuotationModal');
+    const form = document.getElementById('createQuotationForm');
+    if (!modal || !form) return;
+
+    /* ---- State ---------------------------------------------------------- */
+    const state = {
+      exchangeRate: Number('<%= exchangeRate %>') || 103.5,
+      quotationGeneratedAt: new Date(),
+      items: []
+    };
+
+    /* ---- DOM refs ------------------------------------------------------- */
+    const tbody = document.querySelector('#quotationItemsTable tbody');
+    const addLineBtn = document.getElementById('addLineBtn');
+    const quotationTypeSelect = document.getElementById('quotationType');
+    const validUntilInput = document.getElementById('validUntil');
+    const generateBtn = document.getElementById('generateQuotationBtn');
+    const discountBdt = document.getElementById('discountBdt');
+    const discountUsd = document.getElementById('discountUsd');
+    const additionalBdt = document.getElementById('additionalBdt');
+    const additionalUsd = document.getElementById('additionalUsd');
+
+    /* ---- Helpers -------------------------------------------------------- */
+    const num = (v) => {
+      const n = parseFloat(String(v == null ? '' : v).replace(/,/g, ''));
+      return isNaN(n) ? 0 : n;
+    };
+
+    const money = (n) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const toBdt = (usd) => usd * state.exchangeRate;
+    const toUsd = (bdt) => bdt / state.exchangeRate;
+
+    const fmtDate = (d) => String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+    const fmtDateTime = (d) => fmtDate(d) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+
+    /* ---- Shipment reference -------------------------------------------- *
+     * The modal is injected into a tab fetched over AJAX, so the browser URL
+     * never moves and always holds the shipment being managed. Reading the
+     * reference from it is more reliable than the value rendered into the
+     * partial, which is wrong the moment a shipment has a blank reference. */
+    const refFromPage = () => {
+      const match = window.location.pathname.match(/\/admin\/shipments\/manage\/([^/?#]+)/);
+      return match ? decodeURIComponent(match[1]) : '';
+    };
+
+    const quotedRef = () => refFromPage() || document.getElementById('quotationShipmentRef').value || '';
+
+    /* ---- Dates ---------------------------------------------------------- */
+    function renderDates() {
+      document.getElementById('quotationDateDisplay').value = fmtDateTime(state.quotationGeneratedAt);
+      document.getElementById('summaryQuotationDate').textContent = fmtDate(state.quotationGeneratedAt);
+
+      /* Valid Until is date-based: a date, with no expiry time attached. */
+      const raw = validUntilInput.value;
+      const chosen = raw ? new Date(raw + 'T00:00:00') : null;
+      document.getElementById('summaryValidUntil').textContent = chosen && !isNaN(chosen.getTime()) ? fmtDate(chosen) : '—';
+    }
+
+    validUntilInput.addEventListener('change', renderDates);
+
+    /* ---- Line items ----------------------------------------------------- */
+    function addLineRow() {
+      const item = { id: Date.now() + Math.random(), description: '', quantity: 1, unit: '', unitPriceBdt: 0, unitPriceUsd: 0 };
+      state.items.push(item);
+      renderRow(item);
+      recalculate();
+      validate();
+    }
+
+    function renderRow(item) {
+      const tr = document.createElement('tr');
+      tr.dataset.itemId = item.id;
+      tr.innerHTML =
+        '<td class="py-2.5 pr-2 text-center font-mono text-slate-400 sl-cell"></td>' +
+        '<td class="py-2.5 px-2"><input type="text" class="row-description w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-2.5 py-1 text-[11px]" placeholder="Charge description" /></td>' +
+        '<td class="py-2.5 px-2"><input type="number" min="0" step="any" class="row-quantity w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-2.5 py-1 text-[11px] font-mono" /></td>' +
+        '<td class="py-2.5 px-2"><input type="text" class="row-unit w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-2.5 py-1 text-[11px]" placeholder="e.g. KG" /></td>' +
+        '<td class="py-2.5 px-2 space-y-1">' +
+          '<div class="flex items-center gap-1"><span class="text-[10px] text-slate-400 w-8">BDT</span>' +
+          '<input type="text" inputmode="decimal" class="row-bdt w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-2 py-0.5 text-[10.5px] font-mono" placeholder="0.00" /></div>' +
+          '<div class="flex items-center gap-1"><span class="text-[10px] text-slate-400 w-8">USD</span>' +
+          '<input type="text" inputmode="decimal" class="row-usd w-full bg-[#0b162a] border border-[#1b2b48] text-slate-200 rounded px-2 py-0.5 text-[10.5px] font-mono" placeholder="0.00" /></div>' +
+        '</td>' +
+        '<td class="py-2.5 px-2 space-y-1">' +
+          '<div class="flex items-center gap-1"><span class="text-[10px] text-slate-400 w-8">BDT</span>' +
+          '<input type="text" readonly class="row-amount-bdt w-full bg-[#08101e] border border-[#13223b] text-slate-300 rounded px-2 py-0.5 text-[10.5px] font-mono" value="0.00" /></div>' +
+          '<div class="flex items-center gap-1"><span class="text-[10px] text-slate-400 w-8">USD</span>' +
+          '<input type="text" readonly class="row-amount-usd w-full bg-[#08101e] border border-[#13223b] text-slate-300 rounded px-2 py-0.5 text-[10.5px] font-mono" value="0.00" /></div>' +
+        '</td>' +
+        '<td class="py-2.5 pl-2 text-center">' +
+          '<button type="button" class="row-remove text-rose-400 hover:text-rose-300 p-1" title="Remove line">' +
+          '<svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>' +
+          '</button>' +
+        '</td>';
+
+      const qty = tr.querySelector('.row-quantity');
+      qty.value = '1';
+
+      qty.addEventListener('input', () => { item.quantity = num(qty.value); recalculate(); validate(); });
+      tr.querySelector('.row-description').addEventListener('input', (e) => { item.description = e.target.value; validate(); });
+      tr.querySelector('.row-unit').addEventListener('input', (e) => { item.unit = e.target.value; });
+
+      /* Entering one currency fills the other, so staff never type the rate. */
+      tr.querySelector('.row-bdt').addEventListener('input', (e) => {
+        const v = num(e.target.value);
+        item.unitPriceBdt = v;
+        item.unitPriceUsd = toUsd(v);
+        tr.querySelector('.row-usd').value = v ? toUsd(v).toFixed(2) : '';
+        recalculate(); validate();
+      });
+      tr.querySelector('.row-usd').addEventListener('input', (e) => {
+        const v = num(e.target.value);
+        item.unitPriceUsd = v;
+        item.unitPriceBdt = toBdt(v);
+        tr.querySelector('.row-bdt').value = v ? toBdt(v).toFixed(2) : '';
+        recalculate(); validate();
+      });
+
+      tr.querySelector('.row-remove').addEventListener('click', () => {
+        state.items = state.items.filter((i) => String(i.id) !== String(item.id));
+        tr.remove();
+        renumber();
+        recalculate();
+        validate();
+      });
+
+      tbody.appendChild(tr);
+      renumber();
+    }
+
+    function renumber() {
+      Array.from(tbody.children).forEach((tr, i) => {
+        const cell = tr.querySelector('.sl-cell');
+        if (cell) cell.textContent = String(i + 1);
+      });
+    }
+
+    /* ---- Discount / Additional Charge cross-fill ------------------------ */
+    function crossFill(from, to, convert) {
+      from.addEventListener('input', () => {
+        const v = num(from.value);
+        to.value = v ? convert(v).toFixed(2) : '';
+        recalculate();
+        validate();
+      });
+    }
+    crossFill(discountBdt, discountUsd, toUsd);
+    crossFill(discountUsd, discountBdt, toBdt);
+    crossFill(additionalBdt, additionalUsd, toUsd);
+    crossFill(additionalUsd, additionalBdt, toBdt);
+
+    /* ---- Calculations --------------------------------------------------- */
+    function recalculate() {
+      let subBdt = 0;
+      let subUsd = 0;
+
+      state.items.forEach((item) => {
+        const qty = num(item.quantity) || 0;
+        const bdt = qty * (num(item.unitPriceBdt) || 0);
+        const usd = qty * (num(item.unitPriceUsd) || 0);
+        item.amountBdt = bdt;
+        item.amountUsd = usd;
+        subBdt += bdt;
+        subUsd += usd;
+
+        const tr = tbody.querySelector('[data-item-id="' + item.id + '"]');
+        if (tr) {
+          tr.querySelector('.row-amount-bdt').value = money(bdt);
+          tr.querySelector('.row-amount-usd').value = money(usd);
+        }
+      });
+
+      const dBdt = num(discountBdt.value);
+      const dUsd = num(discountUsd.value);
+      const aBdt = num(additionalBdt.value);
+      const aUsd = num(additionalUsd.value);
+
+      const totalBdt = subBdt - dBdt + aBdt;
+      const totalUsd = subUsd - dUsd + aUsd;
+
+      document.getElementById('subtotalBdt').textContent = money(subBdt);
+      document.getElementById('subtotalUsd').textContent = money(subUsd);
+      document.getElementById('discountTotalBdt').textContent = money(dBdt);
+      document.getElementById('discountTotalUsd').textContent = money(dUsd);
+      document.getElementById('additionalTotalBdt').textContent = money(aBdt);
+      document.getElementById('additionalTotalUsd').textContent = money(aUsd);
+      document.getElementById('totalBdt').textContent = money(totalBdt);
+      document.getElementById('totalUsd').textContent = money(totalUsd);
+
+      document.getElementById('summarySubtotal').textContent = 'BDT ' + money(subBdt) + ' / USD ' + money(subUsd);
+      document.getElementById('summaryDiscount').textContent = 'BDT ' + money(dBdt) + ' / USD ' + money(dUsd);
+      document.getElementById('summaryAdditional').textContent = 'BDT ' + money(aBdt) + ' / USD ' + money(aUsd);
+      document.getElementById('summaryTotal').textContent = 'BDT ' + money(totalBdt) + ' / USD ' + money(totalUsd);
+    }
+
+    /* ---- Validation ----------------------------------------------------- */
+    function selectedChannels() {
+      return Array.from(form.querySelectorAll('input[name="notificationChannel"]:checked')).map((c) => c.value);
+    }
+
+    function hasValidLine() {
+      return state.items.some((i) => i.description.trim() && (num(i.unitPriceBdt) > 0 || num(i.unitPriceUsd) > 0));
+    }
+
+    function validate() {
+      const typeOk = Boolean(quotationTypeSelect.value);
+      const validUntilOk = Boolean(validUntilInput.value);
+      const channelsOk = selectedChannels().length > 0;
+      const ready = typeOk && validUntilOk && channelsOk && hasValidLine();
+
+      generateBtn.disabled = !ready;
+
+      const typeSpan = document.getElementById('summaryQuotationType');
+      if (typeSpan) typeSpan.textContent = quotationTypeSelect.value || '—';
+
+      const chSpan = document.getElementById('summaryChannels');
+      if (chSpan) chSpan.textContent = selectedChannels().join(', ') || '—';
+    }
+
+    form.querySelectorAll('input[name="notificationChannel"]').forEach((c) => c.addEventListener('change', validate));
+    quotationTypeSelect.addEventListener('change', validate);
+    validUntilInput.addEventListener('change', validate);
+
+    /* ---- Reset / open / close ------------------------------------------- */
+    function resetModal() {
+      state.items = [];
+      state.quotationGeneratedAt = new Date();
+      tbody.innerHTML = '';
+      form.reset();
+      discountBdt.value = '';
+      discountUsd.value = '';
+      additionalBdt.value = '';
+      additionalUsd.value = '';
+      addLineRow();
+      renderDates();
+      recalculate();
+      validate();
+    }
+
+    window.openCreateQuotationModal = function (payload) {
+      /* The caller supplies the data the modal cannot know for itself: the
+         exchange rate imported from the API, so the BDT/USD pair is filled in
+         from the live rate rather than a stale one. Shipment and customer
+         fields are already rendered server-side and stay read-only. */
+      if (payload && typeof payload === 'object' && payload.exchangeRate && payload.exchangeRate.usdToBdt) {
+        state.exchangeRate = parseFloat(payload.exchangeRate.usdToBdt) || state.exchangeRate;
+        document.getElementById('exchangeRateDisplay').textContent = state.exchangeRate.toFixed(2);
+      }
+      resetModal();
+      modal.classList.remove('hidden');
+    };
+
+    window.closeCreateQuotationModal = function () {
+      modal.classList.add('hidden');
+      resetModal();
+    };
+
+    document.querySelectorAll('[data-open-quotation-modal], #openQuotationBtn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.openCreateQuotationModal();
+      });
+    });
+
+    modal.querySelectorAll('[data-close-quotation-modal]').forEach((btn) => {
+      btn.addEventListener('click', window.closeCreateQuotationModal);
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) window.closeCreateQuotationModal();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) window.closeCreateQuotationModal();
+    });
+
+    addLineBtn.addEventListener('click', addLineRow);
+
+    /* ---- Submit --------------------------------------------------------- */
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const quotationType = quotationTypeSelect.value;
+      const validUntil = validUntilInput.value;
+      const channels = selectedChannels();
+
+      if (!quotationType) { alert('Please select a quotation type.'); return; }
+      if (!validUntil) { alert('Please select the Valid Until date.'); return; }
+      if (!channels.length) { alert('Please select at least one notification channel.'); return; }
+      if (!hasValidLine()) { alert('Please add at least one line item with a description and a unit price.'); return; }
+      if (!quotedRef()) {
+        alert('This quotation cannot be raised: the shipment it belongs to could not be identified. Reload the Manage Shipment page and try again.');
+        return;
+      }
+
+      /* The quotation is generated now, so the date shown in the modal and the
+         one sent are stamped from this moment rather than from when the modal
+         was opened. The server issues its own authoritative stamp regardless. */
+      state.quotationGeneratedAt = new Date();
+      renderDates();
+
+      const payload = {
+        shipmentRef: quotedRef(),
+        quotationType,
+        /* Date-based expiry: the calendar day staff picked, with no time. */
+        validUntil,
+        channels,
+        exchangeRate: state.exchangeRate,
+        items: state.items.map((i) => ({
+          description: i.description,
+          quantity: num(i.quantity),
+          unit: i.unit || '',
+          unitPriceBdt: num(i.unitPriceBdt),
+          unitPriceUsd: num(i.unitPriceUsd),
+          amountBdt: num(i.amountBdt),
+          amountUsd: num(i.amountUsd)
+        })),
+        discount: {
+          bdt: num(discountBdt.value),
+          usd: num(discountUsd.value),
+          description: document.getElementById('discountDescription').value.trim()
+        },
+        additionalCharge: {
+          bdt: num(additionalBdt.value),
+          usd: num(additionalUsd.value),
+          description: document.getElementById('additionalDescription').value.trim()
+        }
+      };
+
+      generateBtn.disabled = true;
+      generateBtn.textContent = 'Generating...';
+
+      try {
+        const res = await fetch('/admin/shipments/quotations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        /* adminAuth sends an unauthenticated request to the login page and the
+           browser follows it, so the result is a 200 carrying HTML. Reading the
+           body as text first tells that apart from a real answer. */
+        const raw = await res.text();
+        let data = {};
+        try {
+          data = JSON.parse(raw);
+        } catch (_) {
+          if (res.redirected || /<html/i.test(raw)) {
+            throw new Error('Your session has expired. Please sign in again and retry.');
+          }
+          throw new Error('The server returned an unexpected response (HTTP ' + res.status + ').');
+        }
+
+        if (!res.ok) {
+          throw new Error(data.error || data.message || ('Server returned ' + res.status));
+        }
+
+        alert('Quotation ' + (data.quotation && data.quotation.quotationId ? data.quotation.quotationId : '') + ' generated. The customer has been notified on: ' + channels.join(', ') + '.');
+        window.closeCreateQuotationModal();
+      } catch (err) {
+        console.error('Quotation generation failed:', err);
+        alert('Could not generate the quotation: ' + err.message);
+      } finally {
+        generateBtn.textContent = 'Generate Quotation';
+        validate();
+      }
+    });
+
+    /* ---- Initial state: one empty row ----------------------------------- */
+    resetModal();
+  })();
+</script>

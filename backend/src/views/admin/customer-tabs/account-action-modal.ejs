@@ -1,0 +1,888 @@
+<!--
+  Account Action popup.
+  Hidden by default - the Account Actions tab shows a normal view and the
+  "Start Account Action" button opens this.
+
+  When the account already has an open case, the same popup opens that case for
+  edit instead of creating a second one, so an account can only ever carry one
+  open case. The Case Type is then locked: it is what the Formal Notice told the
+  customer and what the account status was derived from.
+-->
+<%
+  const editingCase = editingAccountAction || null;
+  const isEditing = Boolean(editingCase);
+%>
+<div id="accountActionModalContainer"
+     data-customer-id="<%= customer.id %>"
+     data-editing-case-id="<%= isEditing ? editingCase.caseId : '' %>"
+     data-correction-window-days="<%= accountActionOptions.correctionWindowDays %>"
+     data-current-status="<%= customer.accountStatus || 'Active' %>"
+     data-restored-status="<%= accountActionOptions.defaultAccountStatus %>"
+     data-status-map="<%= JSON.stringify(accountActionOptions.accountStatusByCaseType) %>"
+     class="hidden fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto transition-all duration-300">
+
+  <div id="accountActionModal" class="w-full max-w-5xl bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden text-slate-800 font-sans text-xs my-auto transition-all duration-300">
+
+    <!-- Modal Header -->
+    <div class="flex items-center justify-between p-4 px-6 bg-white border-b border-slate-100">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+          <i data-lucide="user-check" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h2 class="text-base font-bold text-slate-900 tracking-tight" data-account-action-title>
+            <%= isEditing ? 'Update Account Action' : 'Start Account Action' %>
+          </h2>
+          <p class="text-[11px] text-slate-500 mt-0.5">
+            <%= isEditing
+              ? 'This account already has an open case. Update it or resolve it - a second open case cannot be created.'
+              : 'Create a new account status case and apply the selected account status.' %>
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5">
+        <button type="button" onclick="closeAccountActionModal()" title="Close" class="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Error banner, populated by the save request -->
+    <div id="accountActionError" class="hidden mx-6 mt-4 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5 text-[11px] text-red-700 flex items-start gap-2">
+      <i data-lucide="alert-circle" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
+      <span id="accountActionErrorText"></span>
+    </div>
+
+    <!-- Modal Body -->
+    <div class="p-6 bg-[#f8fafc] grid grid-cols-1 lg:grid-cols-12 gap-6 max-h-[78vh] overflow-y-auto">
+
+      <!-- Left Column -->
+      <div class="lg:col-span-7 space-y-4">
+
+        <!-- Customer Summary -->
+        <div class="space-y-1.5">
+          <label class="font-bold text-slate-900 text-xs">Customer</label>
+          <div class="bg-[#f1f5f9]/80 border border-slate-200 rounded-lg p-3 grid grid-cols-3 gap-2 items-center">
+            <div>
+              <span class="block text-[10px] text-slate-400 font-medium">Customer ID</span>
+              <span class="text-xs font-semibold text-slate-700 font-mono">#<%= customer.id %></span>
+            </div>
+            <div>
+              <span class="block text-[10px] text-slate-400 font-medium">Customer Name</span>
+              <span class="text-xs font-semibold text-slate-800 truncate block"><%= customer.name %></span>
+            </div>
+            <div>
+              <span class="block text-[10px] text-slate-400 font-medium mb-0.5">Current Account Status</span>
+              <span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                <%= customer.accountStatus || 'Active' %>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <% if (isEditing) { %>
+          <div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-start gap-2 text-amber-900">
+            <i data-lucide="alert-triangle" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
+            <p class="text-[11px] leading-relaxed">
+              Editing open case <span class="font-mono font-semibold"><%= editingCase.caseId %></span>
+              (<%= editingCase.caseType %>). The case type is locked because the Formal Notice
+              <span class="font-mono"><%= editingCase.noticeId || 'N/A' %></span> already told the customer this action was taken.
+            </p>
+          </div>
+        <% } %>
+
+        <!-- Case Type. Rendered from the same catalogue the endpoint validates
+             against, so staff are never offered a case type the server refuses.
+             The action that would leave the account on the status it is already
+             on is withheld: applying it would spend a Case ID, send a Formal
+             Notice and write an audit event without changing anything. Dormant is
+             not an action, so it is never offered at all. -->
+        <div class="space-y-1.5">
+          <label for="caseTypeSelect" class="font-bold text-slate-900 text-xs">Action Type <span class="text-red-500">*</span></label>
+          <div class="relative">
+            <select id="caseTypeSelect" data-account-action-input <%= isEditing ? 'disabled' : '' %>
+                    class="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer <%= isEditing ? 'opacity-60 cursor-not-allowed' : '' %>">
+              <option value="" disabled <%= isEditing ? '' : 'selected' %>>Select action type</option>
+              <% accountActionOptions.selectableCaseTypes.forEach(function (type) { %>
+                <option value="<%= type %>" <%= isEditing && editingCase.caseType === type ? 'selected' : '' %>><%= type %></option>
+              <% }); %>
+            </select>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5 pointer-events-none"></i>
+          </div>
+          <p class="text-[10px] text-slate-400 pt-0.5">
+            The action type sets the account status it applies. Each type sends a Formal Notice.
+            <% const hiddenActionTypes = accountActionOptions.caseTypes.filter(function (type) {
+                 return accountActionOptions.selectableCaseTypes.indexOf(type) === -1;
+               });
+               if (!isEditing && hiddenActionTypes.length) { %>
+              <span class="font-medium text-slate-500">
+                <%= hiddenActionTypes.join(', ') %> is not offered because the account is already <%= customer.accountStatus || 'Active' %>.
+              </span>
+            <% } %>
+          </p>
+        </div>
+
+        <!-- Status Change Mapping -->
+        <div class="space-y-1.5">
+          <label class="font-bold text-slate-900 text-xs">Status Change</label>
+          <div class="bg-[#f1f5f9]/80 border border-slate-200 rounded-lg px-3 py-2 flex items-center gap-2 text-xs font-medium text-slate-700">
+            <span class="font-semibold text-slate-800"><%= customer.accountStatus || 'Active' %></span>
+            <span class="text-slate-400">&rarr;</span>
+            <span id="statusChangeTarget" class="text-slate-400 font-normal">Select case type</span>
+          </div>
+        </div>
+
+        <!-- Reason Category -->
+        <div class="space-y-1.5">
+          <label for="reasonCategorySelect" class="font-bold text-slate-900 text-xs">Reason Category <span class="text-red-500">*</span></label>
+          <div class="relative">
+            <select id="reasonCategorySelect" data-account-action-input
+                    class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
+              <option value="" disabled <%= isEditing ? '' : 'selected' %>>Select reason category</option>
+              <% accountActionOptions.reasonCategories.forEach(function (category) { %>
+                <option value="<%= category %>" <%= isEditing && editingCase.reasonCategory === category ? 'selected' : '' %>><%= category %></option>
+              <% }); %>
+            </select>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5 pointer-events-none"></i>
+          </div>
+        </div>
+
+        <!-- Reason Details -->
+        <div class="space-y-1.5">
+          <label for="reasonDetailsText" class="font-bold text-slate-900 text-xs">Reason Details <span class="text-red-500">*</span></label>
+          <div class="relative">
+            <textarea id="reasonDetailsText" data-account-action-input rows="3" maxlength="<%= accountActionOptions.reasonDetailsMaxLength %>"
+                      placeholder="Explain the specific reason for this account action. This is shown to staff when they hover the Reason Category."
+                      class="w-full bg-white border border-slate-200 rounded-lg p-3 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none leading-relaxed"><%= isEditing ? editingCase.reasonDetails : '' %></textarea>
+            <span id="reasonCharCounter" class="absolute right-3 bottom-2 text-[10px] text-slate-400 font-mono">0/<%= accountActionOptions.reasonDetailsMaxLength %></span>
+          </div>
+          <p class="text-[10px] text-slate-400">Recorded for audit and shown in the Reason Category pop-up. Internal - not shown to the customer.</p>
+        </div>
+
+        <!-- Related Record. Search-based rather than a fixed list: the relationship
+             between an account action and the rest of the ERP is not fixed, so
+             staff search this customer's own records and pick the one the action
+             is about. The opaque key of the picked row is submitted and the
+             endpoint re-resolves it against this customer before storing it. -->
+        <div class="space-y-1.5">
+          <label for="relatedRecordSearch" class="font-bold text-slate-900 text-xs">Related Record <span class="text-slate-400 font-normal">(Optional)</span></label>
+          <div class="relative">
+            <input type="search" id="relatedRecordSearch" data-related-search data-account-action-input autocomplete="off"
+                   value="<%= isEditing && editingCase.relatedRecord ? editingCase.relatedRecord : '' %>"
+                   placeholder="Search this customer's records (shipment, request, payment, invoice, claim, return/RTO...)"
+                   class="w-full bg-white border border-slate-200 rounded-lg pl-3 pr-9 py-2 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5 pointer-events-none"></i>
+          </div>
+
+          <!-- Results, populated by the search -->
+          <div data-related-results class="hidden max-h-44 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100 bg-white"></div>
+          <p data-related-hint class="hidden text-[10px] text-slate-400">No matching record found. Refine the search, or leave the field empty to save without a related record.</p>
+
+          <!-- Currently selected record -->
+          <div data-related-selected data-related-key-value="<%= isEditing && editingCase.relatedRecordKey ? editingCase.relatedRecordKey : '' %>" class="<%= isEditing && editingCase.relatedRecord ? '' : 'hidden' %> bg-blue-50/70 border border-blue-200 rounded-lg p-2.5 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-7 h-7 rounded bg-blue-600 flex items-center justify-center text-white shrink-0">
+                <i data-lucide="link-2" class="w-4 h-4"></i>
+              </div>
+              <div class="min-w-0">
+                <div data-related-ref class="font-mono text-[11px] font-bold text-slate-800 truncate"><%= isEditing ? editingCase.relatedRecord : '' %></div>
+                <div data-related-type class="text-[10px] text-slate-500 truncate"><%= isEditing && editingCase.relatedRecordType ? editingCase.relatedRecordType : 'Related record' %></div>
+              </div>
+            </div>
+            <button type="button" data-related-clear class="shrink-0 text-slate-400 hover:text-red-600 transition-colors" title="Remove related record">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+          <p class="text-[10px] text-slate-400">The relationship is stored with the case. Stored as: <span data-related-key class="font-mono"><%= isEditing && editingCase.relatedRecordKey ? editingCase.relatedRecordKey : 'none' %></span></p>
+        </div>
+
+        <!-- Case Status -->
+        <div class="space-y-1.5">
+          <label for="caseStatusSelect" class="font-bold text-slate-900 text-xs">Case Status <span class="text-red-500">*</span></label>
+          <div class="relative">
+            <select id="caseStatusSelect" data-account-action-input
+                    class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
+              <% accountActionOptions.caseStatuses.forEach(function (s, i) { %>
+                <option value="<%= s %>" <%= (i === 0 || (isEditing && editingCase.caseStatus === s)) ? 'selected' : '' %>><%= s %></option>
+              <% }); %>
+            </select>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5 pointer-events-none"></i>
+          </div>
+          <p class="text-[10px] text-slate-400">An account can have only one open case at a time. Resolving keeps the case in the history.</p>
+        </div>
+
+        <!-- Resolution Note, only meaningful when resolving -->
+        <div id="resolutionNoteBlock" class="space-y-1.5 hidden">
+          <label for="resolutionNoteText" class="font-bold text-slate-900 text-xs">Resolution Note <span class="text-red-500">*</span></label>
+          <div class="relative">
+            <textarea id="resolutionNoteText" rows="2" maxlength="<%= accountActionOptions.resolutionNoteMaxLength %>"
+                      placeholder="Record how this case was resolved."
+                      class="w-full bg-white border border-slate-200 rounded-lg p-3 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none leading-relaxed"></textarea>
+          </div>
+          <p class="text-[10px] text-slate-400">Required to resolve a case. The customer is notified that the account is back in good standing.</p>
+        </div>
+
+      </div>
+
+      <!-- Right Column -->
+      <div class="lg:col-span-5 space-y-4">
+
+        <!-- Correction Deadline -->
+        <div class="bg-[#f0f7ff]/70 border border-blue-100 rounded-xl p-4 space-y-2">
+          <div class="flex items-start gap-2.5">
+            <div class="p-1.5 rounded-md bg-blue-500 text-white shrink-0 mt-0.5"><i data-lucide="calendar" class="w-4 h-4"></i></div>
+            <div>
+              <h4 class="font-bold text-slate-900 text-xs">Correction Deadline</h4>
+              <p class="text-[10px] text-slate-500">Applicable only for Warning cases.</p>
+            </div>
+          </div>
+          <div id="deadlineBadge" class="bg-white/80 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-500 font-medium">Not Applicable</div>
+          <p id="deadlineHint" class="text-[10px] text-slate-400 leading-tight">
+            The deadline is the notice's sent date and time plus <%= accountActionOptions.correctionWindowDays %> calendar days.
+          </p>
+        </div>
+
+        <!-- Customer Notification Channels -->
+        <div class="bg-[#f0f7ff]/70 border border-blue-100 rounded-xl p-4 space-y-3">
+          <div class="flex items-start gap-2.5">
+            <div class="p-1.5 rounded-md bg-blue-500 text-white shrink-0 mt-0.5"><i data-lucide="send" class="w-4 h-4"></i></div>
+            <div>
+              <h4 class="font-bold text-slate-900 text-xs">Customer Notification</h4>
+              <p class="text-[10px] text-slate-500 leading-tight mt-0.5">
+                A <%= accountActionOptions.noticeType %> is sent through the selected channels.
+                <% if (isEditing) { %>Resolving the case notifies the customer that the account is restored.<% } %>
+              </p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+            <% const CHANNEL_META = {
+                 'Email': ['mail', 'blue', "Send to customer's registered email address"],
+                 'SMS': ['message-square', 'emerald', "Send to customer's registered mobile number"],
+                 'WhatsApp': ['phone', 'emerald', 'Send to customer via WhatsApp'],
+                 'In-App Notification': ['bell', 'purple', "Send to customer's dashboard notifications"],
+               };
+               const CHANNEL_STYLE = {
+                 blue: 'bg-blue-50 text-blue-600',
+                 emerald: 'bg-emerald-50 text-emerald-600',
+                 purple: 'bg-purple-50 text-purple-600',
+               };
+            %>
+            <% accountActionOptions.noticeChannels.forEach(function (channel) {
+                 const meta = CHANNEL_META[channel] || ['mail', 'blue', ''];
+                 const available = caseNoticeChannels[channel] !== false;
+                 // Editing an open case keeps the channels the original notice went
+                 // out on, so a resolution is not sent somewhere the customer was
+                 // never warned.
+                 const preChecked = isEditing
+                   ? (editingCase.noticeChannels || []).indexOf(channel) !== -1
+                   : available;
+            %>
+              <label class="bg-white border border-slate-200 rounded-lg p-2.5 flex items-start gap-2 <%= available ? 'cursor-pointer hover:border-blue-300 transition-colors' : 'opacity-50 cursor-not-allowed' %>">
+                <div class="p-1.5 rounded <%= CHANNEL_STYLE[meta[1]] %> shrink-0"><i data-lucide="<%= meta[0] %>" class="w-3.5 h-3.5"></i></div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-slate-800 text-[11px]"><%= channel %></span>
+                    <input type="checkbox" data-account-action-channel value="<%= channel %>" <%= preChecked && available ? 'checked' : '' %> <%= available ? '' : 'disabled' %>
+                           class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer" />
+                  </div>
+                  <p class="text-[9px] text-slate-400 leading-tight mt-0.5"><%= available ? meta[2] : 'No contact detail on file' %></p>
+                </div>
+              </label>
+            <% }); %>
+          </div>
+        </div>
+
+        <!-- Auto-generated notification preview. The notice is produced from the
+             decision the staff member is making, so the exact wording and the
+             correction date the customer will be given are shown before saving. -->
+        <div id="noticePreviewBlock" class="hidden bg-[#f0f7ff]/70 border border-blue-100 rounded-xl p-4 space-y-2">
+          <div class="flex items-center gap-2">
+            <div class="p-1.5 rounded-md bg-blue-500 text-white shrink-0"><i data-lucide="file-text" class="w-4 h-4"></i></div>
+            <h4 class="font-bold text-slate-900 text-xs">Notification Preview</h4>
+          </div>
+          <div class="bg-white rounded-lg border border-slate-200/80 p-2.5 space-y-1.5">
+            <div class="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Subject</div>
+            <div id="noticeSubjectPreview" class="text-[11px] font-semibold text-slate-800 break-words"></div>
+          </div>
+          <div class="bg-white rounded-lg border border-slate-200/80 p-2.5">
+            <div class="text-[10px] text-slate-400 font-medium uppercase tracking-wide mb-1">Message</div>
+            <pre id="noticeBodyPreview" class="text-[10px] text-slate-600 leading-relaxed whitespace-pre-wrap break-words font-sans max-h-32 overflow-y-auto"></pre>
+          </div>
+        </div>
+
+        <!-- System-Generated Case Information. Read-only by design: these are produced
+             by the system when the case is saved, so they are shown rather than
+             entered. On a new case they read "Generated on save". -->
+        <div class="bg-[#f0f7ff]/70 border border-blue-100 rounded-xl p-4 space-y-3">
+          <div class="flex items-center gap-2">
+            <div class="p-1.5 rounded-md bg-blue-500 text-white shrink-0"><i data-lucide="fingerprint" class="w-4 h-4"></i></div>
+            <div>
+              <h4 class="font-bold text-slate-900 text-xs">System-Generated Information</h4>
+              <p class="text-[10px] text-slate-500 leading-tight mt-0.5">Issued by the system. Staff do not enter these.</p>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-lg border border-slate-200/80 divide-y divide-slate-100 text-xs">
+            <div class="px-3 py-2 flex items-center justify-between gap-2">
+              <span class="text-slate-500">Case ID</span>
+              <span data-system-field="caseId" class="font-mono text-slate-700 font-semibold truncate"><%= isEditing ? editingCase.caseId : 'Generated on save' %></span>
+            </div>
+            <div class="px-3 py-2 flex items-center justify-between gap-2">
+              <span class="text-slate-500">Effective At</span>
+              <span data-system-field="effectiveAt" class="font-mono text-slate-700 truncate"><%= isEditing ? new Date(editingCase.effectiveAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'Generated on save' %></span>
+            </div>
+            <div class="px-3 py-2 flex items-center justify-between gap-2">
+              <span class="text-slate-500">Notice ID</span>
+              <span data-system-field="noticeId" class="font-mono text-slate-700 font-semibold truncate"><%= isEditing ? (editingCase.noticeId || 'Generated on save') : 'Generated on save' %></span>
+            </div>
+            <div class="px-3 py-2 flex items-center justify-between gap-2">
+              <span class="text-slate-500">Acting Staff ID</span>
+              <span data-system-field="staffId" class="font-mono text-slate-700 truncate"><%= isEditing && editingCase.decidedBy ? 'Staff #' + editingCase.decidedBy : 'Current signed-in staff' %></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Summary -->
+        <div class="bg-[#f0f7ff]/70 border border-blue-100 rounded-xl p-4 space-y-3">
+          <div class="flex items-center gap-2">
+            <div class="p-1.5 rounded-md bg-blue-500 text-white shrink-0"><i data-lucide="file-text" class="w-4 h-4"></i></div>
+            <h4 class="font-bold text-slate-900 text-xs">Action Summary</h4>
+          </div>
+
+          <div class="bg-white rounded-lg border border-slate-200/80 divide-y divide-slate-100 text-xs">
+            <div class="px-3 py-2 flex items-center justify-between">
+              <span class="text-slate-500">Current Status</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200"><%= customer.accountStatus || 'Active' %></span>
+            </div>
+            <div class="px-3 py-2 flex items-center justify-between"><span class="text-slate-500">New Status</span><span id="summaryNewStatus" class="text-slate-400 font-mono">-</span></div>
+            <div class="px-3 py-2 flex items-center justify-between"><span class="text-slate-500">Case Type</span><span id="summaryActionType" class="text-slate-400 font-mono">-</span></div>
+            <div class="px-3 py-2 flex items-center justify-between"><span class="text-slate-500">Reason Category</span><span id="summaryReasonCategory" class="text-slate-400 font-mono">-</span></div>
+            <div class="px-3 py-2 flex items-center justify-between"><span class="text-slate-500">Related Record</span><span id="summaryRelatedRecord" class="text-slate-400 font-mono">-</span></div>
+            <div class="px-3 py-2 flex items-center justify-between">
+              <span class="text-slate-500">Case Status</span>
+              <span id="summaryCaseStatus" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700 border border-blue-200">Open</span>
+            </div>
+            <div class="px-3 py-2 flex items-center justify-between"><span class="text-slate-500">Correction Deadline</span><span id="summaryDeadline" class="text-slate-400 font-mono">-</span></div>
+          </div>
+
+          <div class="bg-blue-50/80 border border-blue-100 rounded-lg p-3 flex items-start gap-2.5 text-blue-900">
+            <i data-lucide="info" class="w-4 h-4 text-blue-500 mt-0.5 shrink-0"></i>
+            <p class="text-[10px] text-blue-800 leading-tight">Please review the information before submitting. This action will update the customer account status, store a Formal Notice and record the case in the Account Action History.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="p-4 px-6 bg-white border-t border-slate-200 flex items-center justify-end gap-3">
+      <button type="button" onclick="closeAccountActionModal()" class="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 font-medium hover:bg-slate-50 transition-colors text-xs">Cancel</button>
+      <button type="button" data-account-action-submit
+              class="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors text-xs shadow-sm flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+        <span data-account-action-submit-label><%= isEditing ? 'Update Account Action' : 'Apply Account Action' %></span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  /**
+   * Account Action modal behaviour.
+   *
+   * The tab arrives via innerHTML, so nothing here can rely on running at
+   * parse time. The opener is delegated on the document and the form is wired on
+   * demand, which also means this partial can be re-injected safely.
+   */
+  (function () {
+    /**
+     * Guards the Related Record search: only the newest response may paint the
+     * results list, so a slow early request cannot overwrite a later one.
+     */
+    let relatedSearchToken = 0;
+
+    /** Records the last search returned, addressed by index by the results list. */
+    let relatedHits = [];
+
+    /**
+     * Configuration is read from data attributes rather than inlined as JS
+     * literals: the page escapes attribute values, and the browser hands them
+     * back decoded, so nothing has to be trusted as raw script.
+     */
+    function accountActionConfig() {
+      const root = document.getElementById('accountActionModalContainer');
+      if (!root) return null;
+      let statusMap = {};
+      try {
+        statusMap = JSON.parse(root.getAttribute('data-status-map') || '{}');
+      } catch {
+        statusMap = {};
+      }
+      return {
+        customerId: root.getAttribute('data-customer-id'),
+        editingCaseId: root.getAttribute('data-editing-case-id') || null,
+        correctionWindowDays: Number(root.getAttribute('data-correction-window-days')) || 7,
+        currentStatus: root.getAttribute('data-current-status') || 'Active',
+        restoredStatus: root.getAttribute('data-restored-status') || 'Active',
+        statusByCaseType: statusMap,
+      };
+    }
+
+    function accountActionEls() {
+      return {
+        container: document.getElementById('accountActionModalContainer'),
+        caseType: document.getElementById('caseTypeSelect'),
+        reasonCategory: document.getElementById('reasonCategorySelect'),
+        reasonDetails: document.getElementById('reasonDetailsText'),
+        relatedSearch: document.getElementById('relatedRecordSearch'),
+        relatedResults: document.querySelector('[data-related-results]'),
+        relatedHint: document.querySelector('[data-related-hint]'),
+        relatedSelected: document.querySelector('[data-related-selected]'),
+        relatedRef: document.querySelector('[data-related-ref]'),
+        relatedType: document.querySelector('[data-related-type]'),
+        relatedKey: document.querySelector('[data-related-key]'),
+        relatedClear: document.querySelector('[data-related-clear]'),
+        caseStatus: document.getElementById('caseStatusSelect'),
+        resolutionBlock: document.getElementById('resolutionNoteBlock'),
+        resolutionNote: document.getElementById('resolutionNoteText'),
+        statusTarget: document.getElementById('statusChangeTarget'),
+        deadlineBadge: document.getElementById('deadlineBadge'),
+        deadlineHint: document.getElementById('deadlineHint'),
+        noticeSubject: document.getElementById('noticeSubjectPreview'),
+        noticeBody: document.getElementById('noticeBodyPreview'),
+        noticePreviewBlock: document.getElementById('noticePreviewBlock'),
+        sumNewStatus: document.getElementById('summaryNewStatus'),
+        sumType: document.getElementById('summaryActionType'),
+        sumReason: document.getElementById('summaryReasonCategory'),
+        sumRelated: document.getElementById('summaryRelatedRecord'),
+        sumCaseStatus: document.getElementById('summaryCaseStatus'),
+        sumDeadline: document.getElementById('summaryDeadline'),
+        counter: document.getElementById('reasonCharCounter'),
+        error: document.getElementById('accountActionError'),
+        errorText: document.getElementById('accountActionErrorText'),
+        submit: document.querySelector('[data-account-action-submit]'),
+        submitLabel: document.querySelector('[data-account-action-submit-label]'),
+      };
+    }
+
+    /**
+     * The Related Record selection, kept as the opaque key the search returned
+     * rather than the text in the box, so the endpoint re-resolves the row
+     * instead of trusting a typed string.
+     */
+    let selectedRelatedKey = null;
+
+    /**
+     * @param {object|null} record  Search hit, or null to clear the selection.
+     * @param {{keepText?: boolean}} options
+     *   keepText leaves the search box alone, which is what the input handler
+     *   needs: clearing it there would wipe what the staff member is typing.
+     */
+    function paintRelatedSelection(record, { keepText = false } = {}) {
+      const el = accountActionEls();
+      selectedRelatedKey = record ? record.key : null;
+
+      if (!el.relatedSelected) return;
+      el.relatedSelected.classList.toggle('hidden', !record);
+      if (record) {
+        if (el.relatedRef) el.relatedRef.textContent = record.ref;
+        if (el.relatedType) el.relatedType.textContent = [record.type, record.label, record.sub].filter(Boolean).join(' - ');
+        if (el.relatedSearch) el.relatedSearch.value = record.ref;
+        if (el.relatedResults) el.relatedResults.classList.add('hidden');
+        if (el.relatedHint) el.relatedHint.classList.add('hidden');
+      } else {
+        if (el.relatedSearch && !keepText) el.relatedSearch.value = '';
+        if (el.relatedResults) el.relatedResults.classList.add('hidden');
+      }
+      if (el.relatedKey) el.relatedKey.textContent = record ? record.key : 'none';
+      refreshAccountActionSummary();
+    }
+
+    function renderRelatedResults(results, token) {
+      const el = accountActionEls();
+      if (!el.relatedResults || token !== relatedSearchToken) return;
+
+      el.relatedResults.textContent = '';
+      if (!results.length) {
+        el.relatedResults.classList.add('hidden');
+        if (el.relatedHint) el.relatedHint.classList.toggle('hidden', !el.relatedSearch.value.trim());
+        return;
+      }
+      if (el.relatedHint) el.relatedHint.classList.add('hidden');
+
+      results.forEach((record, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        // The record is addressed by index into the results the search returned,
+        // and the click is handled by one delegated listener on the list. That
+        // keeps the selection working across re-renders without re-binding a
+        // handler per row.
+        button.setAttribute('data-related-index', String(index));
+        button.className = 'w-full text-left px-2.5 py-2 hover:bg-blue-50/70 transition-colors flex items-center justify-between gap-2';
+
+        const main = document.createElement('div');
+        main.className = 'min-w-0';
+        const ref = document.createElement('div');
+        ref.className = 'font-mono text-[11px] font-bold text-slate-800 truncate';
+        ref.textContent = record.ref;
+        const label = document.createElement('div');
+        label.className = 'text-[11px] text-slate-500 truncate';
+        label.textContent = [record.type, record.label, record.sub].filter(Boolean).join(' - ');
+        main.appendChild(ref);
+        main.appendChild(label);
+
+        const status = document.createElement('span');
+        status.className = 'text-[10px] text-slate-400 shrink-0';
+        status.textContent = record.status || '';
+
+        button.appendChild(main);
+        button.appendChild(status);
+        el.relatedResults.appendChild(button);
+      });
+
+      relatedHits = results;
+      el.relatedResults.classList.remove('hidden');
+    }
+
+    /**
+     * Searches this customer's own records for the Related Record field. The
+     * endpoint is the same one the document verification modal uses, so both
+     * fields resolve a record the same way.
+     */
+    function runRelatedSearch() {
+      const el = accountActionEls();
+      const config = accountActionConfig();
+      if (!el.relatedSearch || !config) return;
+      const term = el.relatedSearch.value.trim();
+
+      const token = ++relatedSearchToken;
+      fetch('/admin/customers/' + config.customerId + '/records/search?q=' + encodeURIComponent(term))
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Search failed'))))
+        .then((data) => renderRelatedResults(data.results || [], token))
+        .catch(() => renderRelatedResults([], token));
+    }
+
+    function setAccountActionError(message) {
+      const el = accountActionEls();
+      if (!el.error || !el.errorText) return;
+      el.errorText.textContent = message || '';
+      el.error.classList.toggle('hidden', !message);
+      el.error.classList.toggle('flex', Boolean(message));
+    }
+
+    function formatDeadline(date) {
+      return date.toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+
+    /**
+     * Mirrors every field into the read-only summary and the deadline preview.
+     * The deadline is previewed from the moment of submission, since that is when
+     * the notice goes out and the seven-day window starts.
+     */
+    function refreshAccountActionSummary() {
+      const el = accountActionEls();
+      const config = accountActionConfig();
+      if (!el.caseType || !config) return;
+
+      const caseType = el.caseType.value;
+      const caseStatus = el.caseStatus ? el.caseStatus.value : 'Open';
+      const resolving = caseStatus === 'Resolved';
+
+      // Resolving returns the account to good standing, so the status it lands
+      // on is Active rather than the status the case type imposed.
+      const newStatus = resolving ? config.restoredStatus : (config.statusByCaseType[caseType] || null);
+
+      if (el.sumNewStatus) {
+        el.sumNewStatus.textContent = newStatus || '-';
+        el.sumNewStatus.className = newStatus ? 'font-mono font-semibold text-slate-800' : 'text-slate-400 font-mono';
+      }
+      if (el.statusTarget) {
+        el.statusTarget.textContent = newStatus || 'Select case type';
+        el.statusTarget.className = newStatus ? 'font-semibold text-slate-800' : 'text-slate-400 font-normal';
+      }
+      if (el.sumType) el.sumType.textContent = caseType || '-';
+      if (el.sumReason) el.sumReason.textContent = (el.reasonCategory && el.reasonCategory.value) || '-';
+      if (el.sumRelated) {
+        // The reference of the picked record, never the raw search text: the
+        // summary has to agree with what the endpoint will store.
+        el.sumRelated.textContent = selectedRelatedKey
+          ? (el.relatedRef ? el.relatedRef.textContent : '-')
+          : '-';
+      }
+      if (el.sumCaseStatus) el.sumCaseStatus.textContent = caseStatus;
+
+      // The notice the customer will receive is generated from the decision, so
+      // its subject is previewed here rather than only existing after the save.
+      refreshNoticePreview({ el, config, caseType, newStatus, resolving, reasonCategory: el.reasonCategory && el.reasonCategory.value });
+
+      // The resolution note only matters when the case is actually being closed.
+      if (el.resolutionBlock) el.resolutionBlock.classList.toggle('hidden', !resolving);
+
+      // A deadline belongs to an open Warning case only. A resolved case has
+      // nothing left to correct.
+      const deadlineApplies = !resolving && caseType === 'Warning';
+      if (deadlineApplies) {
+        const preview = new Date();
+        preview.setDate(preview.getDate() + config.correctionWindowDays);
+        if (el.deadlineBadge) {
+          el.deadlineBadge.textContent = formatDeadline(preview) + ' (on submission)';
+          el.deadlineBadge.className = 'bg-white/80 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700 font-semibold';
+        }
+        if (el.sumDeadline) el.sumDeadline.textContent = formatDeadline(preview);
+        if (el.deadlineHint) {
+          el.deadlineHint.textContent = 'Notice sent date and time plus ' + config.correctionWindowDays + ' calendar days.';
+        }
+      } else {
+        if (el.deadlineBadge) {
+          el.deadlineBadge.textContent = 'Not Applicable';
+          el.deadlineBadge.className = 'bg-white/80 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-500 font-medium';
+        }
+        if (el.sumDeadline) el.sumDeadline.textContent = 'None';
+        if (el.deadlineHint) {
+          el.deadlineHint.textContent = caseType === 'Warning' && resolving
+            ? 'The case is being resolved, so the correction window no longer applies.'
+            : 'The deadline is the notice\'s sent date and time plus ' + config.correctionWindowDays + ' calendar days.';
+        }
+      }
+    }
+
+    function refreshNoticePreview({ el, config, caseType, newStatus, resolving, reasonCategory }) {
+      if (!el.noticePreviewBlock) return;
+
+      // The preview is only meaningful once a decision is actually being made.
+      if (!caseType || !newStatus) {
+        el.noticePreviewBlock.classList.add('hidden');
+        return;
+      }
+
+      el.noticePreviewBlock.classList.remove('hidden');
+
+      // Opening a case announces the status change; resolving it announces that
+      // the account is back in good standing. Two different messages.
+      if (resolving) {
+        el.noticeSubject.textContent =
+          'Formal Notice: Your account status has been restored to ' + config.restoredStatus;
+        el.noticeBody.textContent = [
+          'The ' + caseType.toLowerCase() + ' case raised on your Dazzling Shipping account has been resolved.',
+          'Your account status has been restored to: ' + config.restoredStatus,
+          'Resolution',
+          (el.resolutionNote && el.resolutionNote.value.trim())
+            ? el.resolutionNote.value.trim()
+            : '[your resolution note]',
+        ].join('\n');
+        return;
+      }
+
+      el.noticeSubject.textContent = 'Formal Notice: Your account status has changed to ' + newStatus;
+
+      const deadlineApplies = caseType === 'Warning';
+      const body = [
+        'We are writing to inform you that a ' + caseType.toLowerCase() + ' case has been opened on your Dazzling Shipping account.',
+        'Your account status has changed to: ' + newStatus,
+        'Reason category: ' + (reasonCategory || '[reason category]'),
+        'Case reference: [generated on save]',
+        'Notice reference: [generated on save]',
+        'Reason',
+        (el.reasonDetails && el.reasonDetails.value.trim())
+          ? el.reasonDetails.value.trim()
+          : '[your reason details]',
+      ];
+      if (deadlineApplies) {
+        const preview = new Date();
+        preview.setDate(preview.getDate() + config.correctionWindowDays);
+        body.push(
+          'Correction required',
+          'Please correct the matter by ' + formatDeadline(preview) + '. Failing to do so may lead to further action on your account.'
+        );
+      } else {
+        body.push('Please sign in to your Dazzling Shipping account for the full terms of this notice and what you can do.');
+      }
+      el.noticeBody.textContent = body.join('\n');
+    }
+
+    function initAccountActionModal() {
+      const el = accountActionEls();
+      if (!el.container || el.container.dataset.ready === 'true') return;
+      el.container.dataset.ready = 'true';
+
+      [el.caseType, el.reasonCategory, el.caseStatus].forEach((node) => {
+        node?.addEventListener('change', refreshAccountActionSummary);
+      });
+
+      el.reasonDetails?.addEventListener('input', () => {
+        const max = Number(el.reasonDetails.getAttribute('maxlength')) || 1000;
+        if (el.counter) el.counter.textContent = el.reasonDetails.value.length + '/' + max;
+        // The notice preview quotes the reason, so it follows the textarea.
+        refreshAccountActionSummary();
+      });
+
+      el.resolutionNote?.addEventListener('input', refreshAccountActionSummary);
+
+      // Related Record search. Debounced so a fast typist does not fire a request
+      // per keystroke, and delayed on the first focus so the modal can offer the
+      // customer's most recent records without being asked to.
+      if (el.relatedSearch) {
+        let relatedTimer = null;
+        el.relatedSearch.addEventListener('input', () => {
+          // Typing invalidates any previous pick: the key on the case must match
+          // what is actually selected, never a stale hit from an earlier search.
+          paintRelatedSelection(null, { keepText: true });
+          window.clearTimeout(relatedTimer);
+          relatedTimer = window.setTimeout(runRelatedSearch, 250);
+        });
+        el.relatedSearch.addEventListener('focus', () => {
+          if (!el.relatedResults || el.relatedResults.classList.contains('hidden')) runRelatedSearch();
+        });
+      }
+      el.relatedClear?.addEventListener('click', () => paintRelatedSelection(null));
+
+      // One delegated listener for the whole list, so a row keeps working after
+      // the results are re-rendered by a later search.
+      el.relatedResults?.addEventListener('click', (event) => {
+        const row = event.target.closest('[data-related-index]');
+        if (!row || !el.relatedResults.contains(row)) return;
+        const record = relatedHits[Number(row.getAttribute('data-related-index'))];
+        if (record) paintRelatedSelection(record);
+      });
+
+      el.submit?.addEventListener('click', async () => {
+        setAccountActionError('');
+
+        const config = accountActionConfig();
+        if (!config) return;
+
+        // Read the action type from the disabled select too: a locked field is not
+        // submitted by the browser, but the server still needs it validated.
+        const caseType = el.caseType.value;
+        const caseStatus = el.caseStatus.value;
+        const reasonCategory = el.reasonCategory.value;
+        const reasonDetails = el.reasonDetails.value.trim();
+        const resolutionNote = (el.resolutionNote.value || '').trim();
+        const channels = Array.from(
+          document.querySelectorAll('[data-account-action-channel]:checked')
+        ).map((c) => c.value);
+
+        const missing = [];
+        if (!caseType) missing.push('Action Type is required');
+        if (!caseStatus) missing.push('Case Status is required');
+        if (!reasonCategory) missing.push('Reason Category is required');
+        if (!reasonDetails) missing.push('Reason Details is required');
+        if (caseStatus === 'Resolved' && !resolutionNote) {
+          missing.push('Resolution Note is required when resolving a case');
+        }
+        // A channel is only required when a notice actually goes out: resolving a
+        // case notifies the customer, but a plain edit changes no status and sends
+        // no notice, so it is not held to that rule.
+        if (caseStatus !== 'Resolved' && !channels.length) {
+          missing.push('Select at least one notification channel for the Formal Notice');
+        }
+        if (missing.length) {
+          setAccountActionError(missing[0]);
+          return;
+        }
+
+        const body = {
+          caseType,
+          caseStatus,
+          reasonCategory,
+          reasonDetails,
+          // The key, not the text: the endpoint re-resolves it against this
+          // customer and stores the reference itself.
+          relatedRecordKey: selectedRelatedKey,
+          resolutionNote,
+          notificationChannels: channels,
+        };
+
+        const originalLabel = el.submitLabel.textContent;
+        el.submit.disabled = true;
+        el.submitLabel.textContent = 'Saving...';
+
+        try {
+          // Editing an open case updates it in place; otherwise a new case is
+          // opened. The server refuses a second open case either way.
+          const url = config.editingCaseId
+            ? '/admin/customers/' + config.customerId + '/account-actions/' + encodeURIComponent(config.editingCaseId)
+            : '/admin/customers/' + config.customerId + '/account-actions';
+          const response = await fetch(url, {
+            method: config.editingCaseId ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || 'Could not save the account action');
+          }
+
+          closeAccountActionModal();
+          // The tab is re-read from the database rather than patched client-side.
+          if (typeof switchTab === 'function') {
+            switchTab('actions');
+          } else {
+            window.location.reload();
+          }
+        } catch (error) {
+          setAccountActionError(error.message);
+          el.submit.disabled = false;
+          el.submitLabel.textContent = originalLabel;
+        }
+      });
+
+      refreshAccountActionSummary();
+    }
+
+    function openAccountActionModal() {
+      initAccountActionModal();
+      const el = accountActionEls();
+      if (!el.container) return;
+      setAccountActionError('');
+
+      // Re-open on the stored record rather than whatever the last search left
+      // selected, so editing a case never silently unlinks it.
+      selectedRelatedKey = el.relatedSelected
+        ? el.relatedSelected.getAttribute('data-related-key-value') || null
+        : null;
+
+      el.container.classList.remove('hidden');
+      el.container.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      refreshAccountActionSummary();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    function closeAccountActionModal() {
+      const el = accountActionEls();
+      if (!el.container) return;
+      el.container.classList.add('hidden');
+      el.container.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+
+    // Exposed for the tab's button and the inline Cancel/Close handlers.
+    window.openAccountActionModal = openAccountActionModal;
+    window.closeAccountActionModal = closeAccountActionModal;
+
+    // Delegated because the tab is injected via innerHTML.
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('[data-open-account-action]')) {
+        openAccountActionModal();
+      }
+      if (e.target.id === 'accountActionModalContainer') {
+        closeAccountActionModal();
+      }
+    });
+
+    // Escape closes without saving, matching the other admin popups.
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        const el = accountActionEls();
+        if (el.container && !el.container.classList.contains('hidden')) {
+          closeAccountActionModal();
+        }
+      }
+    });
+  })();
+</script>

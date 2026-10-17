@@ -36,8 +36,20 @@ export const AuthProvider = ({ children }) => {
     return { token: newToken, user: newUser };
   };
 
-  const register = async (name, email, password, phone) => {
-    const res = await api.post('/auth/register', { name, email, password, phone });
+  const register = async (formData) => {
+    const data = new FormData();
+    data.append('name', formData.fullName);
+    data.append('email', formData.email);
+    data.append('password', formData.password);
+    data.append('phone', formData.phone);
+    data.append('accountType', formData.accountType);
+    data.append('homeAddress', formData.homeAddress);
+    data.append('warehouseAddress', formData.warehouseAddress);
+    data.append('whatsapp', formData.whatsapp);
+    if (formData.tradeLicense) {
+      data.append('tradeLicense', formData.tradeLicense);
+    }
+    const res = await api.post('/auth/register', data);
     const { token: newToken, user: newUser } = res.data;
     setToken(newToken);
     setUser(newUser);
